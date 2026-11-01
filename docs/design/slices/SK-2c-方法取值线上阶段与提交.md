@@ -1,7 +1,9 @@
 # SK-2c 方法取值的线上阶段与 `compile --live` 提交
 
-> 状态：Spec r2（2026-11-01，Claude；r2 实现时发现每次编译都给 Claim 写新的编译时间 `maintenance.changed_at`，
-> 同样的计划字节不同，§4.2 的提交回执改按去掉编译时间后的内容摘要比较）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §4.3 (c)、§5.2、§5.3；
+> 状态：Spec r3（2026-11-01，Claude；r2 实现时发现每次编译都给 Claim 写新的编译时间 `maintenance.changed_at`，
+> 同样的计划字节不同，§4.2 的提交回执改按去掉编译时间后的内容摘要比较；r3 按 #526 审核 R1–R5：保存回答必须有其调用
+> 的台账记录背书（§3.1、§3.2、§4.1），请求带来源修订、目录绑定请求参数（§2、§3.1），回执带目标 Space（§4.2），
+> 截断回答也留存且服务版本漂移一律停止（§3.2），持久化目标不得经链接逃逸（§3.1））。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §4.3 (c)、§5.2、§5.3；
 > [SK-2](SK-2-方法登记准入与编译.md)（SK-2a：取值协议、保存回答的格式、离线 `methods compile`）抬头的拆分；
 > [SK-2b](SK-2b-方法发现编排与撤下.md) 抬头的拆分修订。跟踪 Issue #507。实现 Claude，审核 Codex。
 > 真实调用 0（测试用假传输层）；不部署；不写线上登记表；不改 Go、前端与合同 schema。
@@ -28,6 +30,9 @@
 - 两个命令之间的接口就是 SK-2a 已有的保存格式：文件名 = 请求摘要（`JudgeLikeRequest.sha256`，覆盖系统提示与用户
   载荷）。`values` 与编译用**同一组函数**做准入（内存中）与请求构造（§5），所以同样的登记表、候选文件与原始来源页
   得出逐字节相同的请求。
+- **请求带来源修订**（r3，R2）：用户载荷增加 `materials`，按段落编号的材料顺序列出 `{"ref": "M1", "revision":
+  "<knowledge_id>/<parse_attempt>/<sha256>"}`；提示说明它只用于标识、不写进回答。材料换了修订而提取正文不变时，
+  请求也随之不同，旧回答不再命中。取值协议版本因此升为 `2026-11-01.2`（还没有发布过方法 Claim）。
 - `values` 之后登记表若有变化（新材料、记录失效、新候选），受影响方法的请求随之改变，编译对它们报
   `RESPONSE_MISSING`（只跳过这些方法，不发请求）；再运行一次 `values` 只补发这些请求。
 
@@ -45,26 +50,35 @@
 |---|---|
 | `.lock` | 一次只允许一个运行使用该目录（被占用 → `RUN_ROOT_BUSY`） |
 | `budget.jsonl` | 每次发送**之前**先记一行，进程在发送途中中断也计入 |
-| `ledger.jsonl` | 每次尝试一条调用记录：阶段、模型、策略版本、请求摘要、结果、用量、实际服务的模型 |
-| `raw/NNN.txt` | 每个原始回答按到达顺序留存（结构不合格的也留），只用于诊断 |
+| `ledger.jsonl` | 每次尝试一条调用记录：阶段、模型、策略版本、请求摘要（请求体的 SHA-256）、结果、用量、实际服务的模型；成功的调用另记**回答摘要** `response_sha256`（r3） |
+| `stage.json` | 目录第一次使用时写入的阶段配置（不含密钥，只有变量名），只新建、不覆盖（r3） |
+| `raw/NNN.txt` | 收到的每个回答文字按到达顺序留存（结构不合格的、被截断的也留），只用于诊断 |
 | `<请求摘要>.txt` | 结构合格的回答，SK-2a §7 的保存格式；只新建、不覆盖 |
 
 - 目录必须在任何 git 仓库之外（`run_lock` 检查；否则或台账损坏 → `RUN_ROOT_INVALID`）。原始回答可能引用材料原文，
   只留在操作者的私有目录，不进仓库、日志、Issue 与 PR。
-- 一个目录对应一个模型身份：台账已有记录的 `stage`、`model`、`policy_version` 必须与本次阶段配置相同，否则
-  `RUN_ROOT_MODEL_CHANGED`（换模型或策略就换目录）。实际服务的模型版本在一个目录内只能有一个（`DurableLedger`）：
-  变化后立即停止 `SERVED_MODEL_CHANGED`，变化后得到的那个回答不留存。
+- **持久化目标不经链接**（r3，R5）：任何发送之前，`raw`、`ledger.jsonl`、`budget.jsonl`、`stage.json`、`.lock` 都不得是
+  符号链接，`raw` 存在时必须是目录；否则 `RUN_ROOT_INVALID`。回答文件与 `raw/NNN.txt` 都以“只新建”方式写入（已存在的
+  名字或链接不会被跟随）。
+- **一个目录对应一套请求参数**（r3，R2）：`stage.json` 与本次阶段配置相比，除操作项（`timeout_s`、`max_attempts`、
+  `api_key_env`）外全部相同，否则 `RUN_ROOT_MODEL_CHANGED`（换模型、策略、温度、输出上限、思考模式等就换目录）。
+  目录没有 `stage.json` 却已有台账或回答 → `RUN_ROOT_INVALID`；全新目录在锁内写入 `stage.json`。台账记录的 `stage`、
+  `model`、`policy_version` 必须与 `stage.json` 相同，否则 `RUN_ROOT_INVALID`。
+- 实际服务的模型版本在一个目录内只能有一个（`DurableLedger`）：变化后立即停止 `SERVED_MODEL_CHANGED`，变化后收到的
+  回答（被截断的也一样）不留存。
 
 ### 3.2 流程
 
 1. 载入登记表与候选文件；内存中准入，得出在用的方法（未撤下且至少一条有效链接，SK-2a §4.1）；退出的方法不发请求。
 2. 每个在用方法按登记顺序构造请求。段落读取失败的方法记其代码（段落或固定修订页面的代码），不发请求。
-3. 取值目录锁内：检查模型身份；打开台账，`--max-sent` 计入该目录以往的全部发送。
-4. **先查已保存的回答**（任何发送之前）：每个已有 `<摘要>.txt` 的请求做 SK-2a 的结构检查，通过 → `saved`；不通过 →
-   `RUN_ROOT_INVALID`，整次停止（它曾经通过检查才被保存，说明被改动过）。
+3. 取值目录锁内：检查链接与 `stage.json`；打开台账，`--max-sent` 计入该目录以往的全部发送。
+4. **先查已保存的回答**（任何发送之前）：每个已有 `<摘要>.txt` 的请求，只有台账中有一条成功记录同时满足——请求摘要 =
+   按 `stage.json` 的配置重算的该请求的请求体摘要、回答摘要 = 该文件内容的摘要、模型（实际服务的，未报告时为配置的）
+   = 目录的模型——且通过 SK-2a 的结构检查，才记 `saved`；否则 `RUN_ROOT_INVALID`，整次停止（被改动过或没有来源）。
 5. 再按顺序发送其余请求（第一次需要发送时才创建模型客户端，全部已保存时不需要模型密钥）：
-   - 回答先写入 `raw/NNN.txt`；结构合格 → 写 `<摘要>.txt`，记 `answered`；不合格 → `VALUE_RESPONSE_INVALID`（不保存
-     为回答，下次运行在预算内重发）。
+   - 收到的回答文字（含被截断的）在调用返回前由客户端交给 `raw/NNN.txt`（客户端的 `keep`，r3，R4）；服务版本此时已
+     变化的不写。每次收到回答（正常或截断）后都检查服务版本，变化即整次停止 `SERVED_MODEL_CHANGED`。
+   - 结构合格 → 写 `<摘要>.txt`，记 `answered`；不合格 → `VALUE_RESPONSE_INVALID`（不保存为回答，下次运行在预算内重发）。
    - 只影响该方法、继续下一个：回答被截断（结束原因不是 stop）→ `VALUE_TRUNCATED`；输入超过阶段的字符上限 →
      `INPUT_TOO_LARGE`（不计发送）。
    - 整次停止：预算用完 → `BUDGET_EXCEEDED`；配置或密钥无效 → `MODEL_CONFIG_INVALID`；不可重试的 HTTP 错误或重试用尽
@@ -89,26 +103,32 @@
 
 ## 4. `methods compile` 的修订
 
-### 4.1 `--model`
+### 4.1 回答的来源与 `--model`（r3，R1）
 
-- 可省。取值目录有台账且有成功的调用时，目录的模型 = 台账记录的实际服务模型（只能有一个）；提供方没有报告时为台账
-  记录的配置模型。
-- 给了 `--model` 而目录的模型不同 → `MODEL_MISMATCH`；省略而目录没有台账（手工准备的回放目录）→ `MODEL_UNKNOWN`；
-  台账损坏或记录了多个模型 → `RUN_ROOT_INVALID`。这样 Claim 的 `provenance.model` 总是写出这些回答的模型。
+- **有台账背书的目录**（有 `stage.json`，即 `values` 写的）：编译用“台账回答”端口回放。目录的模型 = 台账记录的实际
+  服务模型（只能有一个），提供方没有报告时为配置的模型名；给了 `--model` 而不同 → `MODEL_MISMATCH`。每个用到的回答都按
+  §3.2 第 4 步核对台账，不符 → `RUN_ROOT_INVALID`，整次停止，计划与登记表都不写；没有文件 → 该方法 `RESPONSE_MISSING`。
+- **手工准备的回放目录**（既没有 `stage.json` 也没有台账，SK-2a 的离线接口，保留）：必须给 `--model`（否则
+  `MODEL_UNKNOWN`），回答按文件读取、不核对来源；**不能用于 `--live`**：`--live` 遇到这种目录在写任何东西之前停止
+  `ANSWERS_UNVERIFIED`。
+- 有台账却没有 `stage.json`、台账损坏或记录了多个服务模型 → `RUN_ROOT_INVALID`。这样线上提交的 Claim，其
+  `provenance.model` 与值都来自台账背书的调用。
 
 ### 4.2 `--live`
 
 - 顺序：登记表锁内载入 → 读 Active → 准入、编译、组包（从不发请求）→ 写计划（SK-2a §7 的一套文件）→ 原子写回登记表
   → 提交计划中的 CandidateBundle（`PlatformClient.submit`）。方法 pack 未准入，审核计划为人工：只提交，决定与激活由人在
   平台完成。
-- 提交回执 `submitted.json`（在 `--run-root`）：`{"content_sha256": <内容摘要>, "candidate_sha256": <所提交的
-  candidate.json 的摘要，与该次 report.json 的 plan 相同>, "candidate_id": …}`，提交成功后原子写入。
+- 提交回执 `submitted.json`（在 `--run-root`）：`{"space_id": <提交的目标 Space>, "content_sha256": <内容摘要>,
+  "candidate_sha256": <所提交的 candidate.json 的摘要，与该次 report.json 的 plan 相同>, "candidate_id": …}`，提交成功后
+  原子写入。
 - **内容摘要**：变化判定给每个成员 Claim 写本次编译的时间（`maintenance.changed_at`），成员摘要随之改变，所以同样的
   输入每次编译出的 `candidate.json` 字节都不同。内容摘要 = 去掉各成员的 `member_digest` 与 Claim 的
   `maintenance.changed_at` 之后，候选整体按键排序的紧凑 JSON 的 SHA-256；基线、成员、移出、审核计划与编译器身份都在内。
-- 再次运行时计划的内容摘要等于回执 → 不再提交，输出回执中的 `candidate_id` 与 `"submitted": "already"`，回执不变；
+- 再次运行时目标 Space 与内容摘要都等于回执（r3，R3：两个 Space 都没有 Active 时内容可以相同）→ 不再提交，输出回执中的
+  `candidate_id` 与 `"submitted": "already"`，回执不变；
   否则提交并写新回执，输出 `"submitted": "new"`。与产品发布的回执同一纪律：只记已成功提交的输出，同样的输出不重复提交
-  （人拒绝后要重新提交，需换运行目录）。回执不是这三个非空字符串 → `RECEIPT_INVALID`，不提交。
+  （人拒绝后要重新提交，需换运行目录）。回执不是这四个非空字符串 → `RECEIPT_INVALID`，不提交。
 - 没有变化（计划没有 `candidate.json`）→ 不提交，`"submitted": "nothing"`。
 - 提交失败 → `{"stopped": 平台代码}`，计划与登记表已写，回执不写；重跑得出同一计划并再次提交。提交成功而回执写入前
   中断 → 重跑会再提交一份同样的候选，由人在审核队列中按同一基线处理（与产品发布相同的已知情形）。
@@ -119,7 +139,12 @@
 - 新增 `harness/src/insurance_harness/compilers/methods/values.py`：取值目录、身份检查、发送与留存、输出。
 - `compilers/methods/compile.py`：抽出 `admitted_registry`（准入并校验登记表）与 `method_request`（段落 + 可选标签 +
   请求），`compile_methods` 改为调用它们，行为不变。
-- `compilers/methods/responses.py`：读取目录模型（§4.1）。
+- `compilers/methods/prompt.py`、`paragraphs.py`：请求的 `materials` 与协议版本（§2，r3）。
+- `compilers/methods/responses.py`：台账回答端口与目录模型（§4.1）。
+- `models/openai_compatible.py`、`models/ledger.py`（r3，模型适配器，对现有调用方行为不变）：公开 `request_sha256(config,
+  system, user)`（与发送时记入台账的请求摘要同一算法，供不发送也能找到某请求的记录）；成功的调用记录增加
+  `response_sha256`（回答摘要，不含回答）；构造参数 `keep`：收到的每个回答文字（含被截断的）在调用返回或抛错前交给它，
+  错误信息仍只有元数据。产品编译、独立审核与概念页不传 `keep`，台账多一个字段。
 - `compilers/methods/cli.py`：`values` 子命令、`compile --live` 与回执、`--model` 可省。
 - `models/stages.json`：`methods` 阶段。
 - 测试：`harness/tests/compilers/methods/test_method_values.py`、`test_method_values_cli.py`、`test_method_compile_live.py`。
@@ -143,3 +168,12 @@
 9. `compile --live`：先写计划、再写登记表、再提交；回执与计划摘要一致；同样输入重跑（编译时间不同）不再提交
    （`already`）；取值变了的计划再次提交；没有变化不提交；提交失败 → 平台代码，回执不写，重跑再提交。
 10. `stages.json` 的 `methods` 阶段：DeepSeek、思考开、不含密钥。
+11. 来源背书（r3，R1）：成功记录的回答摘要等于保存文件；换成另一个结构合格的回答、台账记录指向别的请求、缺少
+    `stage.json` → `values` 在发送前、编译在写入前 `RUN_ROOT_INVALID`；手工目录 + `--model` + `--live` →
+    `ANSWERS_UNVERIFIED`，什么都不写。
+12. 来源修订与参数（r3，R2）：同样正文的新修订 → 编译 `RESPONSE_MISSING`、`values` 重发且请求带新修订；温度、输出上限、
+    思考模式不同 → `RUN_ROOT_MODEL_CHANGED`；只改操作项 → 照常复用。
+13. 截断与漂移（r3，R4）：截断回答写入 `raw/`、不生成回答文件；另一服务版本返回的截断回答 → `SERVED_MODEL_CHANGED`，
+    不留存。适配器：请求摘要可重算、成功记录带回答摘要、`keep` 收到截断文字而错误信息不含它。
+14. 链接（r3，R5）：`raw` 链到仓库内的目录、台账/预算/阶段/锁文件是链接 → `RUN_ROOT_INVALID`，没有发送，链接目标不被写入。
+15. 回执（r3，R3）：同样内容换了目标 Space → 向新 Space 提交，回执记新 Space。
