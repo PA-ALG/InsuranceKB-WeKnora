@@ -243,6 +243,14 @@ def test_one_record_per_revision_and_one_live_record_per_material() -> None:
         ProductRegistry.model_validate(document)
 
 
+def test_a_machine_decision_is_exactly_the_labels_hit() -> None:
+    first = judged(v2(), {"k-deck": (DECK, METHOD_SLIDES, "d" * 64)})
+    document = first.model_dump()
+    document["method_uses"][0]["categories"] = ("medical_insurance",)  # not what the blocks hit
+    with pytest.raises(ValidationError):
+        ProductRegistry.model_validate(document)
+
+
 # 3.1 Registered sales materials are detected too (Spec §3.1, added after the RED) ---------------
 
 

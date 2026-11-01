@@ -1,10 +1,11 @@
 """SK-1 acceptance (written by Claude): method signals at block level, the taxonomy, and roles.
 
-Spec docs/design/slices/SK-1-方法用途登记与方法材料归属.md §2.1, §2.2, §3.2, §7 items 1–3. Method
-signals are detected per block, independent of `role_of()`; the insurance category is decided by the
-machine only when the taxonomy hits exactly one category, or only the general words. The new
-`sales_method` role is never recognised automatically and never offered to a person for a product
-material. Texts are invented.
+Spec docs/design/slices/SK-1-方法用途登记与方法材料归属.md §2.1, §2.2, §3.2, §7 items 1–3 (r3).
+Method signals are detected per block, independent of `role_of()`; every scope label (insurance
+category or the general scope) the material's blocks hit is the machine's, with the blocks and
+words that show it, and only a material that hits none waits for a person. The new `sales_method`
+role is never recognised automatically and never offered to a person for a product material. Texts
+are invented.
 """
 
 import json
@@ -25,12 +26,7 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.identity.confirmation import choices
 from insurance_harness.identity.material_roles import load_material_roles, role_of, role_signals
-from insurance_harness.identity.method_signals import (
-    BLOCK_SCHEME,
-    MethodHits,
-    detect,
-    machine_scope,
-)
+from insurance_harness.identity.method_signals import BLOCK_SCHEME, MethodHits, detect
 from tests.ingest.method_helpers import METHOD_SLIDES, PLAIN_SLIDES, deck_pages
 
 SHA = "d" * 64
@@ -96,8 +92,10 @@ def test_method_blocks_are_found_across_slides_with_stable_ids() -> None:
     assert {"P2S1", "P2S2", "P3S1", "P3S2"} <= set(hits.block_ids)
     assert len(set(hits.block_ids)) == len(hits.block_ids)
     assert {"销售方法", "讲解步骤", "异议", "促成"} <= set(hits.signals)
-    assert hits.category_hits == ("nursing_care_insurance",)
-    assert hits.general_hit is False
+    [label] = hits.label_hits
+    assert (label.label, label.block_ids) == ("nursing_care_insurance", ("P1S1",))
+    assert label.words == ("护理险",)
+    assert hits.labels == ("nursing_care_insurance",)
     assert hits.taxonomy_version == load_sales_taxonomy().version
     assert len(hits.evidence_digest) == 64
 
@@ -127,7 +125,7 @@ def test_plain_pdf_pages_are_split_into_segments_too() -> None:
     assert any(block.startswith("P2S") for block in hits.block_ids)
 
 
-# 3. The machine decides the category only when it is unambiguous (Spec §3.2) -------------------
+# 3. Every label the blocks hit is the machine's; none hit waits for a person (Spec §3.2) ---------
 
 
 def _hits(*slides: tuple[str, ...]) -> MethodHits:
@@ -136,24 +134,28 @@ def _hits(*slides: tuple[str, ...]) -> MethodHits:
     return hits
 
 
-def test_one_category_is_decided_by_the_machine() -> None:
-    assert machine_scope(_hits(("重疾险需求分析",))) == ("critical_illness_insurance",)
-
-
-def test_only_general_words_are_decided_as_general() -> None:
-    assert machine_scope(_hits(("通用的需求分析方法",))) == ("scope:general",)
-
-
 @pytest.mark.parametrize(
-    "slides",
+    ("slides", "labels"),
     [
-        (("重疾险与医疗险的需求分析",),),  # two categories
-        (("通用方法", "重疾险举例"),),  # a category and the general words
-        (("家庭保障的需求分析",),),  # neither
+        ((("重疾险需求分析",),), ("critical_illness_insurance",)),
+        ((("重疾险与医疗险的需求分析",),), ("critical_illness_insurance", "medical_insurance")),
+        ((("通用方法", "重疾险举例"),), ("critical_illness_insurance", "scope:general")),
+        ((("通用的需求分析方法",),), ("scope:general",)),
+        ((("家庭保障的需求分析",),), ()),  # none: a person chooses
     ],
 )
-def test_anything_else_waits_for_a_person(slides: tuple[tuple[str, ...], ...]) -> None:
-    assert machine_scope(_hits(*slides)) is None
+def test_every_label_hit_is_the_machines(
+    slides: tuple[tuple[str, ...], ...], labels: tuple[str, ...]
+) -> None:
+    assert _hits(*slides).labels == labels
+
+
+def test_each_label_keeps_the_blocks_and_words_that_show_it() -> None:
+    hits = _hits(("重疾险需求分析", "家庭情况"), ("重大疾病保险的讲解", "医疗险对比"))
+    by_label = {hit.label: hit for hit in hits.label_hits}
+    assert by_label["critical_illness_insurance"].block_ids == ("P2S1", "P3S1")
+    assert by_label["critical_illness_insurance"].words == ("重大疾病", "重疾")
+    assert by_label["medical_insurance"].block_ids == ("P3S2",)
 
 
 # 4. Roles: sales_method is never recognised, never offered for a product material ---------------
