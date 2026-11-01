@@ -52,7 +52,8 @@ PV-4a 合并后页面与问答行为不变（新字段只被写入、不被读�
 `entity_type`（目录中为 `insurance_product`），写进下一次部署 Issue。
 
 允许改动的字段只作用于这些类型的实体及其 Claim；其他实体（如 SK-0 的方法实体）及其 Claim 在 `identity_refresh` 中任何
-改动都整包拒绝（SK-0 接口修订）。
+改动都整包拒绝（SK-0 接口修订）。一个实体 ID 若同时被受版本约束类型与其他类型的实体使用，该 ID 不算版本实体（其 Claim
+无法区分归属），按“其他实体”处理（#510 审核 R2/R3）。
 
 ### 2.2 接收时（结构）
 
@@ -74,14 +75,31 @@ PV-4a 合并后页面与问答行为不变（新字段只被写入、不被读�
    - 其他成员：无（Relation 的任何改动也拒绝）。
    成员 digest 在接收时已按 payload 重算核对。
 5. **字段值**：改动后的 `lifecycle`、`product_family` 必须符合 §1.1 的形状；`identifiers` 的值必须是字符串。
-6. **引用完整**：Claim 的 `product_version_ref` 非空时必须等于其 `subject_ref`，并指向 `T` 中受版本约束类型的实体；新增
-   `supersedes` 的 `relation_id` 与 slug 等于按两端重算的确定值，两端不同且都是 `T` 中受版本约束类型的实体。
+6. **引用完整**（Owner 裁定，#510 审核 R3，统一本节与附录 A §1.2/§2 的表述）：对 `T` 中**每一个** Claim 检查，不论本包
+   是否改动它：
+   - 主体是受版本约束类型实体的 Claim（产品 Claim）：`product_version_ref` 非空时必须等于其 `subject_ref`；为空（`null` 或
+     缺省）只容许在**本包未触及**的 Claim 上（迁移期内尚未被任何刷新触及的遗留 Claim）；本包触及（作为成员提交）的每个产品
+     Claim 必须以非空且等于 `subject_ref` 的引用结束。因此引用一经建立，`identity_refresh` 永远不能把它清空或省略。
+   - 其他 Claim（主体不是受版本约束类型实体，如方法 Claim）：引用必须为空，且不得改动。
+   - 新增 `supersedes` 的 `relation_id` 与 slug 等于按两端重算的确定值，两端不同且都是 `T` 中受版本约束类型的实体。
 7. **no-op**：新增、删除都为空且提交的每个成员 digest 都等于 `A` 中同 slug 的 digest → 拒绝（“没有改动”）。
    只删除 `supersedes` 的包不是 no-op。
 
 任一不满足 → `CANDIDATE_INVALID`（detail 只给规则与成员位置，不回显 payload）。决定与激活沿用现有
 Candidate → Decision → Activate：Decision 为机器决定，`policy_ref = identity_refresh@<元数据提交>`；Head CAS、
 （tenant、Space、bundle digest）去重、已提交激活的 replay 回读都不变。
+
+### 2.4 只能由机器整包决定（#510 审核 R1）
+
+生产 Store 同时是 `PointStore`：逐点审核（`ReviewPoints`）把选中的增量直接交给 `Publisher.Activate`，不经过整包激活，
+也就不经过 §2.3 的完整目标校验与严格基线。采用的规则：**`identity_refresh` 候选包不参与逐点审核，也不接受任何人工决定**，
+唯一能激活它的路径是元数据发布路径的机器整包决定（Decide `mode = machine` → Activate，§2.3 全部检查都在 Activate 内）。
+
+- `ReviewPoints` 对该类候选包的 approve 与 reject 都拒绝，typed error `MACHINE_DECISION_ONLY`（HTTP 409）；
+- 整包人工审核 `Review`（approve/reject，包括借已批准的机器决定重新激活）与 `Decide(mode = human)` 同样拒绝；
+- 候选详情（逐点与整包两种详情）`blocker = MACHINE_DECISION_ONLY`，逐点详情中每个待定审核点的 `blocker` 相同；
+- 人工无法处理这类候选包不会造成堆积：Harness 提交后立即机器决定；中断留下的候选包在重跑时按当时 Active 重新规划，
+  相同的包按 bundle digest 去重后再次机器决定。
 
 ## 3. Harness（PV-4a）
 
@@ -111,11 +129,16 @@ Candidate → Decision → Activate：Decision 为机器决定，`policy_ref = i
 
 - 只接受 v2 登记表（有 `metadata_basis`），否则 `REGISTRY_NOT_V2`；持与其他 `uploads` 子命令相同的文件锁（只读登记表，锁保证
   不与迁移、归属并发）。
-- **规划**（纯函数，输入 Active `A` + 登记表）：
-  - 登记条目对应的实体成员：按 §3.1 更新 `identifiers` / `lifecycle` / `product_family`（在原 payload 上按键改动，其余键原样）；
-  - 主体是这些实体的 Claim：`product_version_ref = subject_ref`（原 payload 上改一个键）；
-  - `supersedes`：登记条目的 `predecessor` 两端都在 `A` 中时生成关系；`A` 中已有但不再成立的 `supersedes` 列入删除；
-  - 不碰任何其他成员（非登记实体、其 Claim、页面、导航、概念、wiki 页、方法知识）。
+- **规划**（纯函数，输入 Active `A` + 登记表 + 受版本约束的产品类型）：
+  - **版本实体**：`entity_type` 属于受版本约束的产品类型、ID 是登记条目、且该 ID 没有被其他类型实体共用的实体（#510 审核 R2）。
+    产品类型取自 SchemaPack 目录各 pack 的 `entity_type`（事实链路编译产品实体用的就是它，目录中为 `insurance_product`；
+    `--catalog` 默认仓库内目录），与平台的 `ENTERPRISE_VERSIONED_ENTITY_TYPES` 对应；同 ID 的 `sales_method` 等其他类型实体
+    永远不进计划；
+  - 版本实体：按 §3.1 更新 `identifiers` / `lifecycle` / `product_family`（在原 payload 上按键改动，其余键原样）；
+  - 主体是版本实体的 Claim：`product_version_ref = subject_ref`（原 payload 上改一个键）；
+  - `supersedes`：只管理**两端都是版本实体**的关系——登记条目的 `predecessor` 两端都是版本实体时生成关系；`A` 中两端都是
+    版本实体、但不再成立的 `supersedes` 列入删除；一端不是版本实体（未登记、不在 `A` 中或其他类型）的关系一律不动；
+  - 不碰任何其他成员（非登记实体、其他类型实体、它们的 Claim 与关系、页面、导航、概念、wiki 页、方法知识）。
   - 新 digest 等于原 digest 的成员不提交。全部为空 → no-op。
 - **分包**：每包不超过平台大小上限；同一产品的实体与 Claim 尽量同包，超限时 Claim 分到后续包；关系与删除随“新版本”所在的包。
 - **执行**：默认只规划（dry-run，输出各类计数与包数）；`--live` 才提交。每一包：按**当时**的 Active 重新规划，取第一包
@@ -142,8 +165,13 @@ epoch 与成员数 → `uploads refresh-identity --live`，不与编译轮次重
   通过并激活；以下各被整包拒绝：新增或删除 Claim/实体、改 Claim 的值或证据、改 `evidence_refs`/`access_scope`/`kind`、
   `product_version_ref ≠ subject_ref`、引用指向非版本类型或不存在的实体、非版本类型实体改允许字段、`lifecycle` 非法、新增非
   `supersedes` 关系、`relation_id` 不确定、删除非 `supersedes` 成员、改已有关系、`base` 为空、Head 已移动（`NEEDS_REBASE`，
-  不走宽松换基）、no-op、未配置版本类型；只删除关系的包通过。
-- **Harness**：v1 条目元数据与旧行为一致；v2 条目的标识、销售期与系列；规划只改登记实体及其 Claim、不碰其他成员；关系增删；
+  不走宽松换基）、no-op、未配置版本类型；只删除关系的包通过。R3：清空或省略已建立的引用、本包触及的产品 Claim 引用为空、
+  未触及的产品 Claim 引用错误、非版本 Claim 带引用、版本 ID 与其他类型实体共用，各被整包拒绝；未触及的遗留空引用可保留。
+  R1（测试替身实现 `PointStore` 与 `QueueStore`）：逐点 approve/reject、整包人工 Review、人工 Decide 都返回
+  `MACHINE_DECISION_ONLY`，详情与每个待定审核点 `blocker` 相同；Head 移动后机器整包路径 `NEEDS_REBASE`；对照：同一替身能
+  逐点发布编译包。
+- **Harness**：v1 条目元数据与旧行为一致；v2 条目的标识、销售期与系列；规划只改登记实体及其 Claim、不碰其他成员；关系增删
+  只限两端都是版本实体（一端未登记的关系不动）；同 ID 的其他类型实体及其 Claim 不进计划、类型共用的 ID 不算版本；
   no-op；只删关系不是 no-op；分包不超限且同产品优先同包；`--live` 循环按每次的 Active 重新规划、遇平台错误停止；
   `claims_from` 带引用；三个编译发布入口传入元数据。
 - 门禁：Go build/vet/受影响包测试、golangci-lint（new-from-rev）、Harness pytest/ruff/mypy、合同导出 `--check`、
