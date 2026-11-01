@@ -82,7 +82,7 @@ def test_a_rate_table_title_after_its_table_attaches_it(line: str, product_id: s
         product_id,
         "rate_table",
     )
-    assert result.policy_ref == "attribution-policy@2026-11-01.2"
+    assert result.policy_ref == "attribution-policy@2026-11-01.2"  # PV-1 bumped it
 
 
 def test_a_brochure_under_the_insurer_with_a_title_split_in_two_attaches_it() -> None:
@@ -204,7 +204,7 @@ def test_filled_labels_are_still_stripped() -> None:
 
 def test_the_policy_carries_the_title_line_rule_and_the_insurer() -> None:
     policy = load_attribution_policy()
-    assert policy.version == "2026-11-01.2"
+    assert policy.version == "2026-11-01.2"  # PV-1 bumped it after S5b-7
     assert policy.issuer_names == ("中国平安人寿保险股份有限公司",)
     for words in ("费率表", "成本表", "金额表", "说明书", "现金价值表"):
         assert words in policy.title_line_pattern

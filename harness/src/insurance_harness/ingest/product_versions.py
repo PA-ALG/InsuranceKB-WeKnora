@@ -6,7 +6,7 @@ brand rules, for grouping and candidates only — never an attribution anchor. T
 not stored: readers derive it from the period and the source status (PV-0 appendix A §3.2).
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -163,15 +163,33 @@ def predecessors(versions: Mapping[str, ProductVersion | None]) -> dict[str, str
     return linked
 
 
+def relinked(versions: Mapping[str, ProductVersion | None]) -> dict[str, ProductVersion | None]:
+    """The versions with every predecessor recomputed (an entry without a version stays so)."""
+    linked = predecessors(versions)
+    return {
+        pid: v.model_copy(update={"predecessor": linked[pid]}) if v is not None else None
+        for pid, v in versions.items()
+    }
+
+
 def check_versions(
     contract: str,
     basis: MetadataBasis | None,
     versions: Mapping[str, ProductVersion | None],
+    decided_keys: Iterable[str | None] = (),
+    decided_evidence: bool = False,
 ) -> None:
-    """The registry-wide rules of PV-1 Spec §2.3, raised as ValueError for the model validator."""
+    """The registry-wide rules of PV-1 Spec §2.3, raised as ValueError for the model validator.
+
+    `decided_keys` are the version keys of every recorded attribution (pending, settlement and
+    decision): a v1 registry holds none, rather than dropping them when it is saved (review R5);
+    likewise no version evidence (`decided_evidence`, PV-3 Spec §2.8).
+    """
     if contract == "product-registry.v1":
         if basis is not None or any(v is not None for v in versions.values()):
             raise ValueError("a v1 registry holds no version fields")
+        if any(key is not None for key in decided_keys) or decided_evidence:
+            raise ValueError("a v1 registry records no version key or version evidence")
         return
     if basis is None:
         raise ValueError("a v2 registry names its metadata basis")

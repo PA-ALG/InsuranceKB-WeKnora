@@ -39,8 +39,8 @@ from insurance_harness.ingest.product_versions import (
     ProductVersion,
     check_versions,
     entry_version,
-    predecessors,
     registered_version,
+    relinked,
     v1_excluded,
 )
 from insurance_harness.ingest.raw_sources import RawSource
@@ -166,7 +166,11 @@ class ProductRegistry(_Strict):
     @model_validator(mode="after")
     def _consistent(self) -> "ProductRegistry":
         versions = {product_id: p.version for product_id, p in self.products.items()}
-        check_versions(self.contract, self.metadata_basis, versions)
+        concluded = [p.settlement.conclusion for p in self.pending if p.settlement]
+        decided = [p.attribution for p in self.pending] + [d.attribution for d in self.decisions]
+        keys = [a.version_key for a in (*decided, *concluded) if a is not None]
+        evidence = any(a is not None and a.version_basis for a in (*decided, *concluded))
+        check_versions(self.contract, self.metadata_basis, versions, keys, evidence)
         recorded = [m for p in self.products.values() for m in (*p.materials, *p.retired)]
         ids = [m.knowledge_id for m in recorded] + [p.knowledge_id for p in self.pending]
         if len(set(ids)) != len(ids):
@@ -411,13 +415,9 @@ def _apply(
 
 def _link(registry: ProductRegistry) -> None:
     """Recompute every entry's unique predecessor (PV-0 appendix A §1.4)."""
-    if registry.contract == CONTRACT:
-        return
-    linked = predecessors({pid: p.version for pid, p in registry.products.items()})
-    for product_id, product in registry.products.items():
-        if product.version is not None:
-            update = {"predecessor": linked[product_id]}
-            product.version = product.version.model_copy(update=update)
+    linked = relinked({k: p.version for k, p in registry.products.items()})
+    for product_id, version in linked.items():
+        registry.products[product_id].version = version
 
 
 def head_of(pages: PageReader, space_id: str, source: RawSource) -> str:

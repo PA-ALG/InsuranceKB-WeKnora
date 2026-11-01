@@ -382,7 +382,12 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
             listed = listing.listing(registry.raw_kb_id)
             basis = registry.metadata_basis
             catalog = (
-                load_catalog(args.registry, basis.catalog_sha256)
+                load_catalog(
+                    args.registry,
+                    basis.catalog_sha256,
+                    repository=basis.repository,
+                    commit=basis.commit,
+                )
                 if registry.contract == V2 and basis is not None
                 else None
             )

@@ -36,7 +36,7 @@ from insurance_harness.identity.title_lines import line_titles, title_pattern
 from insurance_harness.identity.titles import guide_title, head_title, named_inside, own_codes
 from insurance_harness.identity.training_versions import judge, training_role, versioned
 from insurance_harness.identity.version_basis import RegisteredVersion, VersionBasis
-from insurance_harness.identity.versions import VersionIndex, match_version
+from insurance_harness.identity.versions import VersionIndex, match_version, normal_clause_code
 
 TERMS = "terms"  # the material role that prints the clause filing code and may create a product
 _SHA256 = r"^[0-9a-f]{64}$"
@@ -320,7 +320,9 @@ def attribute(
         return decided("QUARANTINE", "anchor_conflict", **anchors)
 
     by_code = [
-        p for p in products if code is not None and code in {_fold(c) for c in p.clause_codes}
+        p
+        for p in products
+        if code is not None and code in {normal_clause_code(c) for c in p.clause_codes}
     ]
     key, by_key = None, False
     if catalog is not None and code is not None:
@@ -465,7 +467,7 @@ def _existing(
         return decided(
             "NEEDS_CONFIRM", "role_unresolved", candidates=(product.product_id,), **anchors
         )
-    known = {_fold(c) for c in product.clause_codes}
+    known = {normal_clause_code(c) for c in product.clause_codes}
     if role == TERMS and own_code is not None and own_code not in known:
         created, key, taken = version
         if taken:

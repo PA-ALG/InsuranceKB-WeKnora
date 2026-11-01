@@ -8,12 +8,10 @@ committed and only confirmed, the old content with its backup intact was never r
 done again, anything else stops without writing (PV-0 appendix A §4).
 """
 
-import hashlib
 import json
 import os
-import tempfile
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -21,6 +19,18 @@ from pydantic import BaseModel, ConfigDict
 
 from insurance_harness.identity.attribution import AttributionPolicy, load_attribution_policy
 from insurance_harness.identity.versions import canonical_clause_code
+from insurance_harness.ingest.migration_journal import (
+    Journal,
+    MigrationError,
+    close_journal,
+    file_digest,
+    fsync_dir,
+    journal_path,
+    now_text,
+    read_journal,
+    sha,
+    write_new,
+)
 from insurance_harness.ingest.product_versions import (
     MetadataBasis,
     ProductVersion,
@@ -38,13 +48,7 @@ from insurance_harness.ingest.registry import (
 )
 from insurance_harness.ingest.version_catalog import VersionCatalog, save_catalog
 
-
-class MigrationError(ValueError):
-    """A caller-safe code; never a path or file content."""
-
-    def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(code)
+__all__ = ["EntryMatch", "MigrationError", "MigrationReport", "migrate_registry", "plan_migration"]
 
 
 class EntryMatch(BaseModel):
@@ -62,10 +66,6 @@ class MigrationReport(BaseModel):
     recovered: Literal["committed", "not_executed"] | None
     entries: list[EntryMatch]
     retired: list[str]  # entries whose retired materials the v2 format keeps as they are
-
-
-def _now(now: datetime | None) -> str:
-    return (now or datetime.now(UTC)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def plan_migration(
@@ -110,7 +110,7 @@ def plan_migration(
         repository=catalog.repository,
         commit=catalog.commit,
         catalog_sha256=catalog.digest(),
-        synced_at=_now(now),
+        synced_at=now_text(now),
     )
     try:
         planned = ProductRegistry.model_validate(planned.model_dump())
@@ -137,74 +137,37 @@ def _v1_view(registry: ProductRegistry) -> dict[str, Any]:
     return data
 
 
-def _sha(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def _fsync_dir(directory: Path) -> None:
-    descriptor = os.open(directory, os.O_RDONLY)
+def _confirm(path: Path, journal: Journal) -> None:
+    """Read the committed file back against the journal and its backup; the journal stays open
+    when anything does not check out (review R3)."""
+    backup = path.with_name(journal.backup_file)
+    if file_digest(backup) != journal.backup_sha256 or file_digest(path) != journal.new_sha256:
+        raise MigrationError("MIGRATION_READBACK_FAILED")
     try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
-def _write_new(path: Path, data: bytes) -> None:
-    """Create the file or fail: a backup or a journal is never overwritten."""
-    descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    try:
-        os.write(descriptor, data)
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-    _fsync_dir(path.parent)
-
-
-def _journal(path: Path) -> Path:
-    return path.with_name(path.name + ".migration-journal.json")
-
-
-def _close(path: Path, entry: dict[str, Any], result: str) -> None:
-    """Append the outcome to the migration records, then remove the open journal."""
-    line = json.dumps(entry | {"result": result, "closed_at": _now(None)}, ensure_ascii=False)
-    with path.with_name(path.name + ".migrations.jsonl").open("ab") as records:
-        records.write(line.encode("utf-8") + b"\n")
-        records.flush()
-        os.fsync(records.fileno())
-    _journal(path).unlink(missing_ok=True)
-    _fsync_dir(path.parent)
-
-
-def _confirm(path: Path, entry: dict[str, Any]) -> None:
-    """Read the committed file back; the journal stays open if it does not check out."""
-    data = path.read_bytes()
-    try:
-        current = load_registry(path)
-        backup = load_registry(path.with_name(entry["backup_file"]))
+        current, before = load_registry(path), load_registry(backup)
     except RegistryError:
         raise MigrationError("MIGRATION_READBACK_FAILED") from None
-    if _sha(data) != entry["new_sha256"] or current.contract != V2:
+    if current.contract != V2 or _v1_view(current) != _v1_view(before):
         raise MigrationError("MIGRATION_READBACK_FAILED")
-    if _v1_view(current) != _v1_view(backup):
-        raise MigrationError("MIGRATION_READBACK_FAILED")
-    _close(path, entry, "committed")
+    close_journal(path, journal, "committed")
 
 
 def _recover(path: Path) -> Literal["committed", "not_executed"]:
-    """Settle an open journal from its digests alone; anything unexpected stops without writing."""
-    try:
-        entry = json.loads(_journal(path).read_text(encoding="utf-8"))
-        current = _sha(path.read_bytes())
-        backup = path.with_name(entry["backup_file"])
-        backup_sha = _sha(backup.read_bytes()) if backup.is_file() else None
-    except (OSError, ValueError, KeyError, TypeError):
-        raise MigrationError("MIGRATION_RECOVERY_UNSAFE") from None
-    if current == entry["new_sha256"]:
-        _confirm(path, entry)
+    """Settle an open journal from its digests alone: the backup it names must be intact in either
+    branch; anything else stops without writing (PV-0 appendix A §4)."""
+    journal = read_journal(path)
+    current = file_digest(path)
+    if file_digest(path.with_name(journal.backup_file)) != journal.backup_sha256:
+        raise MigrationError("MIGRATION_RECOVERY_UNSAFE")
+    if current == journal.new_sha256:
+        try:
+            _confirm(path, journal)
+        except MigrationError:
+            raise MigrationError("MIGRATION_RECOVERY_UNSAFE") from None
         return "committed"
-    if current == entry["old_sha256"] and backup_sha == entry["backup_sha256"]:
-        path.with_name(entry["temp_file"]).unlink(missing_ok=True)
-        _close(path, entry, "not_executed")
+    if current == journal.old_sha256:
+        path.with_name(journal.temp_file).unlink(missing_ok=True)
+        close_journal(path, journal, "not_executed")
         return "not_executed"
     raise MigrationError("MIGRATION_RECOVERY_UNSAFE")
 
@@ -219,7 +182,7 @@ def migrate_registry(
 ) -> MigrationReport:
     """Migrate (or refresh) the registry file; the caller holds the registry lock."""
     recovered = None
-    if _journal(path).exists():
+    if journal_path(path).exists():
         if dry_run:
             raise MigrationError("MIGRATION_JOURNAL_OPEN")
         recovered = _recover(path)
@@ -236,31 +199,24 @@ def migrate_registry(
         return MigrationReport(status=status, recovered=recovered, entries=entries, retired=retired)
     old, new = path.read_bytes(), registry_document(planned)
     operation = uuid.uuid4().hex[:12]
-    backup = path.with_name(f"{path.name}.backup-{_now(now).replace(':', '')}-{operation}.json")
-    _write_new(backup, old)
-    save_catalog(catalog, path)
-    handle = tempfile.NamedTemporaryFile(
-        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
+    journal = Journal(
+        operation=operation,
+        kind="refresh" if refresh else "migrate",
+        old_sha256=sha(old),
+        new_sha256=sha(new),
+        backup_file=f"{path.name}.backup-{now_text(now).replace(':', '')}-{operation}.json",
+        backup_sha256=sha(old),
+        temp_file=f".{path.name}.{operation}.tmp",
+        manifest_commit=catalog.commit,
+        catalog_sha256=catalog.digest(),
+        started_at=now_text(now),
     )
-    with handle:
-        handle.write(new)
-        handle.flush()
-        os.fsync(handle.fileno())
-    temp = Path(handle.name)
-    entry = {
-        "operation": operation,
-        "kind": "refresh" if refresh else "migrate",
-        "old_sha256": _sha(old),
-        "new_sha256": _sha(new),
-        "backup_file": backup.name,
-        "backup_sha256": _sha(old),
-        "temp_file": temp.name,
-        "manifest_commit": catalog.commit,
-        "catalog_sha256": catalog.digest(),
-        "started_at": _now(now),
-    }
+    temp = path.with_name(journal.temp_file)
+    write_new(path.with_name(journal.backup_file), old)  # each write is complete and verified
+    save_catalog(catalog, path)
+    write_new(temp, new)
     try:
-        _write_new(_journal(path), json.dumps(entry, ensure_ascii=False).encode("utf-8"))
+        write_new(journal_path(path), journal.model_dump_json().encode("utf-8"))
     except Exception:
         temp.unlink(missing_ok=True)
         raise
@@ -268,10 +224,10 @@ def migrate_registry(
         os.replace(temp, path)  # the commit point
     except Exception:  # a crash (BaseException) leaves the journal open for recovery
         temp.unlink(missing_ok=True)
-        _close(path, entry, "not_executed")
+        close_journal(path, journal, "not_executed")
         raise
-    _fsync_dir(path.parent)
-    _confirm(path, entry)
+    fsync_dir(path.parent)
+    _confirm(path, journal)
     return MigrationReport(
         status="committed", recovered=recovered, entries=entries, retired=retired
     )
