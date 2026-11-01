@@ -16,12 +16,15 @@ person are not judged again; quarantined ones are, every run.
         --manifest-dir DIR --manifest-commit SHA [--refresh] [--dry-run]
     python -m insurance_harness.ingest.uploads detach --registry PATH --knowledge-id ID \\
         --reason {wrong_version,wrong_product,not_product_material} [--dry-run]
+    python -m insurance_harness.ingest.uploads relabel --registry PATH --knowledge-id ID [--dry-run]
 
 `confirm` pushes the materials waiting for a person to the platform and applies their answers
-(S5b-3c-2); it shares the registry lock with the other commands. `migrate-registry` turns a v1
-registry into v2 (or refreshes the version fields) from a pinned product repository checkout
-(PV-1 Spec §4); it reads no platform. A `run` on a v2 registry reads the catalog it names.
-`detach` takes a wrongly attributed material off its entry in a v2 registry (PV-3 Spec §4).
+(S5b-3c-2), and on a v2 registry the scope-label questions too (SK-1 §4); it shares the registry
+lock with the other commands. `migrate-registry` turns a v1 registry into v2 (or refreshes the
+version fields) from a pinned product repository checkout (PV-1 Spec §4); it reads no platform. A
+`run` on a v2 registry reads the catalog it names. `detach` takes a wrongly attributed material off
+its entry (PV-3 Spec §4); `relabel` has a person correct a method material's labels at the next
+`confirm` (SK-1 §4.5).
 """
 
 import argparse
@@ -36,6 +39,8 @@ import httpx
 from pydantic import BaseModel, ConfigDict
 
 from insurance_harness.bundle.client import PlatformClient, PlatformError
+from insurance_harness.catalog.sales_taxonomy import SalesTaxonomyError
+from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.eval.product_sources import declared_pack, display_name, source_directory
 from insurance_harness.evidence.weknora_pages import SourcePagesError, WeKnoraSourcePages
 from insurance_harness.identity.attribution import (
@@ -53,12 +58,15 @@ from insurance_harness.ingest.identity_refresh import (
     refresh_arguments,
     refresh_command,
 )
+from insurance_harness.ingest.method_confirmations import request_relabel, sync_methods
+from insurance_harness.ingest.method_uses import MethodStep, expire_method_uses
 from insurance_harness.ingest.publication import PublicationError, run_publication
 from insurance_harness.ingest.raw_sources import (
     RawSource,
     RawSources,
     RawSourcesError,
     UnfinishedSource,
+    material_pages,
 )
 from insurance_harness.ingest.registry import (
     FINAL,
@@ -68,13 +76,14 @@ from insurance_harness.ingest.registry import (
     ProductRegistry,
     RegistryError,
     SeedProduct,
-    head_of,
+    head_text,
     load_registry,
     record,
     save_registry,
     seed_registry,
 )
-from insurance_harness.ingest.registry_migration import MigrationError, migrate_registry
+from insurance_harness.ingest.registry_lock import RegistryBusy, RegistryLock
+from insurance_harness.ingest.registry_migration import migrate_command
 from insurance_harness.ingest.source_map import (
     API_KEY_ENV,
     BASE_URL_ENV,
@@ -85,7 +94,6 @@ from insurance_harness.ingest.source_map import (
 from insurance_harness.ingest.version_catalog import (
     CatalogError,
     VersionCatalog,
-    catalog_from_checkout,
     load_catalog,
 )
 from insurance_harness.ingest.withdrawn_questions import read_question_states
@@ -144,6 +152,10 @@ def _candidates(
         or (p.attribution.outcome == "NEEDS_CONFIRM" and p.attribution.policy_ref == policy_ref)
     }
     settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome in FINAL}
+    # A material detached without a product entry (a method material, SK-1 §3.4) ends here too;
+    # one whose method answer is being carried out is not judged again either (SK-1 §4.3).
+    settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome == "DETACHED"}
+    settled |= {u.knowledge_id for u in registry.method_uses if u.settlement is not None}
     return sorted(
         (s for s in sources if s.knowledge_id not in settled), key=lambda s: s.knowledge_id
     )
@@ -205,14 +217,19 @@ def attribute_uploads(
     asked = {p.knowledge_id for p in current.pending if p.attribution.outcome == "NEEDS_CONFIRM"}
     previous = {p.knowledge_id: p for p in current.pending}
     heads: dict[str, str] = {}
+    read: dict[str, list[PageText]] = {}  # every page, read once: the head and method blocks
     unreadable: list[UnreadableMaterial] = []
+    if current.contract == V2:
+        expire_method_uses(current, sources, unfinished)  # before a new revision is recorded
+    methods = MethodStep(current, read, policy)
     kept = {p.knowledge_id for p in current.pending if p.knowledge_id in unknown}
     candidates = [
         s for s in _candidates(current, sources, policy.policy_ref) if s.knowledge_id not in kept
     ]
     for source in candidates:
         try:
-            heads[source.knowledge_id] = head_of(pages, current.space_id, source)
+            read[source.knowledge_id] = material_pages(pages, current.space_id, source)
+            heads[source.knowledge_id] = head_text(read[source.knowledge_id])
         except SourcePagesError as error:
             unreadable.append(UnreadableMaterial(
                 knowledge_id=source.knowledge_id, file_name=source.file_name, code=error.code,
@@ -237,6 +254,7 @@ def attribute_uploads(
             if source.knowledge_id in asked and source.knowledge_id in withdrawn:
                 rejudged.add(source.knowledge_id)  # its item was withdrawn (S5b-9 Spec §2.1)
             elif source.knowledge_id in asked and attribution.outcome in WAITING:
+                methods.record(source, attribution)  # beside the question as it was asked
                 held.append(source)  # the person's question stays as it was asked
                 continue
             if attribution.outcome == "QUARANTINE":
@@ -246,15 +264,19 @@ def attribute_uploads(
             if record(current, source, attribution, catalog=catalog):
                 changed = True
                 affected.add(attribution.product_id or "")
+            methods.record(source, attribution)  # a second use beside the product one (SK-1)
         if not changed:
             for source, attribution in deferred:
+                attribution = methods.conclude(source, attribution)  # METHOD_MATERIAL (SK-1)
                 counts[attribution.outcome] += 1
                 if source.knowledge_id in withdrawn or not _same_question(
                     previous.get(source.knowledge_id), source, attribution
                 ):
                     record(current, source, attribution, catalog=catalog)
+                methods.record(source, attribution)
             break
         remaining = [*(source for source, _ in deferred), *held]
+    methods.backfill(sources, pages)  # registered sales materials (SK-1 §3.1)
     revision_changes, not_listed = _changes(current, sources)
     report = UploadReport(
         counts=dict(sorted(counts.items())),
@@ -269,27 +291,6 @@ def attribute_uploads(
         question_state_unknown=sorted(kept),
     )
     return UploadRun(registry=current, report=report)
-
-
-class _Busy(Exception):
-    pass
-
-
-class _Lock:
-    """One run per registry file: a lock file beside it, taken or refused at once."""
-
-    def __init__(self, registry_path: Path) -> None:
-        self.path = registry_path.with_name(registry_path.name + ".lock")
-
-    def __enter__(self) -> "_Lock":
-        try:
-            os.close(os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
-        except FileExistsError:
-            raise _Busy from None
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        self.path.unlink(missing_ok=True)
 
 
 def _seed_products(repo: Path, product_ids: Sequence[str]) -> dict[str, SeedProduct]:
@@ -341,22 +342,23 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     migration.add_argument("--refresh", action="store_true")
     migration.add_argument("--dry-run", action="store_true")
     refresh_arguments(commands.add_parser("refresh-identity"))
-    detaching = commands.add_parser("detach")
-    detaching.add_argument("--registry", type=Path, required=True)
-    detaching.add_argument("--knowledge-id", required=True)
-    detaching.add_argument("--reason", choices=REASONS, required=True)
-    detaching.add_argument("--dry-run", action="store_true")
+    for name in ("detach", "relabel"):  # one change to a v2 registry under its lock
+        change = commands.add_parser(name)
+        change.add_argument("--registry", type=Path, required=True)
+        change.add_argument("--knowledge-id", required=True)
+        change.add_argument("--dry-run", action="store_true")
+    commands.choices["detach"].add_argument("--reason", choices=REASONS, required=True)
     args = parser.parse_args(argv)
     if args.command == "migrate-registry":
-        return _migrate(args)
-    if args.command == "detach":
-        return _detach(args)
+        return migrate_command(args)
+    if args.command in {"detach", "relabel"}:
+        return _change(args)
     base_url, api_key = os.environ.get(BASE_URL_ENV, ""), os.environ.get(API_KEY_ENV, "")
     if not base_url or not api_key:
         print("CONFIGURATION_MISSING", file=sys.stderr)
         return 2
     try:
-        with _Lock(args.registry):
+        with RegistryLock(args.registry):
             if args.command == "publish":
                 report = run_publication(
                     args.registry, args.run_root,
@@ -395,14 +397,17 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 return 0
             registry = load_registry(args.registry)
             if args.command == "confirm":
-                confirmed = sync(
-                    registry,
-                    PlatformClient(base_url, api_key, transport=transport),
-                    pages,
-                    write=not args.dry_run,
-                    save=lambda current: save_registry(current, args.registry),
+                client = PlatformClient(base_url, api_key, transport=transport)
+                save = lambda current: save_registry(current, args.registry)  # noqa: E731
+                confirmed = sync(registry, client, pages, write=not args.dry_run, save=save)
+                if registry.contract != V2:
+                    print(confirmed.report.model_dump_json())
+                    return 0
+                methods = sync_methods(  # the method-scope questions (SK-1 §4)
+                    confirmed.registry, client, write=not args.dry_run, save=save
                 )
-                print(confirmed.report.model_dump_json())
+                merged = confirmed.report.model_dump(mode="json")
+                print(json.dumps(merged | {"methods": methods.report.model_dump(mode="json")}))
                 return 0
             listed = listing.listing(registry.raw_kb_id)
             basis = registry.metadata_basis
@@ -429,7 +434,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 save_registry(result.registry, args.registry)
             print(result.report.model_dump_json())
             return 0
-    except _Busy:
+    except RegistryBusy:
         print("REGISTRY_BUSY", file=sys.stderr)
         return 3
     except (
@@ -443,6 +448,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         PublicationError,
         CatalogError,
         RefreshError,
+        SalesTaxonomyError,
     ) as error:
         print(error.code, file=sys.stderr)
         return 1
@@ -451,45 +457,26 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         return 1
 
 
-def _migrate(args: argparse.Namespace) -> int:
-    """`migrate-registry`: the registry lock, the pinned catalog, then the journaled migration."""
+def _change(args: argparse.Namespace) -> int:
+    """`detach` (PV-3 Spec §4) or `relabel` (SK-1 §4.5): the registry lock, then the change."""
     try:
-        with _Lock(args.registry):
-            catalog = catalog_from_checkout(args.manifest_dir, args.manifest_commit)
-            report = migrate_registry(
-                args.registry, catalog, refresh=args.refresh, dry_run=args.dry_run
-            )
-    except _Busy:
-        print("REGISTRY_BUSY", file=sys.stderr)
-        return 3
-    except (CatalogError, MigrationError, RegistryError) as error:
-        print(error.code, file=sys.stderr)
-        return 1
-    except OSError:
-        print("REGISTRY_IO_ERROR", file=sys.stderr)
-        return 1
-    print(report.model_dump_json())
-    return 0
-
-
-def _detach(args: argparse.Namespace) -> int:
-    """`detach`: the registry lock, then the material off its entry (PV-3 Spec §4)."""
-    try:
-        with _Lock(args.registry):
+        with RegistryLock(args.registry):
             registry = load_registry(args.registry)
-            detached = detach(registry, args.knowledge_id, args.reason)
+            changed = (request_relabel(registry, args.knowledge_id) if args.command == "relabel"
+                       else detach(registry, args.knowledge_id, args.reason))
             if not args.dry_run:
-                save_registry(detached, args.registry)
-    except _Busy:
+                save_registry(changed, args.registry)
+    except RegistryBusy:
         print("REGISTRY_BUSY", file=sys.stderr)
         return 3
-    except (DetachError, RegistryError) as error:
+    except (DetachError, ConfirmationsError, RegistryError) as error:
         print(error.code, file=sys.stderr)
         return 1
     except OSError:
         print("REGISTRY_IO_ERROR", file=sys.stderr)
         return 1
-    print(json.dumps({"detached": args.knowledge_id, "dry_run": args.dry_run}))
+    done = "detached" if args.command == "detach" else "relabel"
+    print(json.dumps({done: args.knowledge_id, "dry_run": args.dry_run}))
     return 0
 
 

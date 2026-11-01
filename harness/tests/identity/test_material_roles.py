@@ -45,6 +45,7 @@ def test_the_shipped_roles_are_versioned_and_only_terms_and_brochures_are_eviden
         "brochure": True,
         "rate_table": False,
         "sales_training": False,  # S11c: serves only the sales-type fields (TrustPolicy)
+        "sales_method": False,  # SK-1: only recorded, never recognised; method-card predicates
     }
 
 

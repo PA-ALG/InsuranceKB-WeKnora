@@ -1,0 +1,29 @@
+{
+ "version": "2026-11-01.1",
+ "title": "「{file}」需要确认销售方法的适用范围",
+ "detail": "文件：{file}\n系统在这份材料里找到销售方法内容（命中：{signals}）。适用范围是销售方法关联的险种标签，用来把方法归到险种下，不是产品事实。系统在材料里识别到的险种：{hits}；当前适用范围：{labels}。\n每次选一项：加上或去掉一个险种后会接着再问一次，范围齐了选“完成”。如果它不是销售方法材料，选“不是销售方法材料”，{ignore_note}。",
+ "no_hits": "没有识别到险种",
+ "no_labels": "还没有",
+ "ignore_method_only": "忽略后这份文件不再参与归属与抽取",
+ "ignore_dual": "忽略只撤下它的销售方法用途，不影响它已有的产品归属",
+ "options": {
+  "add": "加上：{label}",
+  "remove": "去掉：{label}",
+  "done": "完成（适用范围：{labels}）",
+  "ignore": "不是销售方法材料（忽略）"
+ },
+ "labels": {
+  "critical_illness_insurance": "重疾险",
+  "medical_insurance": "医疗险",
+  "accident_medical_insurance": "意外医疗险",
+  "accident_insurance": "意外险",
+  "annuity_insurance": "年金险",
+  "supplementary_pension_insurance": "专属商业养老保险",
+  "whole_life_insurance": "终身寿险",
+  "term_life_insurance": "定期寿险",
+  "endowment_insurance": "两全保险",
+  "nursing_care_insurance": "护理险",
+  "disability_income_insurance": "失能收入损失保险",
+  "scope:general": "通用（不限险种）"
+ }
+}

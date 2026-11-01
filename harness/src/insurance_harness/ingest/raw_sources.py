@@ -6,10 +6,14 @@ changes or lies while it is read fails as a whole, so attribution never runs on 
 
 import json
 import re
-from typing import Annotated, Literal
+from collections.abc import Sequence
+from typing import Annotated, Literal, Protocol
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+
+from insurance_harness.eval.pdf_text import PageText
+from insurance_harness.evidence.weknora_pages import SourcePagesError
 
 PAGE_SIZE = 100  # the platform's largest page
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
@@ -202,3 +206,21 @@ def _completed(items: list[_Item]) -> list[RawSource]:
         ]
     except ValidationError:
         raise RawSourcesError("RAW_LISTING_INVALID") from None
+
+
+class _Pages(Protocol):
+    def pages(self, space_id: str, knowledge_id: str, attempt: int) -> Sequence[PageText]: ...
+
+
+def material_pages(reader: _Pages, space_id: str, source: RawSource) -> list[PageText]:
+    """Every page of the listed revision, in page order (S5b-2; read once per run, SK-1 §3.1).
+
+    Every page must belong to the file the listing names: the page reader checks the revision and
+    its own page hashes, not that the captured document is the listed one.
+    """
+    read = sorted(
+        reader.pages(space_id, source.knowledge_id, source.parse_attempt), key=lambda p: p.page
+    )
+    if not read or any(page.document_sha256 != source.sha256 for page in read):
+        raise SourcePagesError("PARSE_ARTIFACT_INTEGRITY")
+    return read
