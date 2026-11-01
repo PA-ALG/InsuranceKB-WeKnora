@@ -31,6 +31,7 @@ _LINK = re.compile(r"\[\[([^\[\]|]+)(?:\|([^\[\]]*))?\]\]")
 class NativeChunk(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
     content: str = ""
+    knowledge_id: str = ""  # the knowledge item the chunk belongs to (SK-2b); "" when not given
 
 
 class NativePage(BaseModel):
