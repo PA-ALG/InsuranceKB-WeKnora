@@ -241,8 +241,10 @@ def _evidence(
         unknown = wording.unknown_date
         start = version.sale_start if version and version.sale_start else unknown
         selling = version is not None and version.source_status == "on_sale"
-        end = version.sale_end if version and version.sale_end else (
-            wording.open_end if selling else unknown
+        end = (
+            version.sale_end
+            if version and version.sale_end
+            else (wording.open_end if selling else unknown)
         )
         items.append(
             wording.version_item.format(
