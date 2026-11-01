@@ -31,6 +31,9 @@ func (s *Service) SourceEntities(
 		citing[ref.KnowledgeID][entityID] = true
 	}
 	for entityID, claims := range index.claims {
+		if index.entities[index.entityByID[entityID]].Method {
+			continue // a training material is no product's material (SK-3 §3)
+		}
 		for _, claim := range claims {
 			for _, evidence := range claim.payload.Evidence {
 				cite(entityID, evidence.SourceRef)
@@ -46,7 +49,7 @@ func (s *Service) SourceEntities(
 			// The page's slug names one entity, but the page refers to all of them. A claim
 			// subject's placeholder entry must not take a page's material.
 			for _, entityID := range page.payload.Entities {
-				if index.entityMember(entityID) {
+				if index.entityMember(entityID) && !index.entities[index.entityByID[entityID]].Method {
 					cite(entityID, evidence.SourceRef)
 				}
 			}

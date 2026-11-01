@@ -13,7 +13,14 @@ import (
 // a present value as itself, and the two absences so that "not compiled" never reads as "the
 // material has none" (QA1 §4.1). Any other state is shown as stored.
 func fieldText(field Field) string {
-	text := FieldTitle(field) + "："
+	text := ""
+	if field.Note != "" {
+		text = field.Note + "\n"
+	}
+	if field.State == "present" && len(field.Items) == len(field.Evidence) && len(field.Items) > 0 {
+		return text + itemText(field)
+	}
+	text += FieldTitle(field) + "："
 	switch field.State {
 	case "present":
 		text += field.Value
@@ -39,6 +46,38 @@ func fieldText(field Field) string {
 	return text
 }
 
+// itemText cites each item of a method list with its own evidence (SK-3 §3).
+func itemText(field Field) string {
+	text := FieldTitle(field) + "："
+	for i, item := range field.Items {
+		text += fmt.Sprintf("\n%d. %s（引文：%s，第 %d 页）", i+1, item, field.Evidence[i].Quote, field.Evidence[i].Page)
+	}
+	meta := []string{}
+	if field.Origin != "" {
+		meta = append(meta, "来源性质："+field.Origin)
+	}
+	if field.Review != "" {
+		meta = append(meta, "审核方式："+field.Review)
+	}
+	if len(meta) > 0 {
+		text += "\n" + strings.Join(meta, "；")
+	}
+	return text
+}
+
+// FieldMetadata is the reference metadata of a cited field: its pinned release identity, plus
+// knowledge_class for method knowledge so that readers label it apart (SK-3 §6.3).
+func FieldMetadata(space, id string, field Field) map[string]string {
+	metadata := map[string]string{
+		"source_tier": "release", "space_id": space, "release_id": id,
+		"logical_slug": field.Slug, "evidence_index": "0",
+	}
+	if field.Method {
+		metadata["knowledge_class"] = classMethod
+	}
+	return metadata
+}
+
 func fieldToolResult(space, id string, fields []Field, notes []string, total int) *types.ToolResult {
 	rows := make([]map[string]interface{}, 0, len(fields))
 	notes = append([]string(nil), notes...)
@@ -52,10 +91,7 @@ func fieldToolResult(space, id string, fields []Field, notes []string, total int
 			"chunk_id":        "release:" + id + ":" + field.Slug,
 			"knowledge_title": FieldTitle(field),
 			"content":         content,
-			"metadata": map[string]string{
-				"source_tier": "release", "space_id": space, "release_id": id,
-				"logical_slug": field.Slug, "evidence_index": "0",
-			},
+			"metadata":        FieldMetadata(space, id, field),
 		})
 	}
 	return knowledgeResult(rows, notes, total)

@@ -156,7 +156,7 @@ func (index *releaseIndex) questionProducts(question string) []indexedEntity {
 	if question == "" {
 		return nil
 	}
-	entities := index.orderedEntities()
+	entities := index.productEntities()
 	matches := make([]productMatch, len(entities))
 	firstNames := []string{}
 	for i, entity := range entities {
@@ -239,6 +239,9 @@ func sharedNamePrefix(names []string) string {
 func (index *releaseIndex) productExclusionTitles() []string {
 	var titles []string
 	for _, profile := range index.profiles {
+		if profile.Class == classMethod {
+			continue // method titles name no product field (SK-3 §3)
+		}
 		for _, section := range profile.Sections {
 			for _, field := range section.Fields {
 				titles = append(titles, normalizeProductText(field.Title))

@@ -112,13 +112,14 @@ def test_the_command_writes_the_plan_and_report_before_the_registry(
     status, summary = setup.main(capsys)
     assert status == 0 and seen == [True, True]
     bundle = CandidateBundle.model_validate_json((setup.run_root / "candidate.json").read_text())
-    assert len(bundle.members) == 6
+    # SK-3 RED (Claude): five claims, the entity and the method profile
+    assert len(bundle.members) == 7
     report = (setup.run_root / "report.json").read_text(encoding="utf-8")
     assert METHOD_A not in report and json.loads(report)["methods"][0]["status"] == "compiled"
     written = json.loads(setup.registry.read_text(encoding="utf-8"))
     assert len(written["methods"]) == 1
     assert setup.platform.reads == [world.registry.space_id]
-    assert summary["members"] == 6
+    assert summary["members"] == 7
 
 
 def test_a_failed_bundle_changes_nothing(

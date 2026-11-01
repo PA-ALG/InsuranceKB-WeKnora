@@ -122,6 +122,9 @@ func FieldTitle(field Field) string {
 
 // entityLine describes an entity for knowledge_find_entity; version parts appear only when known.
 func (index *releaseIndex) entityLine(entity Entity) string {
+	if entity.Method {
+		return index.methodLine(index.entities[index.entityByID[entity.EntityID]])
+	}
 	line := "产品编号：" + entity.EntityID + "；名称：" + entity.Name
 	if entity.Lifecycle != nil {
 		word, basis := saleText(entity)

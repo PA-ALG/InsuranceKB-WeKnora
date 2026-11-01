@@ -3,6 +3,11 @@
  "entity_type": "sales_method",
  "owner_module": "harness/sales_methods",
  "review_pack": "methods_sales",
+ "presentation": {
+  "display_name": "销售方法",
+  "reading_note": "销售方法（培训材料，非产品事实）：只用于回答怎么卖、怎么讲、如何应对异议；产品事实以产品的已发布知识为准，两类来源分开标注。",
+  "notices": {"product_info": "其中的产品信息以条款与已发布知识为准。"}
+ },
  "cards": [
   {
    "predicate": "method_summary",
