@@ -50,6 +50,7 @@ from insurance_harness.ingest.raw_sources import (
 from insurance_harness.ingest.registry import (
     FINAL,
     WAITING,
+    PendingEntry,
     ProductRegistry,
     RegistryError,
     SeedProduct,
@@ -146,10 +147,14 @@ def _changes(
     return changed, sorted(owned - set(listed))
 
 
-def _same_question(before: Attribution | None, after: Attribution) -> bool:
-    """The same conclusion under another policy version: the question asked stays (S5b-7 §2.4)."""
-    return before is not None and before.model_dump(exclude={"policy_ref"}) == after.model_dump(
-        exclude={"policy_ref"}
+def _same_question(before: PendingEntry | None, source: RawSource, after: Attribution) -> bool:
+    """The same material revision and the same conclusion under another policy version: the
+    question asked stays (S5b-7 Spec §2.4). A new revision is recorded as before."""
+    return (
+        before is not None
+        and (before.parse_attempt, before.sha256) == (source.parse_attempt, source.sha256)
+        and before.attribution.model_dump(exclude={"policy_ref"})
+        == after.model_dump(exclude={"policy_ref"})
     )
 
 
@@ -167,7 +172,7 @@ def attribute_uploads(
     current = registry.model_copy(deep=True)
     policy = policy or load_attribution_policy()
     asked = {p.knowledge_id for p in current.pending if p.attribution.outcome == "NEEDS_CONFIRM"}
-    previous = {p.knowledge_id: p.attribution for p in current.pending}
+    previous = {p.knowledge_id: p for p in current.pending}
     heads: dict[str, str] = {}
     unreadable: list[UnreadableMaterial] = []
     for source in _candidates(current, sources, policy.policy_ref):
@@ -208,7 +213,7 @@ def attribute_uploads(
         if not changed:
             for source, attribution in deferred:
                 counts[attribution.outcome] += 1
-                if not _same_question(previous.get(source.knowledge_id), attribution):
+                if not _same_question(previous.get(source.knowledge_id), source, attribution):
                     record(current, source, attribution)
             break
         remaining = [*(source for source, _ in deferred), *held]
