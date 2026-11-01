@@ -85,6 +85,7 @@ from insurance_harness.ingest.version_catalog import (
     catalog_from_checkout,
     load_catalog,
 )
+from insurance_harness.ingest.withdrawn_questions import read_question_states
 
 
 class UnreadableMaterial(BaseModel):
@@ -108,6 +109,8 @@ class UploadReport(BaseModel):
     not_listed: list[str]  # registered materials missing from the completed listing (S8)
     unreadable_reasons: list[UnreadableMaterial] = []  # `unreadable`, each with its reason (S11f)
     unfinished: list[UnfinishedSource] = []  # listed materials whose parse has not completed (S11f)
+    withdrawn_rejudged: list[str] = []  # older questions judged again: their item withdrawn (S5b-9)
+    question_state_unknown: list[str] = []  # older questions kept: items unreadable (S5b-9)
 
 
 class UploadRun(BaseModel):
@@ -183,11 +186,16 @@ def attribute_uploads(
     policy: AttributionPolicy | None = None,
     unfinished: Sequence[UnfinishedSource] = (),
     catalog: VersionCatalog | None = None,
+    withdrawn: frozenset[str] = frozenset(),
+    unknown: frozenset[str] = frozenset(),
 ) -> UploadRun:
     """The next registry and a report; the given registry is not modified.
 
     `unfinished` is passed through to the report: the listed materials that cannot be judged yet.
     `catalog` is the pinned version catalog a v2 registry names (PV-1 Spec §3).
+    `withdrawn` names older questions whose item was withdrawn: judged again rather than kept as
+    asked; `unknown` names those whose items could not be read: they take no part in the run, not
+    even through an automatic result, and stay exactly as asked (S5b-9 Spec §2).
     """
     current = registry.model_copy(deep=True)
     policy = policy or load_attribution_policy()
@@ -195,7 +203,11 @@ def attribute_uploads(
     previous = {p.knowledge_id: p for p in current.pending}
     heads: dict[str, str] = {}
     unreadable: list[UnreadableMaterial] = []
-    for source in _candidates(current, sources, policy.policy_ref):
+    kept = {p.knowledge_id for p in current.pending if p.knowledge_id in unknown}
+    candidates = [
+        s for s in _candidates(current, sources, policy.policy_ref) if s.knowledge_id not in kept
+    ]
+    for source in candidates:
         try:
             heads[source.knowledge_id] = head_of(pages, current.space_id, source)
         except SourcePagesError as error:
@@ -203,11 +215,10 @@ def attribute_uploads(
                 knowledge_id=source.knowledge_id, file_name=source.file_name, code=error.code,
                 reason=error.reason, page=error.page,
             ))
-    remaining = [
-        s for s in _candidates(current, sources, policy.policy_ref) if s.knowledge_id in heads
-    ]
+    remaining = [s for s in candidates if s.knowledge_id in heads]
     counts: Counter[str] = Counter()
     affected: set[str] = set()
+    rejudged: set[str] = set()
     while remaining:
         deferred: list[tuple[RawSource, Attribution]] = []
         held: list[RawSource] = []  # asked under an older policy and still a question
@@ -220,7 +231,9 @@ def attribute_uploads(
                 head=heads[source.knowledge_id],
             )
             attribution = attribute(upload, current.registered(), policy, catalog=catalog)
-            if source.knowledge_id in asked and attribution.outcome in WAITING:
+            if source.knowledge_id in asked and source.knowledge_id in withdrawn:
+                rejudged.add(source.knowledge_id)  # its item was withdrawn (S5b-9 Spec §2.1)
+            elif source.knowledge_id in asked and attribution.outcome in WAITING:
                 held.append(source)  # the person's question stays as it was asked
                 continue
             if attribution.outcome == "QUARANTINE":
@@ -233,7 +246,9 @@ def attribute_uploads(
         if not changed:
             for source, attribution in deferred:
                 counts[attribution.outcome] += 1
-                if not _same_question(previous.get(source.knowledge_id), source, attribution):
+                if source.knowledge_id in withdrawn or not _same_question(
+                    previous.get(source.knowledge_id), source, attribution
+                ):
                     record(current, source, attribution, catalog=catalog)
             break
         remaining = [*(source for source, _ in deferred), *held]
@@ -247,6 +262,8 @@ def attribute_uploads(
         not_listed=not_listed,
         unreadable_reasons=sorted(unreadable, key=lambda m: m.knowledge_id),
         unfinished=sorted(unfinished, key=lambda u: u.knowledge_id),
+        withdrawn_rejudged=sorted(rejudged),
+        question_state_unknown=sorted(kept),
     )
     return UploadRun(registry=current, report=report)
 
@@ -408,8 +425,14 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 if registry.contract == V2 and basis is not None
                 else None
             )
+            states = read_question_states(
+                PlatformClient(base_url, api_key, transport=transport),
+                registry,
+                load_attribution_policy().policy_ref,
+            )
             result = attribute_uploads(
-                registry, listed.completed, pages, unfinished=listed.unfinished, catalog=catalog
+                registry, listed.completed, pages, unfinished=listed.unfinished, catalog=catalog,
+                withdrawn=states.withdrawn, unknown=states.unknown,
             )
             if not args.dry_run and result.registry != registry:
                 save_registry(result.registry, args.registry)
