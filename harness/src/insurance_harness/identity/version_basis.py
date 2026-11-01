@@ -13,7 +13,13 @@ from pydantic import BaseModel, ConfigDict, Field
 Precision = Literal["year", "month", "day"]
 SignalSource = Literal["file_name", "opening", "date_line"]
 Verdict = Literal[
-    "consistent", "partial", "date_conflict", "period_unknown", "type_conflict", "undated"
+    "consistent",
+    "partial",
+    "date_conflict",
+    "period_unknown",
+    "type_conflict",
+    "undated",
+    "unbound",  # a version without its external key: shown, never a target (review R3)
 ]
 Decider = Literal["machine", "person"]
 _DATE = r"^\d{4}-\d{2}-\d{2}$"

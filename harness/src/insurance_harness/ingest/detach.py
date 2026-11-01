@@ -5,7 +5,8 @@ The controlled way back from a wrong attribution: the material leaves its entry'
 the material is not judged again (a retired material never is). Its knowledge follows the existing
 change rules on the next compile: a claim supported only by this material is withdrawn as a source
 withdrawal; one still supported by another source, or under an expert lock, is kept. Only a v2
-registry is detached, so a v1 file stays readable by code without this outcome.
+registry is detached, so a v1 file stays readable by code without this outcome; the last material
+of an entry is never detached (no withdrawal path exists for an entry left without sources).
 """
 
 from insurance_harness.identity.attribution import Attribution, load_attribution_policy
@@ -15,7 +16,8 @@ REASONS = ("wrong_version", "wrong_product", "not_product_material")
 
 
 class DetachError(ValueError):
-    """REGISTRY_V1, MATERIAL_NOT_ATTACHED or REASON_INVALID; never a path or a name."""
+    """REGISTRY_V1, MATERIAL_NOT_ATTACHED, LAST_MATERIAL or REASON_INVALID; never a path or a
+    name."""
 
     def __init__(self, code: str) -> None:
         self.code = code
@@ -38,6 +40,10 @@ def detach(registry: ProductRegistry, knowledge_id: str, reason: str) -> Product
     )
     if owner is None:
         raise DetachError("MATERIAL_NOT_ATTACHED")
+    if len(registry.products[owner].materials) == 1:
+        # An entry without any source has no withdrawal path yet: the source map refuses it, so
+        # the next compile could not withdraw its knowledge (review R6). Refused, not half done.
+        raise DetachError("LAST_MATERIAL")
     current = registry.model_copy(deep=True)
     product = current.products[owner]
     material = next(m for m in product.materials if m.knowledge_id == knowledge_id)

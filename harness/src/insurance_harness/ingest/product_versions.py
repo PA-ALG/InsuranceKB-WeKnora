@@ -187,13 +187,14 @@ def check_versions(
 
     `decided_keys` are the version keys of every recorded attribution (pending, settlement and
     decision): a v1 registry holds none, rather than dropping them when it is saved (review R5);
-    likewise no version evidence (`decided_evidence`, PV-3 Spec §2.8).
+    likewise no PV-3 field or outcome (`decided_evidence`: version evidence, shared versions or
+    DETACHED; PV-3 Spec §2.8, §4).
     """
     if contract == "product-registry.v1":
         if basis is not None or any(v is not None for v in versions.values()):
             raise ValueError("a v1 registry holds no version fields")
         if any(key is not None for key in decided_keys) or decided_evidence:
-            raise ValueError("a v1 registry records no version key or version evidence")
+            raise ValueError("a v1 registry records no version key or PV-3 field")
         return
     if basis is None:
         raise ValueError("a v2 registry names its metadata basis")

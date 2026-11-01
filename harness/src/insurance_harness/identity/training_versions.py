@@ -56,11 +56,11 @@ def versioned(products: Sequence["RegisteredProduct"]) -> bool:
 
 
 def training_role(
-    file_name: str, head: str, window: str, policy: "AttributionPolicy"
+    file_name: str, head: str, window: str, policy: "AttributionPolicy", more: str = ""
 ) -> str | None:
     """The training role from the policy's training words, only when no other role shows any
-    signal (PV-3 Spec §2.2)."""
-    if role_signals(file_name, head) - {policy.training_role}:
+    signal, title lines (`more`) included (PV-3 Spec §2.2)."""
+    if role_signals(file_name, head, more) - {policy.training_role}:
         return None
     text = _text(file_name, window)
     return policy.training_role if any(fold(w) in text for w in policy.training_signals) else None
@@ -70,10 +70,10 @@ def date_signals(
     file_name: str, head: str, window: str, policy: "AttributionPolicy"
 ) -> tuple[DateSignal, ...]:
     """The material's own dates: its file name, its opening and whole date lines (§2.4)."""
-    found = [*_scan(fold(PurePosixPath(file_name).stem), "file_name", policy)]
-    found += _scan(window, "opening", policy)
+    found = [*_scan(_masked(fold(PurePosixPath(file_name).stem), policy), "file_name", policy)]
+    found += _scan(_masked(window, policy), "opening", policy)
     for line in (fold(part) for part in _LINES.split(head)):
-        found += [s for s in _scan(line, "date_line", policy, whole=True)]
+        found += [s for s in _scan(_masked(line, policy), "date_line", policy, whole=True)]
     seen: set[tuple[str, str]] = set()
     kept = []
     for signal in sorted(found, key=lambda s: _SOURCES.index(s.source)):
@@ -92,20 +92,22 @@ def judge(
 ) -> Judgement:
     """The version judgement of one training material (§2.3–§2.7)."""
     commit = next((p.version.basis_commit for p in products if p.version is not None), None)
-    hits = brand_hits(file_name, window, products, policy)
-    family = [p for p in products if p.product_id in hits]
+    text = _text(file_name, window)
+    named = _named_prefixes(brand_hits(file_name, window, products, policy), text)
     signals = date_signals(file_name, head, window, policy)
-    if len(set(hits.values())) > 1:
+    widest = {
+        m for m in named.values() if not any(o != m and o.startswith(m) for o in named.values())
+    }
+    if len(widest) > 1:  # two families named apart, a shared short prefix or not (review R1)
         return Judgement("families", VersionBasis(signals=signals, metadata_commit=commit))
+    family = [p for p in products if p.product_id in named]
     if not family:
         return Judgement("none", VersionBasis(signals=signals, metadata_commit=commit))
-    text = _text(file_name, window)
-    excluded = {p.product_id for p in family if _type_conflict(p, family, text, policy)}
+    named_editions = _material_editions(text, family, named, policy)
+    excluded = {p.product_id for p in family if _type_conflict(p, named_editions, text, policy)}
     if not signals:
-        verdicts = tuple(
-            _verdict(p, "type_conflict" if p.product_id in excluded else "undated") for p in family
-        )
-        choices = tuple(p.product_id for p in family if p.product_id not in excluded)
+        verdicts = tuple(_verdict(p, "undated", p.product_id in excluded) for p in family)
+        choices = tuple(v.product_id for v in verdicts if v.verdict == "undated")
         basis = VersionBasis(signals=signals, candidates=verdicts, metadata_commit=commit)
         return Judgement("undated", basis, choices=choices)
     material = _material_period(signals)
@@ -115,16 +117,14 @@ def judge(
     for product in family:
         verdict = _date_verdict(product.version, material)
         if verdict is not None:
-            listed.append(
-                _verdict(product, "type_conflict" if product.product_id in excluded else verdict)
-            )
+            listed.append(_verdict(product, verdict, product.product_id in excluded))
     basis = VersionBasis(
         signals=signals,
         material_period=(material.start.isoformat(), material.end.isoformat()),
         candidates=tuple(listed),
         metadata_commit=commit,
     )
-    candidates = [v for v in listed if v.verdict != "type_conflict"]
+    candidates = [v for v in listed if v.verdict != "type_conflict"]  # unbound ones stay shown
     choices = tuple(v.product_id for v in candidates if v.verdict == "consistent")
     if not candidates:
         return Judgement("none", basis)
@@ -230,9 +230,12 @@ def _date_verdict(version: RegisteredVersion | None, material: _Period) -> str |
     return "partial" if overlaps else "date_conflict"
 
 
-def _verdict(product: "RegisteredProduct", verdict: str) -> VersionVerdict:
+def _verdict(product: "RegisteredProduct", verdict: str, conflict: bool = False) -> VersionVerdict:
+    """A type conflict first; then a version without its external key, never a target (review
+    R3, PV-0 appendix A §4); otherwise the date verdict."""
     key = product.version.version_key if product.version is not None else None
-    return VersionVerdict(product_id=product.product_id, version_key=key, verdict=verdict)  # type: ignore[arg-type]
+    final = "type_conflict" if conflict else ("unbound" if key is None else verdict)
+    return VersionVerdict(product_id=product.product_id, version_key=key, verdict=final)  # type: ignore[arg-type]
 
 
 # Type words -------------------------------------------------------------------------------------
@@ -242,9 +245,45 @@ def _text(file_name: str, window: str) -> str:
     return (fold(PurePosixPath(file_name).stem) + "\n" + window).casefold()
 
 
+def _masked(text: str, policy: "AttributionPolicy") -> str:
+    """Amounts and reference numbers blanked out before dates are read (review R2)."""
+    for mask in policy.date_masks:
+        text = re.sub(mask, lambda match: "|" * len(match.group(0)), text)
+    return text
+
+
+def _named_prefixes(hits: dict[str, str], text: str) -> dict[str, str]:
+    """Each brand hit with the longest prefix of its brand core the material names."""
+    named = {}
+    for product_id, core in hits.items():
+        length = next(n for n in range(len(core), 0, -1) if core[:n] in text)
+        named[product_id] = core[:length]
+    return named
+
+
+def _material_editions(
+    text: str,
+    family: Sequence["RegisteredProduct"],
+    named: dict[str, str],
+    policy: "AttributionPolicy",
+) -> set[str]:
+    """The editions the material names explicitly — in brackets, or right after the brand —
+    whether or not that edition is registered, plus registered editions it names (review R3)."""
+    found = {
+        match.group(1)
+        for match in re.finditer(policy.edition_pattern, text)
+        if not any(c.isdigit() for c in match.group(1))
+    }
+    for prefix in set(named.values()):
+        after = re.escape(prefix) + r"([^\d()\s]{1,4}?[版款])"
+        found |= {match.group(1) for match in re.finditer(after, text)}
+    registered = {e for p in family for e in _editions(p, policy)}
+    return found | {e for e in registered if _edition_core(e) in text}
+
+
 def _type_conflict(
     product: "RegisteredProduct",
-    family: Sequence["RegisteredProduct"],
+    named_editions: set[str],
     text: str,
     policy: "AttributionPolicy",
 ) -> bool:
@@ -269,9 +308,9 @@ def _type_conflict(
     riders = [fold(word).casefold() for word in policy.rider_words]
     if any(word in text for word in riders) and not any(word in names for word in riders):
         return True
-    named = {e for p in family for e in _editions(p, policy) if _edition_core(e) in text}
-    own = _editions(product, policy)
-    return len(named) == 1 and bool(own) and not named <= own
+    if len(named_editions) == 1:  # a version of another edition, or of none, contradicts it
+        return not named_editions <= _editions(product, policy)
+    return False
 
 
 def _editions(product: "RegisteredProduct", policy: "AttributionPolicy") -> set[str]:

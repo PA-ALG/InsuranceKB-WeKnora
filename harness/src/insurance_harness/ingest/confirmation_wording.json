@@ -46,7 +46,8 @@
     "date_conflict": "日期冲突",
     "period_unknown": "销售期未知",
     "type_conflict": "类型不符",
-    "undated": "材料无日期依据"
+    "undated": "材料无日期依据",
+    "unbound": "未绑定报备版本"
   },
   "sources": {
     "file_name": "文件名",

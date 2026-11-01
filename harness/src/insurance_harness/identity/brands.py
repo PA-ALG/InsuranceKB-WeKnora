@@ -54,15 +54,14 @@ def brand_hits(
     products: Sequence["RegisteredProduct"],
     policy: "AttributionPolicy",
 ) -> dict[str, str]:
-    """Each product whose brand the material's file name or opening carries, with the brand
-    prefix it matched (the brand core's first brand_min_chars characters, casefolded)."""
+    """Each product whose brand the material's file name or opening carries, with its brand core
+    (casefolded): a brand matches by its first brand_min_chars characters (S11c)."""
     text = (fold(PurePosixPath(file_name).stem) + "\n" + window).casefold()
     hits: dict[str, str] = {}
     for product in products:
         for brand in sorted({brand_core(name, policy) for name in product.names}):
-            prefix = brand[: policy.brand_min_chars]
-            if len(brand) >= policy.brand_min_chars and prefix in text:
-                hits[product.product_id] = prefix
+            if len(brand) >= policy.brand_min_chars and brand[: policy.brand_min_chars] in text:
+                hits[product.product_id] = brand
                 break
     return hits
 

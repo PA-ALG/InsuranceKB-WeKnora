@@ -139,10 +139,10 @@ def conclude(
         return _settled(
             pending, policy, "IGNORED", "confirmed_ignore", candidates=pending.candidates
         )
+    if versioned(registry):  # every answer but ignoring is checked again (review R4)
+        _still_asked(pending, choice, upload, registry, policy)
     if choice.kind in {"replace", "supplement"}:
         return _same_role(pending, choice.kind, registry, policy)
-    if choice.kind in {"product", "role"} and versioned(registry):
-        _still_asked(pending, choice, upload, registry, policy)
     try:
         if choice.kind == "product":
             result = attribute(upload, registry, policy, product=choice.value)
@@ -197,21 +197,25 @@ def _still_asked(
     registry: Sequence[RegisteredProduct],
     policy: AttributionPolicy,
 ) -> None:
-    """A version answer applies only to the question the material still raises, with the same
-    evidence; an older question cannot carry a choice past the version rules (PV-3 Spec §3)."""
+    """An answer applies only while the material still raises the question with the same version
+    evidence (PV-3 Spec §3, review R4); an older question cannot carry a choice past the version
+    rules. A version a person chose stays one of the choices the material still offers."""
     fresh = attribute(upload, registry, policy)
-    if pending.reason not in VERSION_REASONS:
+    basis = pending.version_basis
+    if basis is None:
         if fresh.version_basis is not None:
             raise ConfirmationError("CHOICE_STALE")
         return
-    same = (fresh.reason, _evidence(fresh.version_basis)) == (
-        pending.reason,
-        _evidence(pending.version_basis),
-    )
-    if pending.reason == "version_role_unresolved":
-        same = same and fresh.product_id == pending.product_id
-    elif choice.value not in fresh.candidates:
-        same = False
+    if _evidence(fresh.version_basis) != _evidence(basis):
+        raise ConfirmationError("CHOICE_STALE")
+    if basis.version_decided_by == "person":  # a second question after a person's choice
+        same = fresh.reason in {"version_candidates", "no_date_signal"} and (
+            pending.product_id in fresh.candidates
+        )
+    elif basis.version_decided_by == "machine":
+        same = (fresh.reason, fresh.product_id) == (pending.reason, pending.product_id)
+    else:  # the version question itself
+        same = fresh.reason == pending.reason and choice.value in fresh.candidates
     if not same:
         raise ConfirmationError("CHOICE_STALE")
 
@@ -242,6 +246,7 @@ def _same_role(
 def _settled(
     pending: Attribution, policy: AttributionPolicy, outcome: str, reason: str, **fields: object
 ) -> Attribution:
+    """The person's decision, keeping the version evidence and who decided it (review R4)."""
     return Attribution.model_validate(
         {
             "outcome": outcome,
@@ -250,6 +255,8 @@ def _settled(
             "role": pending.role,
             "clause_code": pending.clause_code,
             "policy_ref": policy.policy_ref,
+            "version_basis": pending.version_basis,
+            "shared_versions": pending.shared_versions,
             **fields,
         }
     )

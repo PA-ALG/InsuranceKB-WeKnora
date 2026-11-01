@@ -130,6 +130,7 @@ class AttributionPolicy(_Frozen):
     plan_type_groups: tuple[PlanTypeGroup, ...]
     rider_words: tuple[str, ...]
     edition_pattern: str = Field(min_length=1)
+    date_masks: tuple[str, ...]  # amounts and reference numbers, masked before dates are read
 
     @model_validator(mode="after")
     def _consistent(self) -> "AttributionPolicy":
@@ -220,6 +221,8 @@ def _check_versions(policy: AttributionPolicy) -> None:
     try:
         compiled = [(spec, re.compile(spec.pattern)) for spec in policy.date_patterns]
         edition = re.compile(policy.edition_pattern)
+        for mask in policy.date_masks:
+            re.compile(mask)
     except re.error as error:
         raise ValueError("invalid version pattern") from error
     if any(set(regex.groupindex) != groups[spec.precision] for spec, regex in compiled):
@@ -305,7 +308,7 @@ def attribute(
     if role is None and (role := role_of(upload.file_name, upload.head)) != TERMS:
         role = role_of(upload.file_name, upload.head, "".join(lines.values()))
     if role is None and versioned(products):  # training words, v2 only (PV-3 Spec §2.2)
-        role = training_role(upload.file_name, upload.head, window, policy)
+        role = training_role(upload.file_name, upload.head, window, policy, "".join(lines.values()))
     # A terms' own code is the one printed with the verification line (S5b-5), wherever it sits
     # in the first pages; older terms that open with their code keep the S5b-1 rule. Any other
     # code only cites one (after a label, or in a brochure's body): it may confirm a registered

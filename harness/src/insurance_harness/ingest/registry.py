@@ -170,7 +170,9 @@ class ProductRegistry(_Strict):
         decided = [p.attribution for p in self.pending] + [d.attribution for d in self.decisions]
         keys = [a.version_key for a in (*decided, *concluded) if a is not None]
         found = [a for a in (*decided, *concluded) if a is not None]
-        evidence = any(a.version_basis or a.shared_versions for a in found)
+        evidence = any(
+            a.version_basis or a.shared_versions or a.outcome == "DETACHED" for a in found
+        )  # PV-3 fields and outcome: v2 only (review R7)
         check_versions(self.contract, self.metadata_basis, versions, keys, evidence)
         recorded = [m for p in self.products.values() for m in (*p.materials, *p.retired)]
         ids = [m.knowledge_id for m in recorded] + [p.knowledge_id for p in self.pending]

@@ -85,11 +85,12 @@ def role_of(document: str, head: str, more: str = "") -> str | None:
     return both[0] if len(both) == 1 and len(any_signal) == 1 else None
 
 
-def role_signals(document: str, head: str) -> set[str]:
-    """The roles that show any signal, in the name or in the opening (PV-3 Spec §2.2): a role is
-    inferred from other evidence only when none does, so a conflict stays a conflict."""
+def role_signals(document: str, head: str, more: str = "") -> set[str]:
+    """The roles that show any signal, in the name, the opening or `more` (title lines, as for
+    `role_of`) (PV-3 Spec §2.2): a role is inferred from other evidence only when none does, so a
+    conflict stays a conflict."""
     name = _folded(PurePosixPath(document).stem)
-    opening = _folded(head)[:HEAD_CHARS]
+    opening = _folded(head)[:HEAD_CHARS] + _folded(more)
     return {
         role.role
         for role in load_material_roles().roles
