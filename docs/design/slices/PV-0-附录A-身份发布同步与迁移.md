@@ -15,27 +15,38 @@
 
 ### 1.2 合同映射（PV-4 实施）
 
-- **Entity**：每个登记条目发布一个实体，`entity_type` 保持 `product`（读者、导航与 S3d 页面都按它工作）。在我们的模型里
-  一个 `product` 实体就是一个报备版本；蓝图的 `product_version` 类型保留给“一个实体承载多个版本”的场景，本设计不使用，
-  不新增按编码汇总的实体。
+- **Entity**：每个登记条目发布一个实体，`entity_type` 保持 `product`（读者、导航与 S3d 页面都按它工作）；一个 `product`
+  实体就是一个报备版本。本设计不使用 `product_version` 类型，也不新增按编码汇总的实体。
 - `identifiers`：`product_code` 改为真实 planCode（今天 `page.py` 写入内部 ID，`sc-` 条目会得到伪编码）——已知时写，
   未知时**省略**；新增 `version_key`（已知时）；`filing_no` = 条款号。
 - 销售期等属性：Entity 合同（`contracts/knowledge.py`，`extra=forbid`）新增可选对象 `lifecycle{sale_start, sale_end,
   source_status, basis_commit, basis_date}`；按 Harness pydantic → `contracts/*.schema.json` 导出，Go 校验结构与不变量
   （`sale_start < sale_end`、日期格式），前端按 schema 生成类型。销售状态不入合同，由读取侧按评价日推出（§3.2）。
+- 分组数据：Entity 新增可选对象 `product_family{key, display_name}`，由 Harness 按品牌数据规则（主文档 §3.3）计算后随实体
+  发布；产品库页面只从 Release 中的实体读取它分组，**前端不读 Harness 登记表，也不另写品牌规则**。它只能经 §2 的元数据发布
+  路径更新（属于允许改动的字段），缺失时页面把该版本放在“未分组”。
 - **Claim**：`product_version_ref` = 同一 `subject_ref`（内部实体 ID）。该实体必须是同一 Release 的成员，否则组包失败关闭
   （typed error），不发布空或悬空引用。
 - **Relation `supersedes`**：`from` = 新版本实体 ID，`to` = 前驱实体 ID；两端都必须是同一 Release 的成员，否则不发布该
   关系（报告）。`relation_id` 由两端 ID 确定性生成。
 - 不可解析的情况（外部键为空、前驱不唯一、前驱未登记）只影响对应可选属性或关系，不阻断实体与 Claim 的发布。
 
-### 1.3 去重：同一外部版本不得登记两次
+### 1.3 去重：两个标识组合一致才认定，否则失败关闭
 
-- 新建条目前，先按 `version_key`（已知时）与条款号在登记表中查找；命中已有条目 → 该材料属于已有条目（补充或重复），
-  不新建。
-- 迁移与同步时，两个条目映射到同一 `version_key` → 拒绝写入并报告（人工合并），不自动选择。
-- 种子条目（ID = planCode，如 `2650`）迁移后补 `version_key`（如 `2650-1`）；之后同一版本的材料再到达时按 `version_key`
-  与条款号命中种子条目，不会以 `sc-` ID 再登记一次。
+新材料（或迁移、同步中的一条清单记录）带外部版本键 `K`（已知时）与条款号 `C`。在登记表中分别查找：`X` = `version_key` 为 `K`
+的条目，`Y` = `clause_codes` 含 `C` 的条目集合；`C` 在固定提交清单中对应的版本数记为 `n(C)`。
+
+| 情况 | 结论 |
+|---|---|
+| `X` 存在，且 `Y` 为空或只含 `X` | 认定为 `X`（补充或重复） |
+| `X` 存在，`Y` 含 `X` 以外的条目 | 冲突：归属记 `QUARANTINE / anchor_conflict`；迁移、同步拒绝写入并报告 |
+| `X` 不存在，`Y` 恰好一个且 `n(C) = 1` | 认定为 `Y`；该条目 `version_key` 为空时由迁移或同步补 `K`，非空且不等于 `K` 时按冲突处理 |
+| `X` 不存在，`Y` 恰好一个且 `n(C) > 1`（共用条款号） | 不能认定：隔离并报告，不并入、不新建（新建条目的 ID 由条款号决定，无法与 `Y` 区分） |
+| `X` 不存在，`Y` 含多个条目 | 冲突，隔离并报告 |
+| `X`、`Y` 都为空 | 走现有新建规则（条款与标题锚点），新条目写入 `K`（已知时） |
+
+任何情况下都不合并两个已有条目；两个条目映射到同一 `version_key` 时迁移与同步拒绝写入，由人工处理。种子条目（ID = planCode，
+如 `2650`）迁移后补 `version_key`（如 `2650-1`），之后同一版本的材料按上表命中种子条目，不会以 `sc-` ID 再登记一次。
 
 ### 1.4 唯一前驱规则
 
@@ -49,15 +60,27 @@
 直接结束，且对 Active 已有的实体不重发；`ingest/publication.py` 依据既有输出与回执可能判为无需发布。因此身份补齐与元数据
 更新走一条**独立的元数据发布路径**，与事实 delta 分开：
 
-- **输入**：当前 Active Release 的成员（固定 `release_id` 与 epoch）+ 登记表 v2 的身份与销售期 + 固定的元数据提交。
-- **允许改动的字段**：Claim 的 `product_version_ref`；Entity 的 `identifiers`（`product_code`、`version_key`、`filing_no`）与
-  `lifecycle`；`supersedes` Relation 的增删。**其余一律原样保留**：Claim 的 value、state、unit、applicability、effective_*、
-  evidence、provenance、origin、expert_lock、unknown_reason、review（含 mode 与分数）、maintenance（revision_no、changed_at、
-  changed_by、first/last release）；成员与审核记录的关联不变。
-- **候选包**：CandidateBundle 新增 `origin = identity_refresh`（合同改动）。平台不变量：此类候选包的每个成员与 Active 中同 slug
-  成员相比，只能在上述允许字段上不同，否则整包拒绝（失败关闭）；不产生新的审核项，审核方式与分数沿用。
-- **幂等**：重跑时若算出的成员 digest 全部等于 Active，则不提交候选包（no-op）；中断后重跑按 Active 重新计算，不依赖本地回执。
-- **Entity 单独变化**：同步只改了销售期时，同一路径只发布变化的 Entity 成员，不需要 Claim 变化。
+- **输入**：当前 Active Release `A`（候选包必须带非空的 `base_release_id` 与 `base_epoch`，指向 `A`）+ 登记表 v2 的身份、销售期
+  与分组 + 固定的元数据提交。
+- **候选包**：CandidateBundle 的 `origin` 枚举新增 `identity_refresh`（合同改动），其余字段与现有协议相同。
+- **平台按完整目标 Release 校验**（不只看提交的成员，也不因 origin 标记而信任提交者）：平台按现有 `release/publish.go`
+  `materialize` 得到目标 `T` = `A` 先删除 `removals`、再叠加提交成员，然后逐项检查，任一不满足即拒绝整包（typed error）：
+  1. **成员集合**：`T` 相对 `A` 新增的成员只能是谓词为 `supersedes` 的 Relation；被删除的成员只能是 `A` 中谓词为 `supersedes`
+     的 Relation（`removals` 只能列这类 slug）。不得增删 Claim、Entity 或其他任何成员。
+  2. **保留成员的完整投影**：`A` 与 `T` 共有的每个 slug，成员的 kind、slug、`evidence_refs`、`access_scope` 不变；payload 去掉
+     允许字段后逐字段相等；允许字段只有 Claim 的 `product_version_ref`，Entity 的 `identifiers.product_code`、
+     `identifiers.version_key`、`identifiers.filing_no`、`lifecycle`、`product_family`。`member_digest` 由平台按新 payload 重算并
+     核对。Claim 的 value、state、unit、applicability、effective_*、evidence、provenance、origin、expert_lock、
+     unknown_reason、review（含 mode 与分数）、maintenance 因此全部原样保留。
+  3. **引用完整**：`product_version_ref` 必须等于该 Claim 的 `subject_ref`，并指向 `T` 中的 Entity；新增 `supersedes` 的两端
+     都是 `T` 中的 Entity，`relation_id` 等于平台按两端 ID 重算的确定值。
+- **激活**：沿用现有 Candidate → Decision → Activate，不新增协议：Decision 记为机器决定，策略引用写明 `identity_refresh` 与元数据
+  提交，不生成新的审核项；激活照旧做 Head CAS（Head 已移动 → `NEEDS_REBASE`，按新的 Active 重新计算），候选按
+  （tenant、Space、bundle digest）去重，已提交的激活按现有 replay 回读。历史 Release 中的审核决定不改动；保留成员的审核信息
+  就在其 payload 中，原样进入新 Release。
+- **幂等与 no-op**：Harness 先在本地算出 `T`；当新增集合、删除集合都为空，且每个保留成员的 payload 与 `A` 相同，才判定为 no-op
+  （只删除 `supersedes` 的候选包提交成员为空，但删除集合非空，不是 no-op）。中断后重跑按当时的 Active 重新计算，不依赖本地回执。
+- **Entity 单独变化**：同步只改了销售期或分组时，同一路径只发布变化的 Entity 成员，不需要 Claim 变化。
 - **不改变的语义**：同一版本内的权威替代、材料撤回、专家锁优先级仍由事实链路按 `decision.py` 判定；跨版本是“并存”；
   全过程只推进同一个 Space Head。
 - **纪律**：首次全量重发布（所有 Claim 补 `product_version_ref`，成员 digest 全变）单独开 Issue，执行前后核对 Active epoch 与
@@ -91,9 +114,18 @@
 
 - **只读入口保持纯读**：`load_registry` 能读 v1 与 v2；读到 v1 时在内存中按 v2 模型构造（版本字段为空），**从不写文件**。
   发布 dry-run 等经 `changes.options.registry_inputs` 的只读调用行为不变，不持锁、不迁移。
-- **写入口**：单独的迁移命令（如 `uploads migrate-registry --manifest-commit <sha>`），持与 `uploads run/confirm` 相同的文件锁；
-  步骤：校验输入为合法 v1（否则拒绝，不改原件）→ 写带时间戳的备份 → 生成 v2 到同目录临时文件并 fsync → 原子替换 → 重新读回
-  校验。任何一步失败，原件不变；中断后重跑从原件重新开始。对已是 v2 的文件运行 = no-op（可用 `--refresh` 只重算版本字段）。
+- **写入口**：单独的迁移命令（如 `uploads migrate-registry --manifest-commit <sha>`），持与 `uploads run/confirm` 相同的文件锁。
+  步骤与提交点：
+  1. 校验目标文件为合法 v1（是 v2 → 走下面的恢复判定；都不是 → 拒绝，不改任何文件）；
+  2. 写备份（带时间戳的新文件，永不覆盖已有备份，命令也从不删除备份），fsync；
+  3. 生成 v2 到同目录临时文件并 fsync；
+  4. **原子替换 = 提交点**。替换之前的任何失败：目标仍是原 v1，删除临时文件，保留备份；
+  5. 替换之后：读回校验通过 → 写迁移记录（备份路径与摘要、清单提交、v2 摘要），结束。替换之后的读回失败或进程中断，结果视为
+     **已提交但未确认**，不能再声称原件未变。
+- **恢复**（下一次运行，同一把锁下）：读取目标与最近的备份——目标是合法 v2 且其 v1 投影与备份逐项相等 → 视为已提交，补写迁移
+  记录后结束，**不重新迁移**；目标仍是与备份相同的 v1 → 视为未提交，可从第 1 步重新开始；其他情况（目标损坏、投影不等、
+  备份缺失）→ 停止并报告，由人用备份恢复，命令不自动覆盖任何文件。对已确认的 v2 运行 = no-op（`--refresh` 只重算版本字段，
+  按同样的备份、提交点与恢复规则执行）。
 - **保留**：products、materials、retired、pending（含未完成的 Settlement）、decisions（含 ConfirmationRef）、全部 ID 与发布 slug
   原样保留。校验：v2 投影回 v1 字段后与原件逐项相等。
 - **匹配**：按条款号到固定提交的清单匹配；0 个匹配 → 版本字段为空、状态 `unknown`；多个匹配（共用条款号）→ 版本字段为空并
