@@ -137,7 +137,7 @@ def _method(run: _Run, method: MethodEntry) -> dict[str, Any]:
     entry: dict[str, Any] = {"method_id": method.method_id, "status": "skipped", "code": None}
     links = valid_links(method, run.registry.method_uses)
     if method.suppressed or not links:
-        removals = _retired(run.active, method.method_id)
+        removals = published_members(run.active, method.method_id)
         run.removals.extend(removals)
         return {**entry, "status": "retired", "removals": len(removals)}
     try:
@@ -226,9 +226,9 @@ def _in_force(active: Release | None, method_id: str, changes: ChangeSet) -> lis
     return list(claims.values())
 
 
-def _retired(active: Release | None, method_id: str) -> list[str]:
-    """Every published Claim of a method (unknown ones too: they cite no source, so no change
-    decision would retract them) and its entity."""
+def published_members(active: Release | None, method_id: str) -> list[str]:
+    """The slugs of every published Claim of a method (unknown ones too: they cite no source, so no
+    change decision would retract them) and of its entity: what leaves when it retires."""
     slugs = retired_claims(active, method_id, keep=())
     entity = f"entity/{method_id}"
     if active is not None and any(m.logical_slug == entity for m in active.members):

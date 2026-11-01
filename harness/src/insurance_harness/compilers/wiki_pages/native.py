@@ -77,9 +77,10 @@ class NativeWikiReader:
             body = self._get(client, f"/api/v1/chunks/by-id/{chunk_id}", None)
             data = body.get("data") if isinstance(body, dict) else None
             content = data.get("content") if isinstance(data, dict) else None
-            if not isinstance(content, str):
+            knowledge_id = data.get("knowledge_id") if isinstance(data, dict) else None
+            if not isinstance(content, str) or not isinstance(knowledge_id, str | None):
                 raise NativeWikiError("NATIVE_WIKI_UNREADABLE")
-            chunks.append(NativeChunk(content=content))
+            chunks.append(NativeChunk(content=content, knowledge_id=knowledge_id or ""))
         try:
             return NativePage.model_validate(
                 {
