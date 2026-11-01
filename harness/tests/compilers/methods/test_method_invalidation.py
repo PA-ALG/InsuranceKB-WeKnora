@@ -80,4 +80,3 @@ def test_an_invalidated_material_leaves_discovery_candidates_and_active(
         [*(f"{method.method_id}/{card}" for card in CARDS), f"entity/{method.method_id}"]
     )
     assert later.registry.methods[0].links == method.links  # links are never rewritten
-
