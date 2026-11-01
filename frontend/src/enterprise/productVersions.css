@@ -1,0 +1,12 @@
+/* PV-4b: sale status labels (navigation and version page) and the version facts of an entry. */
+.ek-sale-status { flex: none; padding: 0 6px; border-radius: 4px; font-size: 12px; line-height: 20px; white-space: nowrap; color: var(--td-text-color-secondary); background: var(--td-bg-color-component); }
+.ek-sale-status[data-sale-status="on_sale"] { color: var(--td-success-color); background: var(--td-success-color-light); }
+.ek-sale-status[data-sale-status="not_yet_on_sale"] { color: var(--td-warning-color); background: var(--td-warning-color-light); }
+.ek-sale-status[data-sale-status="discontinued"] { color: var(--td-text-color-placeholder); }
+.ek-version { margin: 0 0 12px; color: var(--td-text-color-secondary); font-size: 13px; }
+.ek-version__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin: 0; }
+.ek-version__facts > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ek-version__facts dt { color: var(--td-text-color-placeholder); }
+.ek-version__facts dd { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; }
+.ek-version__link a { color: var(--td-brand-color); }
+.ek-version__link small { margin-left: 4px; color: var(--td-text-color-placeholder); font-variant-numeric: tabular-nums; }

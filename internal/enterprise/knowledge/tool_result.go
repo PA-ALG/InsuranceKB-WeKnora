@@ -13,7 +13,7 @@ import (
 // a present value as itself, and the two absences so that "not compiled" never reads as "the
 // material has none" (QA1 §4.1). Any other state is shown as stored.
 func fieldText(field Field) string {
-	text := field.EntityName + " · " + field.FieldTitle + "："
+	text := FieldTitle(field) + "："
 	switch field.State {
 	case "present":
 		text += field.Value
@@ -50,7 +50,7 @@ func fieldToolResult(space, id string, fields []Field, notes []string, total int
 		}
 		rows = append(rows, map[string]interface{}{
 			"chunk_id":        "release:" + id + ":" + field.Slug,
-			"knowledge_title": field.EntityName + " · " + field.FieldTitle,
+			"knowledge_title": FieldTitle(field),
 			"content":         content,
 			"metadata": map[string]string{
 				"source_tier": "release", "space_id": space, "release_id": id,

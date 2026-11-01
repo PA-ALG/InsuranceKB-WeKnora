@@ -118,7 +118,9 @@ func (t *knowledgeTool) Execute(ctx context.Context, raw json.RawMessage) (*type
 	}
 	// One execution observes one immutable release view, including concept refs.
 	// A subsequent tool invocation reads again through the production Reader.
-	service := NewService(&toolRead{source: t.service.reader, tenant: tenant, space: args.SpaceID, id: id})
+	service := &Service{
+		reader: &toolRead{source: t.service.reader, tenant: tenant, space: args.SpaceID, id: id}, now: t.service.now,
+	}
 	var fields []Field
 	var notes []string
 	total := 0
@@ -137,12 +139,16 @@ func (t *knowledgeTool) Execute(ctx context.Context, raw json.RawMessage) (*type
 		}
 		return pageToolResult(args.SpaceID, id, pages, total, notes), nil
 	case "knowledge_find_entity":
-		entities, err := service.FindEntities(ctx, tenant, args.SpaceID, id, args.Query, 0)
+		index, err := service.read(ctx, tenant, args.SpaceID, id)
+		if err != nil {
+			return nil, err
+		}
+		entities, err := index.findEntities(ctx, args.Query, 0)
 		if err != nil {
 			return nil, err
 		}
 		for _, entity := range entities {
-			notes = append(notes, "产品编号："+entity.EntityID+"；名称："+entity.Name)
+			notes = append(notes, index.entityLine(entity))
 		}
 		total = len(entities)
 	case "knowledge_get_fields":

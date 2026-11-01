@@ -404,6 +404,9 @@ class NavigationProfile(ContractModel):
     # QA3: per field key, groups of 1-3 terms; a question asks a field when it contains every
     # term of one group. Absent in navigations published before QA3.
     question_terms: dict[NonBlank, list[list[NonBlank]]] | None = None
+    # PV-4b: per question intent, term groups shaped like question_terms. The platform narrows
+    # product versions by intent from these alone (Spec PV-4b §4). Absent before PV-4b.
+    question_intents: dict[Literal["sales", "service"], list[list[NonBlank]]] | None = None
 
     @model_validator(mode="after")
     def keys_are_unique(self) -> Self:
@@ -412,19 +415,24 @@ class NavigationProfile(ContractModel):
             raise ValueError("domain keys must be unique")
         if len(set(self.overview_fields)) != len(self.overview_fields):
             raise ValueError("overview fields must be unique")
-        for groups in (self.question_terms or {}).values():
-            # A group matches when every term occurs, so its order carries nothing: compare sets.
-            seen: set[frozenset[str]] = set()
-            for group in groups:
-                texts = frozenset(question_term_text(term) for term in group)
-                if not 1 <= len(group) <= 3 or any(len(text) < 2 for text in texts):
-                    raise ValueError("a question-term group has 1 to 3 terms of 2+ characters")
-                if len(texts) != len(group):
-                    raise ValueError("a question-term group repeats a term")
-                if texts in seen:
-                    raise ValueError("question-term groups of a field must be distinct")
-                seen.add(texts)
+        intents = (self.question_intents or {}).values()
+        for groups in [*(self.question_terms or {}).values(), *intents]:
+            _check_term_groups(groups)
         return self
+
+
+def _check_term_groups(groups: list[list[str]]) -> None:
+    # A group matches when every term occurs, so its order carries nothing: compare sets.
+    seen: set[frozenset[str]] = set()
+    for group in groups:
+        texts = frozenset(question_term_text(term) for term in group)
+        if not 1 <= len(group) <= 3 or any(len(text) < 2 for text in texts):
+            raise ValueError("a question-term group has 1 to 3 terms of 2+ characters")
+        if len(texts) != len(group):
+            raise ValueError("a question-term group repeats a term")
+        if texts in seen:
+            raise ValueError("the term groups of one key must be distinct")
+        seen.add(texts)
 
 
 class ConceptStatement(ContractModel):

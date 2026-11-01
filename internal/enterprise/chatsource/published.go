@@ -163,7 +163,7 @@ func publishedHits(
 			content := knowledge.FieldText(field)
 			hits = append(hits, &types.SearchResult{
 				ID: "release:" + id + ":" + field.Slug, Content: content,
-				KnowledgeTitle: field.EntityName + " · " + field.FieldTitle,
+				KnowledgeTitle: knowledge.FieldTitle(field),
 				Score:          1, ChunkType: types.ChunkTypeText, MatchType: types.MatchTypeKeywords,
 				Metadata: map[string]string{
 					"source_tier": "release", "space_id": space, "release_id": id,

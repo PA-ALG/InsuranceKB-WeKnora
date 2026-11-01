@@ -13,7 +13,9 @@ const defaultQuestionLimit = 12
 // QuestionFields finds the published fields a quick question asks about, without a model:
 // a field by its title or published question terms; a product using QuestionProducts' matching.
 // Fields alone compare every product. Named products supply overview fields when no field is
-// asked, or when a field matches only through a named product's name.
+// asked, or when a field matches only through a named product's name. Published question intents
+// narrow a sales comparison of every product to versions that may be on sale, and a service
+// question's named versions to those sold on its purchase date (PV-4b Spec §4.2).
 func (s *Service) QuestionFields(
 	ctx context.Context, tenantID uint64, spaceID, releaseID, question string, limit int,
 ) ([]Field, error) {
@@ -31,6 +33,10 @@ func (s *Service) QuestionFields(
 	entities := index.orderedEntities()
 	products := index.questionProducts(question)
 	termQuestion := normalizeQuestionTerm(question)
+	intent := index.questionIntent(termQuestion)
+	if intent == intentService {
+		products = heldVersions(products, question)
+	}
 	asked := map[string]bool{}
 	fieldsAsked, supplementOverview := false, false
 	for _, entity := range entities {
@@ -54,6 +60,9 @@ func (s *Service) QuestionFields(
 		scope := products
 		if len(scope) == 0 {
 			scope = entities
+			if intent == intentSales {
+				scope = forSale(entities)
+			}
 		}
 		for _, entity := range scope {
 			for _, field := range index.fields(entity) {

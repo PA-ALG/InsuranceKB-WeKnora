@@ -1,7 +1,7 @@
 {
  "navigation_id": "enterprise",
- "navigation_version": "2026-10-28.1",
- "basis": "S3e: the product domain lists the schema pack catalog's packs in catalog order (display name and labels as filed); service domains are declared for entities published later (user 2026-10-18). QA3 (2026-10-28): question_terms per field key, drafted by Claude from the field cards' titles, definitions and includes; offline check on the #286 r2 questions (the author knew those questions, so that check is optimistic).",
+ "navigation_version": "2026-11-01.1",
+ "basis": "S3e: the product domain lists the schema pack catalog's packs in catalog order (display name and labels as filed); service domains are declared for entities published later (user 2026-10-18). QA3 (2026-10-28): question_terms per field key, drafted by Claude from the field cards' titles, definitions and includes; offline check on the #286 r2 questions (the author knew those questions, so that check is optimistic). PV-4b (2026-11-01): question_intents drafted by Claude from PV-0 §5.3's question kinds (sales: recommend, compare, can I buy; service: claims and policy changes on a held policy, or a purchase in the past). Terms that also name product features or pre-purchase questions (投保年龄, 保证续保, 报销, 保单贷款) are left out, so that a sales question about them is not made ambiguous; no live check yet (PV-4b Spec §6).",
  "display_name": "保险产品知识库",
  "overview_fields": [
   "entry_age_range",
@@ -455,6 +455,82 @@
    [
     "合同",
     "变更"
+   ]
+  ]
+ },
+ "question_intents": {
+  "sales": [
+   [
+    "推荐"
+   ],
+   [
+    "哪款"
+   ],
+   [
+    "哪些产品"
+   ],
+   [
+    "对比"
+   ],
+   [
+    "能买"
+   ],
+   [
+    "可以买"
+   ],
+   [
+    "值得买"
+   ],
+   [
+    "买哪"
+   ],
+   [
+    "选哪"
+   ],
+   [
+    "在售"
+   ],
+   [
+    "适合"
+   ]
+  ],
+  "service": [
+   [
+    "理赔"
+   ],
+   [
+    "保全"
+   ],
+   [
+    "退保"
+   ],
+   [
+    "已投保"
+   ],
+   [
+    "投保了"
+   ],
+   [
+    "年投保"
+   ],
+   [
+    "月投保"
+   ],
+   [
+    "日投保"
+   ],
+   [
+    "已购买"
+   ],
+   [
+    "年买的"
+   ],
+   [
+    "月买的"
+   ],
+   [
+    "我的",
+    "保单"
    ]
   ]
  }

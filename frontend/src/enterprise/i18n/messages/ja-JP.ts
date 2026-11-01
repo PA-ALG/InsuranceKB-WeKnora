@@ -258,6 +258,24 @@ export default {
       "noFields": "フィールドはありません",
       "noConcepts": "このリリースに共通の概念はありません"
     },
+    "version": {
+      "title": "バージョン情報",
+      "status": {
+        "on_sale": "販売中",
+        "discontinued": "販売停止",
+        "not_yet_on_sale": "販売開始前",
+        "unknown": "販売状況不明"
+      },
+      "onSaleAsOf": "販売中（{date} 時点のデータ）",
+      "period": "販売期間",
+      "periodRange": "{start} ～ {end}",
+      "periodFrom": "{start} から",
+      "periodUntil": "{end} まで",
+      "family": "シリーズ",
+      "predecessors": "前のバージョン",
+      "successors": "次のバージョン",
+      "includeDiscontinued": "販売停止を含む（{n}）"
+    },
     "concept": {
       "definition": "フィールドの定義",
       "summary": "モデルによる要約（各商品の原文に基づく）",
