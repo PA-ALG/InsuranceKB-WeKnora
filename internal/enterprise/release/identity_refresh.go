@@ -222,7 +222,7 @@ func (s *Service) checkChangedPayload(old, m Member, versioned map[string]bool) 
 	}
 	switch m.Kind {
 	case kindEntity:
-		return s.checkEntityChange(m.LogicalSlug, before, after)
+		return s.checkEntityChange(m.LogicalSlug, before, after, versioned)
 	case kindClaim:
 		return checkClaimChange(m.LogicalSlug, before, after, versioned)
 	default:
@@ -230,8 +230,11 @@ func (s *Service) checkChangedPayload(old, m Member, versioned map[string]bool) 
 	}
 }
 
-func (s *Service) checkEntityChange(slug string, before, after map[string]any) error {
-	if kind, _ := before["entity_type"].(string); !s.versioned[kind] {
+// checkEntityChange admits an entity of a versioned type whose ID no other entity shares (the
+// same set its claims and relations are held to); its ID cannot change (stripEntity).
+func (s *Service) checkEntityChange(slug string, before, after map[string]any, versioned map[string]bool) error {
+	kind, _ := before["entity_type"].(string)
+	if id, _ := before["entity_id"].(string); !s.versioned[kind] || !versioned[id] {
 		return invalid("identity refresh may not change an unversioned entity: " + slug)
 	}
 	if !sameJSON(stripEntity(before), stripEntity(after)) {
