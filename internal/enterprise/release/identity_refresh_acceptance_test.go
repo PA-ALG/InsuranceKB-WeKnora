@@ -343,3 +343,71 @@ func TestCompileBundlesAreUnaffectedByTheRefreshRules(t *testing.T) {
 	require.Contains(t, slugs(r), "P1/f9")
 	require.NotContains(t, slugs(r), "presentation/p")
 }
+
+// Owner ruling on #510 (R3): an established product_version_ref is never cleared or omitted,
+// and every product claim a refresh touches ends with its subject as reference. A product
+// claim no refresh has touched yet may keep its legacy null reference.
+func TestAnIdentityRefreshNeverClearsAnEstablishedRef(t *testing.T) {
+	// refreshed is A after a refresh gave P1/f1 its reference; P2/f1 stays legacy null.
+	refreshed := func(t *testing.T) (*platform, *release.Service, release.Release) {
+		p, s, a := setup(t)
+		r := publish(t, s, vbundle(t, "identity_refresh", &a, nil,
+			vm(t, "claim", "P1/f1", claimPayload("P1", "f1", "P1", nil))))
+		require.Equal(t, memberBySlug(a, "P2/f1").MemberDigest, memberBySlug(r, "P2/f1").MemberDigest)
+		return p, s, r
+	}
+	entity := func(t *testing.T) map[string]any {
+		return vm(t, "entity", "entity/P1", entityPayload("P1", "product", map[string]any{"lifecycle": lifecycle}))
+	}
+	cases := map[string]func(t *testing.T) []map[string]any{
+		"cleared": func(t *testing.T) []map[string]any {
+			return []map[string]any{vm(t, "claim", "P1/f1", claimPayload("P1", "f1", nil, nil))}
+		},
+		"omitted": func(t *testing.T) []map[string]any {
+			omitted := claimPayload("P1", "f1", nil, nil)
+			delete(omitted, "product_version_ref")
+			return []map[string]any{vm(t, "claim", "P1/f1", omitted)}
+		},
+		"touched legacy null": func(t *testing.T) []map[string]any {
+			return []map[string]any{entity(t), vm(t, "claim", "P2/f1", claimPayload("P2", "f1", nil, nil))}
+		},
+	}
+	for name, members := range cases {
+		t.Run(name, func(t *testing.T) {
+			p, s, r := refreshed(t)
+			_, err := attempt(s, vbundle(t, "identity_refresh", &r, nil, members(t)...))
+			require.Equal(t, release.ErrorCandidateInvalid, codeOf(t, err))
+			require.Equal(t, r.ID, p.head.ReleaseID, "nothing activated")
+		})
+	}
+	// Positive control: the same entity change alone passes while P2/f1 stays untouched and null.
+	_, s, r := refreshed(t)
+	publish(t, s, vbundle(t, "identity_refresh", &r, nil, entity(t)))
+}
+
+// The reference rule covers every claim of the target, changed or not. A compile bundle is not
+// held to it, so Active can carry a wrong reference; no refresh may then activate on top of it.
+// An entity ID that a versioned and an unversioned entity share is not a version.
+func TestAnIdentityRefreshChecksEveryClaimOfTheTarget(t *testing.T) {
+	cases := map[string]func(t *testing.T) map[string]any{
+		"product claim with another subject's ref": func(t *testing.T) map[string]any {
+			return vm(t, "claim", "P2/f1", claimPayload("P2", "f1", "P1", nil))
+		},
+		"unversioned claim with a ref": func(t *testing.T) map[string]any {
+			return vm(t, "claim", "M1/s1", claimPayload("M1", "s1", "M1", nil))
+		},
+		"id shared with an unversioned entity": func(t *testing.T) map[string]any {
+			return vm(t, "entity", "entity/method-P1", entityPayload("P1", "method", nil))
+		},
+	}
+	for name, wrong := range cases {
+		t.Run(name, func(t *testing.T) {
+			p, s, a := setup(t)
+			w := publish(t, s, vbundle(t, "compile", &a, nil, wrong(t)))
+			_, err := attempt(s, vbundle(t, "identity_refresh", &w, nil,
+				vm(t, "claim", "P1/f1", claimPayload("P1", "f1", "P1", nil))))
+			require.Equal(t, release.ErrorCandidateInvalid, codeOf(t, err))
+			require.Equal(t, w.ID, p.head.ReleaseID, "nothing activated")
+		})
+	}
+}

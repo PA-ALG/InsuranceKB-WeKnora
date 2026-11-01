@@ -3,7 +3,9 @@
 Protected file: written by Claude. From Active and a v2 registry the planner changes only the
 registered version entities (identity, sale period, family) and their claims
 (`product_version_ref`), adds the `supersedes` relations of unique predecessors and removes stale
-ones; every other member is untouched. Bundles stay under the size limit, a product's entity comes
+ones between registered versions; every other member is untouched, including relations with an
+unregistered end and any entity (or its claims) of a type that is no versioned product type, even
+under a registered ID (#510 R2). Bundles stay under the size limit, a product's entity comes
 before its claims, and the live loop replans on the Active of each step, stops on a platform error
 and never runs past its bundle limit.
 """
@@ -46,6 +48,8 @@ BASIS = MetadataBasis(
     synced_at="2026-11-01T08:00:00Z",
 )
 ALLOWED_ENTITY = {"lifecycle", "product_family"}
+PRODUCT = "insurance_product"
+TYPES = frozenset({PRODUCT})  # the versioned product types (the catalog's pack entity types)
 
 
 def _member(kind: str, slug: str, payload: dict[str, Any]) -> ReleaseMember:
@@ -59,16 +63,18 @@ def _member(kind: str, slug: str, payload: dict[str, Any]) -> ReleaseMember:
     )
 
 
-def entity_member(entity_id: str, **identifiers: str) -> ReleaseMember:
+def entity_member(
+    entity_id: str, entity_type: str = PRODUCT, slug: str | None = None
+) -> ReleaseMember:
     payload = Entity(
         entity_id=entity_id,
-        entity_type="product",
+        entity_type=entity_type,
         names=[f"产品{entity_id}"],
-        identifiers=identifiers or {"product_code": entity_id},
+        identifiers={"product_code": entity_id},
         classification_labels=["demo"],
         owner_module="harness",
     ).model_dump(mode="json")
-    return _member("entity", f"entity/{entity_id}", payload)
+    return _member("entity", slug or f"entity/{entity_id}", payload)
 
 
 def claim_member(subject: str, field: str) -> ReleaseMember:
@@ -142,7 +148,8 @@ def base_release() -> Release:
         claim_member("1828", "grace_period"),
         claim_member("1814", "waiting_period"),
         claim_member("other", "waiting_period"),
-        relation_member("1828", "9999"),  # stale: 9999 is no predecessor
+        relation_member("1814", "1828"),  # stale: 1814 does not supersede 1828
+        relation_member("1828", "9999"),  # 9999 is no registered version: never touched
         relation_member("1828", "concept-x", predicate="relates_to_concept"),
         _member("navigation", "navigation/main", {"navigation_id": "main"}),
         _member("presentation_profile", "presentation/p", {"profile_id": "p"}),
@@ -155,7 +162,7 @@ def changed(plan: Any) -> dict[str, dict[str, Any]]:
 
 def test_the_plan_touches_only_registered_versions_and_their_claims() -> None:
     a = base_release()
-    plan = plan_refresh(a, v2(p1828=NEWER, p1814=OLDER))
+    plan = plan_refresh(a, v2(p1828=NEWER, p1814=OLDER), TYPES)
     out = changed(plan)
     assert set(out) == {
         "entity/1828",
@@ -165,7 +172,7 @@ def test_the_plan_touches_only_registered_versions_and_their_claims() -> None:
         "1814/waiting_period",
         "relation/supersedes/1828/1814",
     }
-    assert plan.removals == ("relation/supersedes/1828/9999",)
+    assert plan.removals == ("relation/supersedes/1814/1828",)
     assert out["entity/1828"]["identifiers"] == {
         "product_code": "2635",
         "version_key": "2635-1",
@@ -190,7 +197,7 @@ def test_the_plan_touches_only_registered_versions_and_their_claims() -> None:
 def test_changed_members_keep_every_other_key_and_their_envelope() -> None:
     a = base_release()
     by_slug = {m.logical_slug: m for m in a.members}
-    plan = plan_refresh(a, v2(p1828=NEWER, p1814=OLDER))
+    plan = plan_refresh(a, v2(p1828=NEWER, p1814=OLDER), TYPES)
     for new in plan.members:
         old = by_slug.get(new.logical_slug)
         if old is None:
@@ -212,7 +219,7 @@ def test_changed_members_keep_every_other_key_and_their_envelope() -> None:
 
 
 def test_an_unversioned_entry_keeps_its_entity_but_gets_claim_refs() -> None:
-    plan = plan_refresh(base_release(), v2(p1828=NEWER, p1814=None))
+    plan = plan_refresh(base_release(), v2(p1828=NEWER, p1814=None), TYPES)
     out = changed(plan)
     assert "entity/1814" not in out  # no version record: today's identity is already published
     assert out["1814/waiting_period"]["product_version_ref"] == "1814"
@@ -221,25 +228,59 @@ def test_an_unversioned_entry_keeps_its_entity_but_gets_claim_refs() -> None:
 def test_an_applied_refresh_is_a_noop_and_a_stale_relation_alone_is_not() -> None:
     registry_v2 = v2(p1828=NEWER, p1814=OLDER)
     a = base_release()
-    plan = plan_refresh(a, registry_v2)
+    plan = plan_refresh(a, registry_v2, TYPES)
     applied = _apply(a, plan.members, plan.removals)
-    assert plan_refresh(applied, registry_v2).noop
+    assert plan_refresh(applied, registry_v2, TYPES).noop
     with_stale = _apply(applied, [relation_member("1814", "1828")], ())
-    stale = plan_refresh(with_stale, registry_v2)
+    stale = plan_refresh(with_stale, registry_v2, TYPES)
     assert not stale.noop
     assert stale.members == ()
     assert stale.removals == ("relation/supersedes/1814/1828",)
 
 
+def test_relations_with_an_unregistered_end_are_never_touched() -> None:
+    # #510 R2: such a relation was planned as a removal (0 entities, 0 claims, 1 removal).
+    a = active(
+        entity_member("1828"),
+        relation_member("1828", "9999"),
+        relation_member("9999", "1828"),
+        relation_member("other", "1814"),
+    )
+    plan = plan_refresh(a, v2(p1828=None, p1814=None), TYPES)
+    assert plan.removals == ()
+    assert plan.noop
+
+
+def test_an_entity_of_another_type_never_enters_the_plan_under_a_registered_id() -> None:
+    registry_v2 = v2(p1828=NEWER, p1814=OLDER)
+    method_only = active(
+        entity_member("1828", entity_type="sales_method"),
+        claim_member("1828", "steps"),
+        entity_member("1814"),
+        relation_member("1828", "1814"),
+    )
+    plan = plan_refresh(method_only, registry_v2, TYPES)
+    assert set(changed(plan)) == {"entity/1814"}
+    assert plan.removals == ()
+    # An ID that a product and another type share is no version either: neither is touched.
+    shared = active(
+        entity_member("1828"),
+        entity_member("1828", entity_type="sales_method", slug="method/1828"),
+        claim_member("1828", "waiting_period"),
+        entity_member("1814"),
+    )
+    assert set(changed(plan_refresh(shared, registry_v2, TYPES))) == {"entity/1814"}
+
+
 def test_a_v1_registry_is_refused() -> None:
     with pytest.raises(RefreshError) as refused:
-        plan_refresh(base_release(), registry(p1828=entry("1828", "terms")))
+        plan_refresh(base_release(), registry(p1828=entry("1828", "terms")), TYPES)
     assert refused.value.code == "REGISTRY_NOT_V2"
 
 
 def test_bundles_stay_under_the_limit_and_keep_a_product_together() -> None:
     a = base_release()
-    plan = plan_refresh(a, v2(p1828=NEWER, p1814=OLDER))
+    plan = plan_refresh(a, v2(p1828=NEWER, p1814=OLDER), TYPES)
     whole = refresh_bundles(plan, a.head, compiler_identity="harness/identity_refresh")
     assert len(whole) == 1
     limit = _size(whole[0]) // 2
@@ -254,10 +295,12 @@ def test_bundles_stay_under_the_limit_and_keep_a_product_together() -> None:
         assert (bundle.base_release_id, bundle.base_epoch) == (a.id, a.epoch)
         assert bundle.review_plan == []
         seen += [m.logical_slug for m in bundle.members]
-        if "relation/supersedes/1828/9999" in bundle.removals:
-            # A product's relation changes travel with its entity.
-            slugs = [m.logical_slug for m in bundle.members]
-            assert "entity/1828" in slugs and "relation/supersedes/1828/1814" in slugs
+        slugs = [m.logical_slug for m in bundle.members]
+        # A product's relation changes travel with its entity.
+        if "relation/supersedes/1814/1828" in bundle.removals:
+            assert "entity/1814" in slugs
+        if "relation/supersedes/1828/1814" in slugs:
+            assert "entity/1828" in slugs
     assert sorted(seen) == sorted(m.logical_slug for m in plan.members)
     assert sorted(r for b in split for r in b.removals) == list(plan.removals)
     for product in ("1828", "1814"):
@@ -306,14 +349,16 @@ class FakeClient:
 def test_the_live_loop_replans_each_step_until_nothing_is_left() -> None:
     registry_v2 = v2(p1828=NEWER, p1814=OLDER)
     a = base_release()
-    plan = plan_refresh(a, registry_v2)
+    plan = plan_refresh(a, registry_v2, TYPES)
     limit = _size(refresh_bundles(plan, a.head, compiler_identity="x")[0]) // 2
     client = FakeClient(a)
-    summary = run_refresh(client, registry_v2, live=True, max_bytes=limit)  # type: ignore[arg-type]
+    summary = run_refresh(
+        client, registry_v2, entity_types=TYPES, live=True, max_bytes=limit  # type: ignore[arg-type]
+    )
     assert client.activations >= 2
     assert summary["releases"] == [f"release-{3 + n}" for n in range(1, client.activations + 1)]
     assert "stopped" not in summary
-    assert plan_refresh(client.current, registry_v2).noop
+    assert plan_refresh(client.current, registry_v2, TYPES).noop
     assert {(d.outcome, d.mode, d.policy_ref) for d in client.decisions} == {
         ("approve", "machine", f"identity_refresh@{COMMIT}")
     }
@@ -321,7 +366,9 @@ def test_the_live_loop_replans_each_step_until_nothing_is_left() -> None:
 
 def test_a_dry_run_sends_nothing() -> None:
     client = FakeClient(base_release())
-    summary = run_refresh(client, v2(p1828=NEWER, p1814=OLDER), live=False)  # type: ignore[arg-type]
+    summary = run_refresh(
+        client, v2(p1828=NEWER, p1814=OLDER), entity_types=TYPES, live=False  # type: ignore[arg-type]
+    )
     assert client.bundles == {} and client.decisions == []
     assert summary["dry_run"] is True
     assert summary["bundles"] == 1
@@ -330,7 +377,9 @@ def test_a_dry_run_sends_nothing() -> None:
 
 def test_a_platform_error_stops_the_loop_with_its_code() -> None:
     client = FakeClient(base_release(), fail_on=1)
-    summary = run_refresh(client, v2(p1828=NEWER, p1814=OLDER), live=True)  # type: ignore[arg-type]
+    summary = run_refresh(
+        client, v2(p1828=NEWER, p1814=OLDER), entity_types=TYPES, live=True  # type: ignore[arg-type]
+    )
     assert summary["stopped"] == "NEEDS_REBASE"
     assert client.activations == 0
 
@@ -338,11 +387,16 @@ def test_a_platform_error_stops_the_loop_with_its_code() -> None:
 def test_the_loop_never_runs_past_its_bundle_limit() -> None:
     registry_v2 = v2(p1828=NEWER, p1814=OLDER)
     a = base_release()
-    first = refresh_bundles(plan_refresh(a, registry_v2), a.head, compiler_identity="x")[0]
+    first = refresh_bundles(plan_refresh(a, registry_v2, TYPES), a.head, compiler_identity="x")[0]
     limit = _size(first) // 2
     client = FakeClient(a)
     summary = run_refresh(
-        client, registry_v2, live=True, max_bytes=limit, max_bundles=1  # type: ignore[arg-type]
+        client,  # type: ignore[arg-type]
+        registry_v2,
+        entity_types=TYPES,
+        live=True,
+        max_bytes=limit,
+        max_bundles=1,
     )
     assert client.activations == 1
     assert summary["stopped"] == "MAX_BUNDLES"
