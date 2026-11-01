@@ -90,7 +90,9 @@ def relation_member(newer: str, older: str, predicate: str = "supersedes") -> Re
         rid = supersedes_relation_id(newer, older)
     else:
         rid = f"{predicate}/{newer}"
-    relation = Relation(relation_id=rid, predicate=predicate, **{"from": newer}, to=older)
+    relation = Relation.model_validate(
+        {"relation_id": rid, "predicate": predicate, "from": newer, "to": older}
+    )
     payload = relation.model_dump(mode="json")
     return _member("relation", f"relation/{rid}", payload)
 
@@ -339,8 +341,8 @@ def test_the_loop_never_runs_past_its_bundle_limit() -> None:
     first = refresh_bundles(plan_refresh(a, registry_v2), a.head, compiler_identity="x")[0]
     limit = _size(first) // 2
     client = FakeClient(a)
-    summary = run_refresh(  # type: ignore[arg-type]
-        client, registry_v2, live=True, max_bytes=limit, max_bundles=1
+    summary = run_refresh(
+        client, registry_v2, live=True, max_bytes=limit, max_bundles=1  # type: ignore[arg-type]
     )
     assert client.activations == 1
     assert summary["stopped"] == "MAX_BUNDLES"
