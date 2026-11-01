@@ -15,6 +15,7 @@ from pydantic.main import IncEx
 from insurance_harness.identity.attribution import AttributionPolicy, load_attribution_policy
 from insurance_harness.identity.brands import brand_core, years
 from insurance_harness.identity.text import fold
+from insurance_harness.identity.version_basis import RegisteredVersion
 from insurance_harness.ingest.version_catalog import DateText, VersionCatalog, VersionRecord
 
 
@@ -112,7 +113,11 @@ def v1_excluded() -> IncEx:
     """The v2 fields a v1 registry file never contains (PV-1 Spec §2.3), so code without them can
     still read it: an entry's version, the basis, and an attribution's version key (only ever set
     with a v2 registry's catalog)."""
-    key: dict[str, IncEx | bool] = {"version_key": True}
+    key: dict[str, IncEx | bool] = {  # PV-1, PV-3
+        "version_key": True,
+        "version_basis": True,
+        "shared_versions": True,
+    }
     conclusion: dict[str, IncEx | bool] = {"conclusion": key}
     pending: dict[str, IncEx | bool] = {"attribution": key, "settlement": conclusion}
     decision: dict[str, IncEx | bool] = {"attribution": key}
@@ -123,6 +128,23 @@ def v1_excluded() -> IncEx:
         "decisions": {"__all__": decision},
     }
     return excluded
+
+
+def registered_version(
+    version: ProductVersion | None, basis: MetadataBasis | None
+) -> RegisteredVersion | None:
+    """What attribution reads of an entry's version (PV-3 Spec §2.5): None in a v1 registry."""
+    if version is None:
+        return None
+    return RegisteredVersion(
+        version_key=version.version_key,
+        year_tag=version.year_tag,
+        sale_start=version.sale_start,
+        sale_end=version.sale_end,
+        source_status=version.source_status,
+        plan_type=version.plan_type,
+        basis_commit=basis.commit if basis is not None else None,
+    )
 
 
 def predecessors(versions: Mapping[str, ProductVersion | None]) -> dict[str, str | None]:
@@ -159,17 +181,20 @@ def check_versions(
     basis: MetadataBasis | None,
     versions: Mapping[str, ProductVersion | None],
     decided_keys: Iterable[str | None] = (),
+    decided_evidence: bool = False,
 ) -> None:
     """The registry-wide rules of PV-1 Spec §2.3, raised as ValueError for the model validator.
 
     `decided_keys` are the version keys of every recorded attribution (pending, settlement and
-    decision): a v1 registry holds none, rather than dropping them when it is saved (review R5).
+    decision): a v1 registry holds none, rather than dropping them when it is saved (review R5);
+    likewise no PV-3 field or outcome (`decided_evidence`: version evidence, shared versions or
+    DETACHED; PV-3 Spec §2.8, §4).
     """
     if contract == "product-registry.v1":
         if basis is not None or any(v is not None for v in versions.values()):
             raise ValueError("a v1 registry holds no version fields")
-        if any(key is not None for key in decided_keys):
-            raise ValueError("a v1 registry records no version key")
+        if any(key is not None for key in decided_keys) or decided_evidence:
+            raise ValueError("a v1 registry records no version key or PV-3 field")
         return
     if basis is None:
         raise ValueError("a v2 registry names its metadata basis")

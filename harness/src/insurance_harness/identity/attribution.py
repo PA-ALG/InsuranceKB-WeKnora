@@ -33,12 +33,16 @@ from insurance_harness.identity.brands import brand_candidates, unqualified
 from insurance_harness.identity.material_roles import load_material_roles, role_of
 from insurance_harness.identity.text import fold as _fold
 from insurance_harness.identity.title_lines import line_titles, title_pattern
+from insurance_harness.identity.titles import guide_title, head_title, named_inside, own_codes
+from insurance_harness.identity.training_versions import judge, training_role, versioned
+from insurance_harness.identity.version_basis import RegisteredVersion, VersionBasis
 from insurance_harness.identity.versions import VersionIndex, match_version, normal_clause_code
 
 TERMS = "terms"  # the material role that prints the clause filing code and may create a product
 _SHA256 = r"^[0-9a-f]{64}$"
 
-# REPLACE and IGNORED only follow a person's choice (S5b-3c-1); attribute() never returns them.
+# REPLACE and IGNORED only follow a person's choice (S5b-3c-1), DETACHED only `uploads detach`
+# (PV-3 §4); attribute() never returns them.
 Outcome = Literal[
     "DUPLICATE",
     "SUPPLEMENT",
@@ -48,6 +52,7 @@ Outcome = Literal[
     "QUARANTINE",
     "REPLACE",
     "IGNORED",
+    "DETACHED",
 ]
 
 
@@ -75,6 +80,17 @@ class Classification(_Frozen):
     suffix: str = Field(min_length=1)
     classification: str = Field(pattern=r"^[a-z][a-z_]*$")
     schema_pack_id: str = Field(min_length=1)
+
+
+class DatePattern(_Frozen):
+    precision: Literal["year", "month", "day"]
+    pattern: str = Field(min_length=1)  # named groups y, and m, d as the precision needs
+
+
+class PlanTypeGroup(_Frozen):
+    plan_type: str = Field(min_length=1)
+    material_words: tuple[str, ...]
+    version_words: tuple[str, ...]
 
 
 class AttributionPolicy(_Frozen):
@@ -106,6 +122,15 @@ class AttributionPolicy(_Frozen):
     brand_max_candidates: int = Field(gt=0)
     upload_year_pattern: str = Field(min_length=1)
     product_year_patterns: tuple[str, ...] = Field(min_length=1)
+    # Training materials by version (PV-3 Spec §2): date signals, training words, type words.
+    date_patterns: tuple[DatePattern, ...] = Field(min_length=1)
+    date_years: tuple[int, int]
+    training_role: str
+    training_signals: tuple[str, ...] = Field(min_length=1)
+    plan_type_groups: tuple[PlanTypeGroup, ...]
+    rider_words: tuple[str, ...]
+    edition_word: str = Field(min_length=1)  # one edition, bracketed or right after the brand
+    date_masks: tuple[str, ...]  # amounts and reference numbers, masked before dates are read
 
     @model_validator(mode="after")
     def _consistent(self) -> "AttributionPolicy":
@@ -132,6 +157,7 @@ class AttributionPolicy(_Frozen):
             raise ValueError("a blank brand prefix or extension")
         if not set(self.brand_roles) <= {role.role for role in load_material_roles().roles}:
             raise ValueError("a brand role that is not a material role")
+        _check_versions(self)
         suffixes = [_fold(entry.suffix) for entry in self.classifications]
         if len(set(suffixes)) != len(suffixes):
             raise ValueError("duplicate classification suffix")
@@ -162,6 +188,7 @@ class RegisteredProduct(_Frozen):
     schema_pack_id: str = Field(min_length=1)
     materials: tuple[RegisteredMaterial, ...] = ()
     version_key: str | None = None  # the filed version, planCode-versionNo (PV-1)
+    version: RegisteredVersion | None = None  # set by a v2 registry only (PV-3)
 
 
 class Upload(_Frozen):
@@ -182,7 +209,28 @@ class Attribution(_Frozen):
     replaces: tuple[str, ...] = ()
     candidates: tuple[str, ...] = ()  # for NEW_VERSION: the registered entry of the same name
     version_key: str | None = None  # of the entry CREATE or NEW_VERSION adds, if catalogued
+    version_basis: VersionBasis | None = None  # a training material's version evidence (PV-3)
+    shared_versions: tuple[str, ...] = ()  # the filed versions a quarantined shared code names
     policy_ref: str
+
+
+def _check_versions(policy: AttributionPolicy) -> None:
+    """The PV-3 data: date patterns with the groups their precision needs, a training role among
+    the brand roles, an edition word without groups, and an ordered year range."""
+    groups = {"year": {"y"}, "month": {"y", "m"}, "day": {"y", "m", "d"}}
+    try:
+        compiled = [(spec, re.compile(spec.pattern)) for spec in policy.date_patterns]
+        edition = re.compile(policy.edition_word)
+        for mask in policy.date_masks:
+            re.compile(mask)
+    except re.error as error:
+        raise ValueError("invalid version pattern") from error
+    if any(set(regex.groupindex) != groups[spec.precision] for spec, regex in compiled):
+        raise ValueError("a date pattern without the groups of its precision")
+    if edition.groups != 0 or policy.training_role not in policy.brand_roles:
+        raise ValueError("an edition word has no group and the training role is a brand role")
+    if policy.date_years[0] > policy.date_years[1]:
+        raise ValueError("an empty year range")
 
 
 @lru_cache(maxsize=1)
@@ -193,88 +241,6 @@ def load_attribution_policy() -> AttributionPolicy:
         return AttributionPolicy.model_validate_json(text)
     except (OSError, ValidationError) as error:
         raise AttributionPolicyError("ATTRIBUTION_POLICY_INVALID") from error
-
-
-def _title(text: str, policy: AttributionPolicy) -> str:
-    """The product name a title starts with, or "" when it cannot be read."""
-    left, right = (_fold(mark) for mark in policy.title_brackets)
-    if text.startswith(left):
-        end = text.find(right, len(left))
-        name = text[len(left) : end] if end > 0 else ""
-        after = text[end + len(right) : end + len(right) + 4] if end > 0 else ""
-        if any(_fold(word) in after for word in policy.title_line_exclusions):
-            return ""  # 《name》不适用…, 《name》并非…: an explanation, not a title (S5b-7)
-    else:
-        # A marker at the very start counts: then there is no title, and the body is never one.
-        ends = [i for i in (text.find(_fold(mark)) for mark in policy.title_end_markers) if i >= 0]
-        name = text[: min(ends)] if ends else ""
-    return name if len(name) <= policy.max_title_chars else ""
-
-
-def _head_title(window: str, own_code: str | None, policy: AttributionPolicy) -> str:
-    """The title at the start, after page numbers, labels, the insurer's name and the terms' own
-    code line."""
-    text = window
-    issuers = [_fold(name) for name in policy.issuer_names]
-    while (stripped := _strip_prefix(text, policy.title_prefix_pattern, issuers)) != text:
-        text = stripped  # page numbers, labels and the insurer may come together, in any order
-    if own_code is not None and text.startswith(own_code):
-        text = text[len(own_code) :]
-        text = text.removeprefix(_fold(policy.own_code_marker))
-    return _title(text, policy)
-
-
-def _strip_prefix(text: str, pattern: str, issuers: Sequence[str]) -> str:
-    issuer = next((name for name in issuers if text.startswith(name)), "")
-    return text[len(issuer) :] if issuer else re.sub(pattern, "", text, count=1)
-
-
-def _guide_title(head: str, policy: AttributionPolicy) -> str:
-    """The product the reader guide introduces ("阅读指引<name>产品提供…"), or "".
-
-    Only a fallback for terms whose start carries no title, and it fails closed (S5b-5 §2.2): one
-    guide must start near the start, every guide must name the same product, and the name must
-    carry no code, verification line or end word, which extraction mixes in when it garbles.
-    """
-    matches = list(re.finditer(policy.guide_title_pattern, head))
-    if not any(match.start() < policy.anchor_chars for match in matches):
-        return ""
-    names = {match.group(1) for match in matches}
-    if len(names) != 1:
-        return ""
-    name = names.pop()
-    polluted = (
-        re.search(policy.clause_code_pattern, name)
-        or _fold(policy.own_code_marker) in name
-        or any(_fold(marker) in name for marker in policy.title_end_markers)
-    )
-    return "" if polluted or not name or len(name) > policy.max_title_chars else name
-
-
-def _own_codes(head: str, policy: AttributionPolicy) -> set[str]:
-    """Codes printed with the verification line that follows a terms' own code (S5b-5)."""
-    marked = f"({policy.clause_code_pattern}){re.escape(_fold(policy.own_code_marker))}"
-    return {match.group(1) for match in re.finditer(marked, head)}
-
-
-def _named_inside(title: str, products: Sequence[RegisteredProduct]) -> list[RegisteredProduct]:
-    """Two or more products whose names appear in a title, none inside a longer appearance."""
-    spans = []
-    for product in products:
-        for name in {_fold(n) for n in product.names}:
-            start = title.find(name)
-            while start >= 0:
-                spans.append((start, start + len(name), product))
-                start = title.find(name, start + 1)
-    whole = [
-        span
-        for span in spans
-        if not any(
-            o[0] <= span[0] and span[1] <= o[1] and o[1] - o[0] > span[1] - span[0] for o in spans
-        )
-    ]
-    found = {span[2].product_id: span[2] for span in whole}
-    return [found[key] for key in sorted(found)] if len(found) > 1 else []
 
 
 def _pack(name: str, policy: AttributionPolicy) -> str | None:
@@ -341,11 +307,13 @@ def attribute(
     # never read through them (S5b-7 Spec §2.3).
     if role is None and (role := role_of(upload.file_name, upload.head)) != TERMS:
         role = role_of(upload.file_name, upload.head, "".join(lines.values()))
+    if role is None and versioned(products):  # training words, v2 only (PV-3 Spec §2.2)
+        role = training_role(upload.file_name, upload.head, window, policy, "".join(lines.values()))
     # A terms' own code is the one printed with the verification line (S5b-5), wherever it sits
     # in the first pages; older terms that open with their code keep the S5b-1 rule. Any other
     # code only cites one (after a label, or in a brochure's body): it may confirm a registered
     # product whose name the title carries, but never creates a product or a new version.
-    marked = _own_codes(head, policy)
+    marked = own_codes(head, policy)
     match = re.search(policy.clause_code_pattern, window)
     own_code = next(iter(marked)) if len(marked) == 1 else None
     if own_code is None and not marked and match and match.start() == 0:
@@ -363,9 +331,11 @@ def attribute(
     key, by_key = None, False
     if catalog is not None and code is not None:
         found = match_version(code, products, catalog, policy.clause_code_pattern)
-        if found.kind in {"conflict", "shared"}:
-            reason = "shared_clause_code" if found.kind == "shared" else "anchor_conflict"
-            return decided("QUARANTINE", reason, **anchors)
+        if found.kind == "shared":  # appendix A §1.3 row 3: named, never merged or created
+            shared = catalog.keys_for(code)
+            return decided("QUARANTINE", "shared_clause_code", shared_versions=shared, **anchors)
+        if found.kind == "conflict":
+            return decided("QUARANTINE", "anchor_conflict", **anchors)
         key, by_key = found.version_key, found.by_key
         if found.kind == "registered":
             by_code = [p for p in products if p.product_id == found.product_id]
@@ -380,11 +350,11 @@ def attribute(
             return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
         return _existing(chosen, "confirmed_by_person", decided, role, code, own_code, version)
     # The start names the product; the reader guide only stands in when the start has no title.
-    title = _head_title(window, own_code, policy) or (
-        _guide_title(head, policy) if role == TERMS else ""
+    title = head_title(window, own_code, policy) or (
+        guide_title(head, policy) if role == TERMS else ""
     )
     named = [p for p in products if title and title in {_fold(n) for n in p.names}]
-    named = named or _named_inside(title, products)
+    named = named or named_inside(title, products)
     if not named and lines and role != TERMS:  # confirms a registered product, never creates
         named = [p for p in products if {_fold(n) for n in p.names} & lines.keys()]
         if len(lines) > 1 and len(named) < 2:  # titles of other products, unregistered
@@ -410,6 +380,8 @@ def attribute(
     extension = PurePosixPath(upload.file_name).suffix.casefold()
     office = extension in {e.casefold() for e in policy.brand_extensions}
     if role in policy.brand_roles or (role is None and office):
+        if versioned(products):  # by version and date, never by brand alone (PV-3 Spec §2.1)
+            return _by_version(upload, window, products, policy, decided, anchors, version)
         if brands := brand_candidates(upload, window, products, policy):
             return decided("NEEDS_CONFIRM", "brand_candidates", candidates=tuple(brands), **anchors)
     if role != TERMS or own_code is None or not title:
@@ -429,6 +401,51 @@ def attribute(
         version_key=key,
         **anchors,
     )
+
+
+_VERSION_REASONS = {
+    "candidates": ("NEEDS_CONFIRM", "version_candidates"),
+    "undated": ("NEEDS_CONFIRM", "no_date_signal"),
+    "none": ("QUARANTINE", "no_registered_version"),
+    "signals_conflict": ("QUARANTINE", "date_signals_conflict"),
+    "families": ("QUARANTINE", "multiple_families"),
+}
+
+
+def _by_version(
+    upload: Upload,
+    window: str,
+    products: Sequence[RegisteredProduct],
+    policy: AttributionPolicy,
+    decided: Callable[..., Attribution],
+    anchors: dict[str, str | None],
+    version: tuple[str | None, str | None, bool],
+) -> Attribution:
+    """A training material judged by version and date (Option A, PV-3 Spec §2.7)."""
+    found = judge(upload.file_name, upload.head, window, products, policy)
+    if found.kind != "unique":
+        outcome, reason = _VERSION_REASONS[found.kind]
+        basis = found.basis
+        return decided(outcome, reason, candidates=found.choices, version_basis=basis, **anchors)
+    chosen = next(p for p in products if p.product_id == found.product_id)
+    if anchors["role"] is None:
+        basis = found.basis.model_copy(update={"version_decided_by": "machine"})
+        return decided(
+            "NEEDS_CONFIRM",
+            "version_role_unresolved",
+            product_id=chosen.product_id,
+            candidates=(chosen.product_id,),
+            version_basis=basis,
+            **anchors,
+        )
+    result = _existing(
+        chosen, "matched_by_version_period", decided, anchors["role"], anchors["clause_code"],
+        None, version,
+    )
+    basis = found.basis.model_copy(
+        update={"version_decided_by": "machine", "role_decided_by": "machine"}
+    )
+    return result.model_copy(update={"version_basis": basis})
 
 
 def _created_id(own_code: str, policy: AttributionPolicy) -> str:

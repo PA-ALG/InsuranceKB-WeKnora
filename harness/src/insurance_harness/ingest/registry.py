@@ -39,6 +39,7 @@ from insurance_harness.ingest.product_versions import (
     ProductVersion,
     check_versions,
     entry_version,
+    registered_version,
     relinked,
     v1_excluded,
 )
@@ -86,7 +87,7 @@ class ProductEntry(_Strict):
     schema_pack_id: _Name
     origin: Literal["seeded", "created"]
     materials: list[MaterialEntry]
-    retired: list[MaterialEntry] = Field(default_factory=list)  # replaced by a person (REPLACE)
+    retired: list[MaterialEntry] = Field(default_factory=list)  # REPLACE, or DETACHED (PV-3)
     version: ProductVersion | None = None  # v2 only (PV-1)
 
 
@@ -168,7 +169,11 @@ class ProductRegistry(_Strict):
         concluded = [p.settlement.conclusion for p in self.pending if p.settlement]
         decided = [p.attribution for p in self.pending] + [d.attribution for d in self.decisions]
         keys = [a.version_key for a in (*decided, *concluded) if a is not None]
-        check_versions(self.contract, self.metadata_basis, versions, keys)
+        found = [a for a in (*decided, *concluded) if a is not None]
+        evidence = any(
+            a.version_basis or a.shared_versions or a.outcome == "DETACHED" for a in found
+        )  # PV-3 fields and outcome: v2 only (review R7)
+        check_versions(self.contract, self.metadata_basis, versions, keys, evidence)
         recorded = [m for p in self.products.values() for m in (*p.materials, *p.retired)]
         ids = [m.knowledge_id for m in recorded] + [p.knowledge_id for p in self.pending]
         if len(set(ids)) != len(ids):
@@ -218,6 +223,7 @@ class ProductRegistry(_Strict):
                     for m in product.materials
                 ),
                 version_key=product.version.version_key if product.version else None,
+                version=registered_version(product.version, self.metadata_basis),
             )
             for product_id, product in sorted(self.products.items())
         ]
