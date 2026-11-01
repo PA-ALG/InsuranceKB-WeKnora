@@ -2,10 +2,10 @@
 
 The controlled way back from a wrong attribution: the material leaves its entry's materials for
 `retired`, a `DETACHED` decision records why with a fixed code (never text a person wrote), and
-the material is not judged again. Its knowledge follows the existing change rules on the next
-compile: a claim supported only by this material is withdrawn as a source withdrawal; one still
-supported by another source, or under an expert lock, is kept. Only a v2 registry is detached, so
-a v1 file stays readable by code without this outcome.
+the material is not judged again (a retired material never is). Its knowledge follows the existing
+change rules on the next compile: a claim supported only by this material is withdrawn as a source
+withdrawal; one still supported by another source, or under an expert lock, is kept. Only a v2
+registry is detached, so a v1 file stays readable by code without this outcome.
 """
 
 from insurance_harness.identity.attribution import Attribution, load_attribution_policy

@@ -57,9 +57,7 @@ _Principal = Annotated[str, StringConstraints(pattern=r"^[^\x00-\x1f\x7f-\x9f]{1
 # Applied outcomes change the products; waiting ones stay in pending; final ones end judging.
 APPLIED = frozenset({"SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE"})
 WAITING = frozenset({"NEEDS_CONFIRM", "QUARANTINE"})
-FINAL = frozenset(
-    {"DUPLICATE", "SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE", "IGNORED", "DETACHED"}
-)
+FINAL = frozenset({"DUPLICATE", "SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE", "IGNORED"})
 _PERSON_ONLY = frozenset({"REPLACE", "IGNORED"})
 
 
@@ -89,7 +87,7 @@ class ProductEntry(_Strict):
     schema_pack_id: _Name
     origin: Literal["seeded", "created"]
     materials: list[MaterialEntry]
-    retired: list[MaterialEntry] = Field(default_factory=list)  # replaced by a person (REPLACE)
+    retired: list[MaterialEntry] = Field(default_factory=list)  # REPLACE, or DETACHED (PV-3)
     version: ProductVersion | None = None  # v2 only (PV-1)
 
 
