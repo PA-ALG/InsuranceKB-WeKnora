@@ -411,3 +411,20 @@ func TestAnIdentityRefreshChecksEveryClaimOfTheTarget(t *testing.T) {
 		})
 	}
 }
+
+// An ID shared with an unversioned entity is no version: not even its own entity may be
+// refreshed while every claim stays untouched (#510 review round 2). A product whose ID no other
+// entity holds still may, on the same Active.
+func TestAnIdentityRefreshCannotChangeTheEntityOfASharedID(t *testing.T) {
+	p, s, a := setup(t)
+	w := publish(t, s, vbundle(t, "compile", &a, nil,
+		vm(t, "entity", "entity/method-P1", entityPayload("P1", "method", nil))))
+	_, err := attempt(s, vbundle(t, "identity_refresh", &w, nil,
+		vm(t, "entity", "entity/P1", entityPayload("P1", "product", map[string]any{"lifecycle": lifecycle}))))
+	require.Equal(t, release.ErrorCandidateInvalid, codeOf(t, err))
+	require.Equal(t, w.ID, p.head.ReleaseID, "nothing activated")
+
+	r := publish(t, s, vbundle(t, "identity_refresh", &w, nil,
+		vm(t, "entity", "entity/P2", entityPayload("P2", "product", map[string]any{"lifecycle": lifecycle}))))
+	require.Equal(t, w.Epoch+1, r.Epoch)
+}
