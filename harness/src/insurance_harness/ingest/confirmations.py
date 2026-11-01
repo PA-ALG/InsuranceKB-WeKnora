@@ -70,6 +70,7 @@ class ConfirmationReport(BaseModel):
     applied: list[str]
     reopened: list[str]
     obsoleted: list[str]
+    answers_withdrawn: list[str] = []  # obsoleted with a person's answer not applied (S5b-7)
     waiting: int
     skipped: dict[str, int]
 
@@ -158,6 +159,7 @@ class _Sync:
         self.applied: set[str] = set()
         self.reopened: set[str] = set()
         self.obsoleted: set[str] = set()
+        self.withdrawn: set[str] = set()  # obsolete items that carried an unapplied answer
         self.skipped: Counter[str] = Counter()
         self.unaskable: dict[str, str] = {}  # knowledge id -> why its question cannot be built
         self.handled: set[str] = set()  # items closed (in a dry run: taken as closed) in this run
@@ -429,6 +431,8 @@ class _Sync:
                     continue
             self.handled.add(item.id)
             self.obsoleted.add(kid)
+            if item.answer is not None:  # never withdrawn unseen (S5b-7 Spec §2.5)
+                self.withdrawn.add(kid)
 
     def report(self) -> ConfirmationReport:
         return ConfirmationReport(
@@ -436,6 +440,7 @@ class _Sync:
             applied=sorted(self.applied),
             reopened=sorted(self.reopened),
             obsoleted=sorted(self.obsoleted),
+            answers_withdrawn=sorted(self.withdrawn),
             waiting=len(self.waiting()),
             skipped=dict(sorted((self.skipped + Counter(self.unaskable.values())).items())),
         )
