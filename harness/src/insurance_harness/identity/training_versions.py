@@ -15,7 +15,7 @@ from datetime import date, timedelta
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Literal
 
-from insurance_harness.identity.brands import brand_hits
+from insurance_harness.identity.brands import brand_core, brand_hits
 from insurance_harness.identity.material_roles import role_signals
 from insurance_harness.identity.text import fold
 from insurance_harness.identity.version_basis import (
@@ -106,8 +106,7 @@ def judge(
     family = [p for p in products if p.product_id in named and _related(hits[p.product_id], widest)]
     if not family:
         return Judgement("none", VersionBasis(signals=signals, metadata_commit=commit))
-    cores = {hits[p.product_id] for p in family}
-    named_editions = _material_editions(text, cores, policy)
+    named_editions = _material_editions(text, _family_cores(family, policy), policy)
     excluded = {p.product_id for p in family if _type_conflict(p, named_editions, text, policy)}
     if not signals:
         verdicts = tuple(_verdict(p, "undated", p.product_id in excluded) for p in family)
@@ -288,6 +287,13 @@ def _material_editions(text: str, cores: set[str], policy: "AttributionPolicy") 
         if (match := after.match(text, end)) is not None:
             found.add((match.group(1) or match.group(2)).casefold())
     return found
+
+
+def _family_cores(family: Sequence["RegisteredProduct"], policy: "AttributionPolicy") -> set[str]:
+    """Every brand core of every registered name and approved alias in the family, not just the
+    one each entry's recall hit on (review R3, round 4)."""
+    cores = {brand_core(name, policy) for product in family for name in product.names}
+    return {core for core in cores if len(core) >= policy.brand_min_chars}
 
 
 def _written(text: str, start: int, core: str, policy: "AttributionPolicy") -> int:
