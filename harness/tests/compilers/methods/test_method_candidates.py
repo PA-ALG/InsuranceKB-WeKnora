@@ -3,9 +3,16 @@
 from collections.abc import Sequence
 from typing import Any
 
+import pytest
+
 from insurance_harness.compilers.methods.candidates import CandidateRun, method_candidates
 from insurance_harness.compilers.methods.compile import compile_methods
-from insurance_harness.compilers.methods.copies import CopyBook, empty_book, sync_copies
+from insurance_harness.compilers.methods.copies import (
+    CopiesError,
+    CopyBook,
+    empty_book,
+    sync_copies,
+)
 from insurance_harness.compilers.wiki_pages.members import NativePage
 from tests.compilers.methods.discovery_helpers import (
     DISCOVERY_KB,
@@ -162,3 +169,14 @@ def test_candidates_are_admitted_and_compiled_end_to_end() -> None:
     statuses = {m["method_id"]: m["status"] for m in compiled.report["methods"]}
     assert statuses[by_name[METHOD_A].method_id] == "compiled"
     assert compiled.report["candidates"]["dropped"] == {}
+
+
+def test_a_mapping_onto_the_raw_base_is_refused() -> None:
+    """#518 review R2: candidates are never made from the RAW base itself."""
+    d = Discovery()
+    onto_raw = d.book.model_copy(update={"discovery_kb_id": d.world.registry.raw_kb_id})
+    with pytest.raises(CopiesError) as raised:
+        method_candidates(
+            d.world.registry, onto_raw, d.platform.listing(DISCOVERY_KB), [], d.world.reader
+        )
+    assert raised.value.code == "DISCOVERY_KB_INVALID"

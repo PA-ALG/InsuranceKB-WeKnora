@@ -9,7 +9,12 @@ import pytest
 from insurance_harness.bundle.client import Candidate, Release
 from insurance_harness.compilers.methods import cli
 from insurance_harness.compilers.methods.admission import CandidateFile
-from insurance_harness.compilers.methods.copies import load_copies
+from insurance_harness.compilers.methods.copies import (
+    MethodCopy,
+    empty_book,
+    load_copies,
+    save_copies,
+)
 from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.ingest.registry import ProductRegistry, load_registry, save_registry
 from insurance_harness.ingest.source_map import API_KEY_ENV, BASE_URL_ENV
@@ -184,3 +189,29 @@ def test_withdraw_offline_submits_nothing_and_refuses_unknown_methods(
     status, summary = run(capsys, *args, "--method-id", "sm-" + "0" * 24)
     assert (status, summary) == (2, {"stopped": "METHOD_UNKNOWN"})
     assert registry.read_bytes() == before
+
+
+def test_candidates_refuses_a_mapping_onto_the_raw_base_before_reading_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#518 review R2: the isolation holds at every entry that reads the discovery base."""
+    configure(monkeypatch)
+    world = DiscoveryWorld()
+    raw = world.raws["k-deck-a"]
+    onto_raw = empty_book(SPACE, RAW_KB).model_copy(update={"copies": (MethodCopy(
+        copy_knowledge_id=raw.knowledge_id, knowledge_id=raw.knowledge_id,
+        parse_attempt=raw.parse_attempt, sha256=raw.sha256,
+    ),)})
+    copies = tmp_path / "copies.json"
+    save_copies(onto_raw, copies)
+
+    def unreachable(*_: Any) -> Any:
+        raise AssertionError("nothing may be read")
+
+    for name in ("MaterialPlatform", "NativeWikiReader", "reader_from_env"):
+        monkeypatch.setattr(cli, name, unreachable)
+    registry, out = registry_file(tmp_path, world.registry), tmp_path / "candidates.json"
+    status, summary = run(capsys, "candidates", "--registry", str(registry), "--copies",
+                          str(copies), "--discovery-kb", RAW_KB, "--out", str(out))
+    assert (status, summary) == (2, {"stopped": "DISCOVERY_KB_INVALID"})
+    assert not out.exists()
