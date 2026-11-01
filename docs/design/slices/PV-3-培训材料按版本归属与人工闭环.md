@@ -106,6 +106,10 @@
   `no_product_anchor`），对它的产品选择一律 `CHOICE_STALE`，不能借旧问题绕过版本约束。
 - **来源**：人选版本 → `version_decided_by = person`；只问角色 → 版本 `machine`、角色 `person`；自动归属两者都是 `machine`。
 
+- **共用条款号**（PV-1 附录 A §1.3 第 3 行的 `QUARANTINE / shared_clause_code`）：同样可推为问题，只能忽略；正文写明共用的
+  条款编号、固定目录中共用它的报备版本（`Attribution.shared_versions`）与暂不能挂接的原因（内部编号按条款编号生成，无法区分
+  这些版本）；忽略记为人工决定。v1 登记表与 `version_basis` 一样拒绝该字段。
+
 ## 4. 解除归属（`uploads detach`）
 
 `uploads detach --registry PATH --knowledge-id ID --reason {wrong_version,wrong_product,not_product_material} [--dry-run]`：
