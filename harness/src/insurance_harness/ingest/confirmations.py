@@ -37,14 +37,13 @@ from insurance_harness.ingest.confirmation_questions import (
     load_wording,
     question_of,
 )
-from insurance_harness.ingest.raw_sources import RawSource
+from insurance_harness.ingest.raw_sources import RawSource, head_of
 from insurance_harness.ingest.registry import (
     ConfirmationRef,
     PendingEntry,
     ProductRegistry,
     RegistryError,
     Settlement,
-    head_of,
     record,
 )
 from insurance_harness.ingest.source_map import PageReader

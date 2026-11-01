@@ -61,6 +61,7 @@ from insurance_harness.ingest.raw_sources import (
     RawSources,
     RawSourcesError,
     UnfinishedSource,
+    head_text,
     material_pages,
 )
 from insurance_harness.ingest.registry import (
@@ -71,7 +72,6 @@ from insurance_harness.ingest.registry import (
     ProductRegistry,
     RegistryError,
     SeedProduct,
-    head_text,
     load_registry,
     record,
     save_registry,

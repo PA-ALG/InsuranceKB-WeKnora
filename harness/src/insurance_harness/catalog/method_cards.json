@@ -1,0 +1,58 @@
+{
+ "version": "2026-11-01.1",
+ "entity_type": "sales_method",
+ "owner_module": "harness/sales_methods",
+ "review_pack": "methods_sales",
+ "cards": [
+  {
+   "predicate": "method_summary",
+   "title": "方法摘要",
+   "definition": "这个销售方法是什么、解决什么问题，用一两句话概括。",
+   "includes": ["方法的目的与核心思路", "方法用在销售的哪个环节"],
+   "excludes": ["具体操作步骤（method_steps）", "原文话术（key_phrases）", "产品的价格、保额与保险责任"],
+   "value_type": "text",
+   "verbatim": false
+  },
+  {
+   "predicate": "method_steps",
+   "title": "步骤",
+   "definition": "使用这个方法时依次要做的事，每项一步，按原文顺序。",
+   "includes": ["原文写明的步骤、环节与动作"],
+   "excludes": ["原文话术（key_phrases）", "注意事项与禁忌（cautions）"],
+   "value_type": "list",
+   "verbatim": false
+  },
+  {
+   "predicate": "key_phrases",
+   "title": "关键句",
+   "definition": "原文给出的讲解关键句或话术，逐字摘录，每项一句。",
+   "includes": ["标为关键句、话术或讲解要点的原句"],
+   "excludes": ["对方法的概括（method_summary）", "改写或合并后的句子"],
+   "value_type": "list",
+   "verbatim": true
+  },
+  {
+   "predicate": "applicable_scenario",
+   "title": "适用情形",
+   "definition": "这个方法适用于哪些客户、险种或销售场景。",
+   "includes": ["原文写明的适用客户、险种、人生阶段或场景"],
+   "excludes": ["产品的投保年龄、保额等投保规则"],
+   "value_type": "text",
+   "verbatim": false
+  },
+  {
+   "predicate": "cautions",
+   "title": "注意事项",
+   "definition": "使用这个方法时要注意或禁止的事，每项一条。",
+   "includes": ["原文写明的注意事项、禁忌与合规提醒"],
+   "excludes": ["操作步骤（method_steps）"],
+   "value_type": "list",
+   "verbatim": false
+  }
+ ],
+ "product_info_patterns": [
+  {"signal": "amount", "pattern": "[¥$]\\d|\\d(?:[\\d,.]*\\d)?(?:[万千百亿]+元?|元)"},
+  {"signal": "percentage", "pattern": "\\d(?:[\\d.]*\\d)?%|百分之[零一二三四五六七八九十百\\d]"},
+  {"signal": "age", "pattern": "(?:\\d+|[一二三四五六七八九十]+)周?岁"}
+ ]
+}
