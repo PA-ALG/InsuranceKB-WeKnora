@@ -95,7 +95,7 @@ def test_values_then_compile_without_a_model_name(
     assert files.registry.read_bytes() == before  # the value stage only reads the registry
 
     status, summary = files.compile(capsys)
-    assert status == 0 and summary["members"] == 6
+    assert status == 0 and summary["members"] == 7  # five claims, the entity, the profile (SK-3)
     bundle = CandidateBundle.model_validate_json(
         (files.run_root / "candidate.json").read_text(encoding="utf-8")
     )
