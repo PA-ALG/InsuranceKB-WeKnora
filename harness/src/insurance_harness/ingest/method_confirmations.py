@@ -1,11 +1,15 @@
-"""The method-scope question of a method use, and how its answer is applied (SK-1 Spec §4).
+"""The scope-label question of a method use, and how its answer is applied (SK-1 Spec §4).
 
-A method use whose insurance category the machine could not decide is asked under its own subject
-(`method:<knowledge id>`), apart from the product questions (`material:`), whose run never touches
-these items. The revision covers the source revision, the evidence and the wording, so changed
-evidence is a new question and an answer to the old one is stale. As for product questions, closing
-is the commit point: a run saves what it is about to do (the settlement) on the record, closes the
-item, then executes exactly what it saved; an interrupted run completes it from the settlement.
+The machine labels every method use whose blocks hit a label; the question is asked only for one
+that hit none, or whose labels a person asked to correct (`request_relabel`). It is asked under its
+own subject (`method:<knowledge id>`), apart from the product questions (`material:`), whose run
+never touches these items. The page offers one choice per answer, so several labels are chosen one
+at a time: each answer adds or removes one label and the next question follows at once, until the
+person answers "done" or ignores the material. The revision covers the source revision, the
+evidence, the labels in force and the last answer, so every step is a new question and an answer to
+an older one is stale. As for product questions, closing is the commit point: a run saves what it
+is about to do (the settlement) on the record, closes the item, then executes exactly what it saved;
+an interrupted run completes it from the settlement.
 """
 
 import hashlib
@@ -32,6 +36,7 @@ from insurance_harness.identity.attribution import Attribution, load_attribution
 from insurance_harness.ingest.confirmation_matching import content_of
 from insurance_harness.ingest.confirmation_questions import ConfirmationsError, trim
 from insurance_harness.ingest.method_use_model import (
+    LIVE,
     METHOD_ROLE,
     MethodUse,
     ScopeAnswer,
@@ -50,7 +55,11 @@ SUBJECT_PREFIX = "method:"
 _SUBJECT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$")  # the platform's (S5b-3a)
 _CONTROL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
 _LIMITS = {"title": 200, "detail": 2000, "label": 200}
-_KINDS = ("suggested", "general", "category", "ignore")
+_KINDS = ("add", "remove", "done", "ignore")
+
+
+def _every_label(taxonomy: SalesTaxonomy) -> tuple[str, ...]:
+    return (*taxonomy.insurance_labels(), taxonomy.general.label)
 
 
 class MethodWording(BaseModel):
@@ -58,17 +67,18 @@ class MethodWording(BaseModel):
     version: str = Field(min_length=1)
     title: str
     detail: str
-    no_categories: str
+    no_hits: str
+    no_labels: str
     ignore_method_only: str
     ignore_dual: str
     options: dict[str, str]
-    categories: dict[str, str]
+    labels: dict[str, str]
 
     @model_validator(mode="after")
     def _complete(self) -> "MethodWording":
-        labels = set(load_sales_taxonomy().insurance_labels())
-        if set(self.options) != set(_KINDS) or set(self.categories) != labels:
-            raise ValueError("the wording must cover every choice kind and insurance category")
+        labels = set(_every_label(load_sales_taxonomy()))
+        if set(self.options) != set(_KINDS) or set(self.labels) != labels:
+            raise ValueError("the wording must cover every choice kind and scope label")
         return self
 
 
@@ -85,24 +95,30 @@ def load_method_wording() -> MethodWording:
 class ScopeChoice:
     key: str
     kind: str
-    labels: tuple[str, ...]  # empty for ignoring
+    label: str | None  # the label added or removed
+    labels: tuple[str, ...]  # the labels after the answer; empty for ignoring
+    editing: bool  # another question follows
 
 
 def method_choices(
     use: MethodUse, taxonomy: SalesTaxonomy | None = None
 ) -> tuple[ScopeChoice, ...]:
-    """The single choices, in a fixed order: the taxonomy's combination when it hit several
-    categories, general, each category, then ignoring (Spec §4.1)."""
+    """One step of choosing labels, in a fixed order: add each label not in force, remove one of
+    several in force (the last one is replaced by adding another first), done, ignore (§4.1)."""
     taxonomy = taxonomy or load_sales_taxonomy()
-    offered = []
-    if len(use.category_hits) > 1:
-        offered.append(ScopeChoice("scope:suggested", "suggested", use.category_hits))
-    offered.append(ScopeChoice(taxonomy.general.label, "general", (taxonomy.general.label,)))
-    offered += [
-        ScopeChoice(f"scope:{label}", "category", (label,))
-        for label in taxonomy.insurance_labels()
+    current = use.categories
+    offered = [
+        ScopeChoice(f"add:{label}", "add", label, tuple(sorted({*current, label})), True)
+        for label in _every_label(taxonomy)
+        if label not in current
     ]
-    offered.append(ScopeChoice("ignore", "ignore", ()))
+    if len(current) > 1:
+        for label in current:
+            rest = tuple(other for other in current if other != label)
+            offered.append(ScopeChoice(f"remove:{label}", "remove", label, rest, True))
+    if current:
+        offered.append(ScopeChoice("done", "done", None, current, False))
+    offered.append(ScopeChoice("ignore", "ignore", None, (), False))
     return tuple(offered)
 
 
@@ -123,10 +139,10 @@ def method_question(
     taxonomy: SalesTaxonomy | None = None,
     method_only: bool = True,
 ) -> ConfirmationInput:
-    """The confirmation item for one method use waiting for its scope (Spec §4.1)."""
+    """The confirmation item for one step of a method use's labels (Spec §4.1)."""
     wording = wording or load_method_wording()
     subject = SUBJECT_PREFIX + use.knowledge_id
-    if not _SUBJECT.fullmatch(subject) or use.state != "awaiting_scope":
+    if not _SUBJECT.fullmatch(subject) or not use.asked:
         raise ConfirmationsError("QUESTION_INVALID")
     identity = {
         "triple": list(use.triple),
@@ -134,22 +150,24 @@ def method_question(
         "taxonomy": use.taxonomy_version,
         "wording": wording.version,
         "method_only": method_only,
+        "labels": list(use.categories),
+        "after": use.confirmation.answer_id if use.confirmation is not None else None,
     }
     canonical = json.dumps(identity, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-    names = wording.categories
-    categories = "、".join(names[label] for label in use.category_hits) or wording.no_categories
+
+    def shown(labels: tuple[str, ...], empty: str) -> str:
+        return "、".join(wording.labels.get(label, label) for label in labels) or empty
+
     facts = {
         "file": use.file_name,
         "signals": "、".join(use.signals),
-        "categories": categories,
+        "hits": shown(tuple(hit.label for hit in use.label_hits), wording.no_hits),
+        "labels": shown(use.categories, wording.no_labels),
         "ignore_note": wording.ignore_method_only if method_only else wording.ignore_dual,
     }
     options = []
     for choice in method_choices(use, taxonomy):
-        values = facts | {
-            "category": names.get(choice.labels[0], "") if choice.kind == "category" else "",
-            "categories": "、".join(names.get(label, label) for label in choice.labels),
-        }
+        values = facts | {"label": shown((choice.label,), "") if choice.label else ""}
         options.append(
             ConfirmationOption(
                 key=choice.key,
@@ -200,6 +218,8 @@ class _MethodSync:
         self.obsoleted: set[str] = set()
         self.skipped: Counter[str] = Counter()
         self.handled: set[str] = set()
+        self.submitted: set[tuple[object, ...]] = set()
+        self.following: set[tuple[str, int, str]] = set()  # edited on: the next step is asked
 
     # The registry ---------------------------------------------------------------------------
 
@@ -252,17 +272,26 @@ class _MethodSync:
             else:
                 self.commit(use, settlement)
 
-    def ask(self, listed: list[ConfirmationItem]) -> set[tuple[object, ...]]:
-        """Push every waiting question and settle the answered ones; the wanted contents."""
-        waiting = [u for u in self.current.method_uses if u.state == "awaiting_scope"]
+    def ask(
+        self, listed: list[ConfirmationItem], only: set[tuple[str, int, str]] | None = None
+    ) -> set[tuple[object, ...]]:
+        """Push every asked question (or `only` those records') and settle the answered ones;
+        the wanted contents."""
         asked = []
-        for use in waiting:
+        for use in self.current.method_uses:
+            if not use.asked or (only is not None and use.triple not in only):
+                continue
             try:
                 asked.append((use, self.question(use)))
             except ConfirmationsError as error:
                 self.skipped[error.code] += 1
         wanted = {content_of(question) for _, question in asked}
-        fresh = [(use, question) for use, question in asked if use.settlement is None]
+        fresh = [
+            (use, question)
+            for use, question in asked
+            if use.settlement is None and content_of(question) not in self.submitted
+        ]
+        self.submitted |= {content_of(question) for _, question in fresh}
         self.pushed.update(use.knowledge_id for use, _ in fresh)
         if not fresh:
             return wanted
@@ -302,7 +331,9 @@ class _MethodSync:
         except ValidationError:
             self.skipped["ANSWER_INVALID"] += 1
             return
-        settlement = ScopeSettlement(revision=item.revision, answer=ref, categories=choice.labels)
+        settlement = ScopeSettlement(
+            revision=item.revision, answer=ref, categories=choice.labels, editing=choice.editing
+        )
         self.commit(self.put(use.model_copy(update={"settlement": settlement})), settlement)
 
     def commit(self, use: MethodUse, settlement: ScopeSettlement) -> None:
@@ -324,12 +355,15 @@ class _MethodSync:
         self.handled.add(settlement.answer.item_id)
         decided = {"decided_by": "person", "confirmation": settlement.answer, "settlement": None}
         if settlement.categories:
-            active = {**decided, "state": "active", "categories": settlement.categories}
-            self.put(use.model_copy(update=active))
+            labels = {"categories": settlement.categories, "editing": settlement.editing}
+            self.put(use.model_copy(update={**decided, **labels, "state": "active"}))
+            if settlement.editing:
+                self.following.add(use.triple)
         else:
             if self.method_only(use):  # a method-only material is ignored as a whole
                 self._ignore_material(use, settlement.answer)
-            self.put(use.model_copy(update={**decided, "state": "ignored", "categories": ()}))
+            ignored = {"state": "ignored", "categories": (), "editing": False}
+            self.put(use.model_copy(update={**decided, **ignored}))
         self.applied.add(use.knowledge_id)
 
     def _ignore_material(self, use: MethodUse, answer: ScopeAnswer) -> None:
@@ -389,7 +423,7 @@ class _MethodSync:
             pushed=sorted(self.pushed),
             applied=sorted(self.applied),
             obsoleted=sorted(self.obsoleted),
-            waiting=sum(1 for u in self.current.method_uses if u.state == "awaiting_scope"),
+            waiting=sum(1 for u in self.current.method_uses if u.asked),
             skipped=dict(sorted(self.skipped.items())),
         )
 
@@ -403,7 +437,7 @@ def sync_methods(
     wording: MethodWording | None = None,
     taxonomy: SalesTaxonomy | None = None,
 ) -> MethodConfirmationRun:
-    """One run over the method-scope questions; the given registry is not modified."""
+    """One run over the scope-label questions; the given registry is not modified."""
     run = _MethodSync(
         registry,
         client,
@@ -415,6 +449,21 @@ def sync_methods(
     listed = [*client.confirmations(run.space, "open"), *client.confirmations(run.space, "closed")]
     run.reconcile(listed)
     wanted = run.ask(listed)
+    wanted |= run.ask(listed, run.following)  # an answer's next step is asked at once (§4.1)
     run.clean(wanted, listed)
     final = ProductRegistry.model_validate(run.current.model_dump())
     return MethodConfirmationRun(registry=final, report=run.report())
+
+
+def request_relabel(registry: ProductRegistry, knowledge_id: str) -> ProductRegistry:
+    """A person's request to correct a material's labels (Spec §4.5): its live record is asked
+    again through the same question; one already asked stays as it is."""
+    current = registry.model_copy(deep=True)
+    live = [u for u in current.method_uses if u.knowledge_id == knowledge_id and u.state in LIVE]
+    if not live:
+        raise ConfirmationsError("METHOD_USE_NOT_FOUND")
+    current.method_uses = [
+        u.model_copy(update={"editing": True}) if u in live and not u.asked else u
+        for u in current.method_uses
+    ]
+    return ProductRegistry.model_validate(current.model_dump())

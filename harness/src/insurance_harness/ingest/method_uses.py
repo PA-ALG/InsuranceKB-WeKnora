@@ -13,12 +13,7 @@ from pathlib import PurePosixPath
 from insurance_harness.catalog.sales_taxonomy import SalesTaxonomy, load_sales_taxonomy
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.identity.attribution import Attribution, AttributionPolicy
-from insurance_harness.identity.method_signals import (
-    BLOCK_SCHEME,
-    MethodHits,
-    detect,
-    machine_scope,
-)
+from insurance_harness.identity.method_signals import BLOCK_SCHEME, MethodHits, detect
 from insurance_harness.ingest.method_use_model import LIVE, MethodUse, check_method_uses
 from insurance_harness.ingest.raw_sources import RawSource, UnfinishedSource
 from insurance_harness.ingest.registry import V2, ProductRegistry
@@ -30,7 +25,7 @@ _ENDED = frozenset({"IGNORED", "DETACHED"})  # a material that no longer takes p
 def expired(use: MethodUse, reason: str) -> MethodUse:
     """The record, expired: kept for audit, never revived."""
     data = use.model_dump() | {"state": "invalidated", "invalidated_reason": reason}
-    return MethodUse.model_validate(data | {"settlement": None})
+    return MethodUse.model_validate(data | {"settlement": None, "editing": False})
 
 
 def expire_method_uses(
@@ -161,7 +156,7 @@ class MethodStep:
         return True
 
     def _add(self, source: RawSource, hits: MethodHits) -> None:
-        scope = machine_scope(hits, self.taxonomy)
+        """Every label the blocks hit is the machine's; with none, a person chooses (§3.2)."""
         use = MethodUse(
             knowledge_id=source.knowledge_id,
             parse_attempt=source.parse_attempt,
@@ -170,13 +165,12 @@ class MethodStep:
             block_scheme=BLOCK_SCHEME,
             block_ids=hits.block_ids,
             signals=hits.signals,
-            category_hits=hits.category_hits,
-            general_hit=hits.general_hit,
+            label_hits=hits.label_hits,
             taxonomy_version=hits.taxonomy_version,
             evidence_digest=hits.evidence_digest,
-            state="active" if scope else "awaiting_scope",
-            categories=scope or (),
-            decided_by="machine" if scope else None,
+            state="active" if hits.labels else "awaiting_scope",
+            categories=hits.labels,
+            decided_by="machine" if hits.labels else None,
         )
         uses = [*self.registry.method_uses, use]
         check_method_uses(uses)  # one record per revision, one live record per material

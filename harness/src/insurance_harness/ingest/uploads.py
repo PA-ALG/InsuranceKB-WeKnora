@@ -16,13 +16,15 @@ person are not judged again; quarantined ones are, every run.
         --manifest-dir DIR --manifest-commit SHA [--refresh] [--dry-run]
     python -m insurance_harness.ingest.uploads detach --registry PATH --knowledge-id ID \\
         --reason {wrong_version,wrong_product,not_product_material} [--dry-run]
+    python -m insurance_harness.ingest.uploads relabel --registry PATH --knowledge-id ID [--dry-run]
 
 `confirm` pushes the materials waiting for a person to the platform and applies their answers
-(S5b-3c-2), and on a v2 registry the method-scope questions too (SK-1 §4); it shares the registry
-lock with the other commands. `migrate-registry` turns a v1
-registry into v2 (or refreshes the version fields) from a pinned product repository checkout
-(PV-1 Spec §4); it reads no platform. A `run` on a v2 registry reads the catalog it names.
-`detach` takes a wrongly attributed material off its entry in a v2 registry (PV-3 Spec §4).
+(S5b-3c-2), and on a v2 registry the scope-label questions too (SK-1 §4); it shares the registry
+lock with the other commands. `migrate-registry` turns a v1 registry into v2 (or refreshes the
+version fields) from a pinned product repository checkout (PV-1 Spec §4); it reads no platform. A
+`run` on a v2 registry reads the catalog it names. `detach` takes a wrongly attributed material off
+its entry (PV-3 Spec §4); `relabel` has a person correct a method material's labels at the next
+`confirm` (SK-1 §4.5).
 """
 
 import argparse
@@ -51,7 +53,7 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.ingest.confirmations import ConfirmationsError, sync
 from insurance_harness.ingest.detach import REASONS, DetachError, detach
-from insurance_harness.ingest.method_confirmations import sync_methods
+from insurance_harness.ingest.method_confirmations import request_relabel, sync_methods
 from insurance_harness.ingest.method_uses import MethodStep, expire_method_uses
 from insurance_harness.ingest.publication import PublicationError, run_publication
 from insurance_harness.ingest.raw_sources import (
@@ -343,16 +345,17 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     migration.add_argument("--manifest-commit", required=True)
     migration.add_argument("--refresh", action="store_true")
     migration.add_argument("--dry-run", action="store_true")
-    detaching = commands.add_parser("detach")
-    detaching.add_argument("--registry", type=Path, required=True)
-    detaching.add_argument("--knowledge-id", required=True)
-    detaching.add_argument("--reason", choices=REASONS, required=True)
-    detaching.add_argument("--dry-run", action="store_true")
+    for name in ("detach", "relabel"):  # one change to a v2 registry under its lock
+        change = commands.add_parser(name)
+        change.add_argument("--registry", type=Path, required=True)
+        change.add_argument("--knowledge-id", required=True)
+        change.add_argument("--dry-run", action="store_true")
+    commands.choices["detach"].add_argument("--reason", choices=REASONS, required=True)
     args = parser.parse_args(argv)
     if args.command == "migrate-registry":
         return _migrate(args)
-    if args.command == "detach":
-        return _detach(args)
+    if args.command in {"detach", "relabel"}:
+        return _change(args)
     base_url, api_key = os.environ.get(BASE_URL_ENV, ""), os.environ.get(API_KEY_ENV, "")
     if not base_url or not api_key:
         print("CONFIGURATION_MISSING", file=sys.stderr)
@@ -469,24 +472,26 @@ def _migrate(args: argparse.Namespace) -> int:
     return 0
 
 
-def _detach(args: argparse.Namespace) -> int:
-    """`detach`: the registry lock, then the material off its entry (PV-3 Spec §4)."""
+def _change(args: argparse.Namespace) -> int:
+    """`detach` (PV-3 Spec §4) or `relabel` (SK-1 §4.5): the registry lock, then the change."""
     try:
         with _Lock(args.registry):
             registry = load_registry(args.registry)
-            detached = detach(registry, args.knowledge_id, args.reason)
+            changed = (request_relabel(registry, args.knowledge_id) if args.command == "relabel"
+                       else detach(registry, args.knowledge_id, args.reason))
             if not args.dry_run:
-                save_registry(detached, args.registry)
+                save_registry(changed, args.registry)
     except _Busy:
         print("REGISTRY_BUSY", file=sys.stderr)
         return 3
-    except (DetachError, RegistryError) as error:
+    except (DetachError, ConfirmationsError, RegistryError) as error:
         print(error.code, file=sys.stderr)
         return 1
     except OSError:
         print("REGISTRY_IO_ERROR", file=sys.stderr)
         return 1
-    print(json.dumps({"detached": args.knowledge_id, "dry_run": args.dry_run}))
+    done = "detached" if args.command == "detach" else "relabel"
+    print(json.dumps({done: args.knowledge_id, "dry_run": args.dry_run}))
     return 0
 
 
