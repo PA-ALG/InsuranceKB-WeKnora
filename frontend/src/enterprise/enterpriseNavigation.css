@@ -37,3 +37,8 @@
   .ek-navigation__body { max-height: 60dvh; }
   .ek-navigation:not(.ek-navigation--open) .ek-navigation__body { display: none; }
 }
+/* PV-4b: the include-discontinued switch, family clusters and sale status labels. */
+.ek-nav-discontinued { display: flex; align-items: center; gap: 6px; margin: -8px 8px 12px; color: var(--td-text-color-secondary); font-size: 12px; cursor: pointer; }
+.ek-nav-family__name { display: block; padding: 4px 8px 2px 24px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--td-text-color-placeholder); font-size: 12px; }
+.ek-nav-family > ul { padding-left: 8px; }
+.ek-nav-entry__head .ek-sale-status { margin: 0 4px; }

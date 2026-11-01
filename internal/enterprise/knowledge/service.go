@@ -5,6 +5,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
@@ -26,16 +27,22 @@ type Evidence struct {
 	SourceRef string
 }
 
-// Field is a published Claim with its entity, display title and provenance.
+// Field is a published Claim with its entity, display title and provenance. EntityVersion is the
+// entity's version label, empty for an entity without a lifecycle.
 type Field struct {
-	ReleaseID, Slug, EntityID, EntityName, FieldKey, FieldTitle, State, Value, Origin, Review string
-	Evidence                                                                                  []Evidence
+	ReleaseID, Slug, EntityID, EntityName, EntityVersion, FieldKey, FieldTitle, State, Value, Origin, Review string
+	Evidence                                                                                                 []Evidence
 }
 
-// Entity is the published identity, aliases and classification of an entry.
+// Entity is the published identity, aliases and classification of an entry, with its version
+// data: Status is evaluated for the read; Predecessors and Successors are visible entity IDs.
 type Entity struct {
-	EntityID, Name string
-	Names, Labels  []string
+	EntityID, Name           string
+	Names, Labels            []string
+	Lifecycle                *Lifecycle
+	Family                   *Family
+	Status                   SaleStatus
+	Predecessors, Successors []string
 }
 
 // Statement is a concept explanation with exact Claim references.
@@ -51,8 +58,12 @@ type Concept struct {
 	OmittedStatements                              int
 }
 
-// Service has no release cache: each query remains within its explicit read scope.
-type Service struct{ reader Reader }
+// Service has no release cache: each query remains within its explicit read scope. now is the
+// clock sale status is evaluated by (time.Now when nil).
+type Service struct {
+	reader Reader
+	now    func() time.Time
+}
 
 // NewService constructs a stateless query service over the supplied release reader.
 func NewService(reader Reader) *Service { return &Service{reader: reader} }
@@ -74,7 +85,12 @@ func (s *Service) read(ctx context.Context, tenantID uint64, spaceID, releaseID 
 	if r.ID != releaseID {
 		return nil, &release.Error{Code: release.ErrorReleaseConflict, Detail: "reader returned another release"}
 	}
-	return indexRelease(ctx, r)
+	index, err := indexRelease(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	index.evaluate(s.today())
+	return index, nil
 }
 
 func validateRead(ctx context.Context, tenantID uint64, spaceID, releaseID string) error {
