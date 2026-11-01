@@ -47,6 +47,24 @@
    记录也存在且某个受管键与它不一致、本次又未显式 `--set-env`/`--unset-env` 该键时拒绝；当前容器不存在（例如上次 `create`
    失败）时取记录；两者都没有时，每个受管键都必须显式给出（`--set-env` 或 `--unset-env`），否则拒绝，不把丢失当作成功。
    当前容器或记录任一表明带 Spaces 而未传 `--spaces` 时拒绝。记录不可读或格式不符时拒绝。
+
+   记录格式与规则（审核 R3.1–R3.3 补充，Owner 裁定绑定身份）：
+   ```json
+   {"version": 1, "context": "<docker context 名>", "container": "<App 容器名>",
+    "source_id": "<重建来源容器 ID>", "current_id": "<写入时当前 App 容器 ID 或 null>",
+    "managed": {"<受管键>": "<取值>"}, "spaces": true}
+   ```
+   - `context` 取 `docker context show`；`source_id` 是每次重建所依据的原容器（`-pre-s4` 备份；首次换装时即改名前的原容器，
+     ID 不变）；`current_id` 只作诊断。`version` 为 1，字段集合固定，任何一层出现重复成员即视为损坏；`managed` 为空对象合法（表示已明确移除）。
+   - 记录**属于**本次环境，当且仅当 `context`、`container`、`source_id` 都与本次一致。不属于时（例如从另一套环境复制
+     过来）一律不采用其取值与 Spaces 标记，并以 `intent_record_mismatch` 拒绝，除非本次对每个受管键都显式 `--set-env` 或
+     `--unset-env`；显式给全后照常换装并以本次身份重写记录。
+   - 读：记录路径必须是普通文件（不跟随符号链接，`O_NOFOLLOW`），否则 `intent_record_invalid`；损坏（不可解析、重复成员、字段或
+     类型不符、`version` 不是 1、含非受管键）同为 `intent_record_invalid`。没有当前容器也没有记录时为 `intent_record_missing`；当前容器与记录不一致时
+     为 `intent_record_disagrees`。这些都在动容器之前拒绝，且不改记录。
+   - 写：记录路径存在但不是普通文件即拒绝；在私有目录内用本次新建的独占临时文件（`O_CREAT|O_EXCL|O_NOFOLLOW`、随机名、
+     属主为当前用户、0600），写入并 `fsync` 后原子改名到记录路径，再 `fsync` 目录；任一步失败都在动容器之前退出，并删除临时文件。
+     不使用固定的临时文件名，私有目录中其他文件的内容不受影响。
 9. **计划阶段的可表达性检查**：子进程环境的键与值、`docker` 参数中含 NUL 或无法按文件系统编码表示的字符，私有目录路径含 `:`
    （`-v` 的分隔符），都在动容器之前拒绝，错误信息不含取值。换行可以经子进程环境原样传递，不拒绝。
 
@@ -82,6 +100,9 @@ python3 -I deploy/local-live/swap_app.py <旧 app-image-id> --private-dir <私�
   重跑，受管键从意图记录恢复，未传 `--spaces` 拒绝；当前容器与记录不一致拒绝，显式给出后通过；无当前容器且无记录时须显式给出；
   记录损坏拒绝；记录权限 0600；签名密钥或原容器环境含 NUL 或无法编码的字符、私有目录路径含 `:`，都在任何写操作与
   写记录之前拒绝。
+- R3.1–R3.3：预置指向 `secrets.env` 的旧固定临时文件名不影响私有文件字节；记录路径是符号链接或目录时拒绝且私有文件字节不变；
+  顶层或嵌套重复成员拒绝且记录与容器不变；本环境的空 `managed` 记录可用于恢复；从环境 A 复制到原容器 ID 不同的环境 B 的记录、
+  context 或容器名不符的记录，都以 `intent_record_mismatch` 拒绝，显式给出全部受管键后通过。
 
 门禁：上述测试、Harness ruff/mypy（测试文件）、`pytest -q tests/architecture`、手写文件 ≤500 行、`git diff --check`。
 
