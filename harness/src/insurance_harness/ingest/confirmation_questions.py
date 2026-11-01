@@ -2,7 +2,8 @@
 
 The text is versioned data (confirmation_wording.json); the revision identifies the question, its
 place in the material's decision history and the wording version, so a question asked again after
-being set aside, or reworded, is a new platform item rather than a closed one.
+being set aside, or reworded, is a new platform item rather than a closed one. Questions go to
+the platform in the batches it accepts (`confirmation_batches`), product and method ones alike.
 """
 
 import hashlib
@@ -16,7 +17,13 @@ from typing import get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from insurance_harness.bundle.client import ConfirmationInput, ConfirmationOption
+from insurance_harness.bundle.client import (
+    MAX_CONFIRMATION_BYTES,
+    MAX_CONFIRMATIONS,
+    ConfirmationInput,
+    ConfirmationOption,
+    confirmation_body,
+)
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.identity.attribution import load_attribution_policy
 from insurance_harness.identity.confirmation import Choice, ConfirmationError, choices
@@ -268,3 +275,22 @@ def _pack_labels() -> dict[str, str]:
     for entry in load_attribution_policy().classifications:
         labels.setdefault(entry.schema_pack_id, entry.suffix)
     return labels
+
+
+_ENVELOPE = len(confirmation_body([]))
+
+
+def confirmation_batches(items: list[ConfirmationInput]) -> list[list[ConfirmationInput]]:
+    """The items in input order, in submissions the platform accepts: at most 200 items and
+    512 KiB of body each (S5b-3c-2 review R8; SK-1 review R2)."""
+    batches: list[list[ConfirmationInput]] = []
+    batch: list[ConfirmationInput] = []
+    size = _ENVELOPE
+    for item in items:
+        part = len(confirmation_body([item])) - _ENVELOPE  # its exact part of the body
+        if batch and (len(batch) == MAX_CONFIRMATIONS or size + part + 2 > MAX_CONFIRMATION_BYTES):
+            batches.append(batch)
+            batch, size = [], _ENVELOPE
+        batch.append(item)
+        size += part + 2
+    return [*batches, batch] if batch else batches

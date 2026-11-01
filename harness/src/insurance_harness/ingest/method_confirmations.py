@@ -35,7 +35,11 @@ from insurance_harness.catalog.sales_taxonomy import SalesTaxonomy, load_sales_t
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.identity.attribution import Attribution, load_attribution_policy
 from insurance_harness.ingest.confirmation_matching import content_of
-from insurance_harness.ingest.confirmation_questions import ConfirmationsError, trim
+from insurance_harness.ingest.confirmation_questions import (
+    ConfirmationsError,
+    confirmation_batches,
+    trim,
+)
 from insurance_harness.ingest.method_use_model import (
     LIVE,
     METHOD_ROLE,
@@ -277,7 +281,8 @@ class _MethodSync:
         self, listed: list[ConfirmationItem], only: set[tuple[str, int, str]] | None = None
     ) -> set[tuple[object, ...]]:
         """Push every asked question (or `only` those records') and settle the answered ones;
-        the wanted contents."""
+        the wanted contents. Questions go in the batches the platform accepts (Spec §4.1): a batch
+        that fails ends the run, after what earlier batches settled is saved."""
         asked = []
         for use in self.current.method_uses:
             if not use.asked or (only is not None and use.triple not in only):
@@ -294,23 +299,27 @@ class _MethodSync:
         ]
         self.submitted |= {content_of(question) for _, question in fresh}
         self.pushed.update(use.knowledge_id for use, _ in fresh)
-        if not fresh:
-            return wanted
-        if self.write:
-            stored: list[ConfirmationItem | None] = list(
-                self.client.submit_confirmations(self.space, [q for _, q in fresh])
-            )
-        else:
+        if not self.write:  # a dry run finds what the platform would return, open or closed
             existing = {content_of(item): item for item in listed}
-            stored = [existing.get(content_of(question)) for _, question in fresh]
-        for (use, _), item in zip(fresh, stored, strict=True):
+            self.answered([(use, existing.get(content_of(q))) for use, q in fresh])
+            return wanted
+        sent = 0
+        for batch in confirmation_batches([question for _, question in fresh]):
+            uses = [use for use, _ in fresh[sent : sent + len(batch)]]
+            sent += len(batch)
+            stored = self.client.submit_confirmations(self.space, batch)  # in input order
+            self.answered(list(zip(uses, stored, strict=True)))  # settled batch by batch
+        return wanted
+
+    def answered(self, pairs: list[tuple[MethodUse, ConfirmationItem | None]]) -> None:
+        """Settle the items a person answered; a closed one was closed elsewhere."""
+        for use, item in pairs:
             if item is None or item.id in self.handled:
                 continue
             if item.closure is not None:
                 self.skipped["CONFIRMATION_CLOSED"] += 1
             elif item.answer is not None:
                 self.settle(use, item)
-        return wanted
 
     def settle(self, use: MethodUse, item: ConfirmationItem) -> None:
         """Decide, save the settlement, close, execute (Spec §4.2, §4.3)."""
