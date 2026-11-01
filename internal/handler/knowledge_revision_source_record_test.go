@@ -82,6 +82,18 @@ func TestKnowledgeRevisionSourceRecordRejectsAmbiguousDryRunAndMapsErrors(t *tes
 	require.Equal(t, http.StatusConflict, recorder.Code)
 	require.Zero(t, stub.recordCalls)
 
+	// R2 (#513 review): repeated values, malformed escapes and an empty value never reach the writer.
+	for _, query := range []string{
+		"?dry_run=false&dry_run=true", "?dry_run=false&dry_run=%zz", "?dry_run=true&dry_run=false",
+		"?dry_run=%zz", "?dry_run=", "?dry_run",
+	} {
+		stub = &knowledgeRevisionSourceRecordStub{}
+		recorder = recordRequest(t, stub, query)
+		require.Equal(t, http.StatusConflict, recorder.Code, query)
+		require.Contains(t, recorder.Body.String(), "REVISION_SOURCE_MISMATCH", query)
+		require.Zero(t, stub.recordCalls, query)
+	}
+
 	stub = &knowledgeRevisionSourceRecordStub{recordErr: revisionsource.ErrRevisionSourceBackfillDisabled}
 	recorder = recordRequest(t, stub, "?dry_run=false")
 	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)

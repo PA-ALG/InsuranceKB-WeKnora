@@ -7,6 +7,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Tencent/WeKnora/internal/types"
@@ -35,6 +36,23 @@ func committedOffice(t *testing.T, db *gorm.DB, repo *knowledgeRepository, mimeT
 	_, err := repo.CommitDirectRevision(context.Background(), id, testRevisionBinding(1))
 	require.NoError(t, err)
 	return id
+}
+
+// verifiedObject is what the service hands over after hashing the bytes of the resource the
+// knowledge currently points at (the fixture's file digest is all "a").
+func verifiedObject(t *testing.T, db *gorm.DB, knowledgeID string) types.RevisionSourceObject {
+	t.Helper()
+	var knowledge types.Knowledge
+	require.NoError(t, db.Where("id = ?", knowledgeID).First(&knowledge).Error)
+	handle, ok := types.ParseResourcePath(knowledge.FilePath)
+	require.True(t, ok)
+	var resource types.StoredResource
+	require.NoError(t, db.Where("handle = ?", handle).First(&resource).Error)
+	return types.RevisionSourceObject{
+		ResourceID: resource.ID, ResourceHandle: resource.Handle, Provider: resource.Provider,
+		StorageBackendID: resource.StorageBackendID, PhysicalPath: resource.PhysicalPath,
+		Size: resource.Size, ObjectSHA256: knowledge.FileSHA256,
+	}
 }
 
 func TestCommitRecordsOfficeSourceRevisionsLikePDF(t *testing.T) {
@@ -78,7 +96,8 @@ func TestRecordMissingRevisionSourceDryRunThenRecordsOnce(t *testing.T) {
 	require.NoError(t, db.Exec(`DELETE FROM knowledge_revision_sources WHERE knowledge_id = ?`, id).Error)
 	ctx := context.Background()
 
-	planned, outcome, err := repo.RecordMissingRevisionSource(ctx, 1, id, 1, true)
+	object := verifiedObject(t, db, id)
+	planned, outcome, err := repo.RecordMissingRevisionSource(ctx, 1, id, 1, object, true)
 	require.NoError(t, err)
 	require.Equal(t, types.RevisionSourceRecordWouldRecord, outcome)
 	require.Equal(t, original.RevisionSourceID, planned.RevisionSourceID)
@@ -86,7 +105,7 @@ func TestRecordMissingRevisionSourceDryRunThenRecordsOnce(t *testing.T) {
 	require.NoError(t, db.Table("knowledge_revision_sources").Where("knowledge_id = ?", id).Count(&sources).Error)
 	require.Zero(t, sources, "a dry run writes nothing")
 
-	recorded, outcome, err := repo.RecordMissingRevisionSource(ctx, 1, id, 1, false)
+	recorded, outcome, err := repo.RecordMissingRevisionSource(ctx, 1, id, 1, object, false)
 	require.NoError(t, err)
 	require.Equal(t, types.RevisionSourceRecordRecorded, outcome)
 	row := sourceRow(t, db, id, 1)
@@ -96,7 +115,7 @@ func TestRecordMissingRevisionSourceDryRunThenRecordsOnce(t *testing.T) {
 	require.Equal(t, types.KnowledgeRevisionSourceReleased, row.RetentionState)
 	require.Empty(t, row.BindingDigest)
 
-	again, outcome, err := repo.RecordMissingRevisionSource(ctx, 1, id, 1, false)
+	again, outcome, err := repo.RecordMissingRevisionSource(ctx, 1, id, 1, object, false)
 	require.NoError(t, err)
 	require.Equal(t, types.RevisionSourceRecordPresent, outcome)
 	require.Equal(t, row.RevisionSourceID, again.RevisionSourceID)
@@ -110,7 +129,8 @@ func TestRecordMissingRevisionSourceNeverTouchesAnExistingPDFRow(t *testing.T) {
 	before := sourceRow(t, db, id, 1)
 
 	for _, dryRun := range []bool{true, false} {
-		got, outcome, err := repo.RecordMissingRevisionSource(context.Background(), 1, id, 1, dryRun)
+		got, outcome, err := repo.RecordMissingRevisionSource(
+			context.Background(), 1, id, 1, verifiedObject(t, db, id), dryRun)
 		require.NoError(t, err)
 		require.Equal(t, types.RevisionSourceRecordPresent, outcome)
 		require.Equal(t, before.RevisionSourceID, got.RevisionSourceID)
@@ -150,7 +170,70 @@ func TestRecordMissingRevisionSourceRefusesUnboundOrDriftedAttempts(t *testing.T
 			require.NoError(t, db.Exec(`DELETE FROM knowledge_revision_sources WHERE knowledge_id = ?`, id).Error)
 			tenantID, attempt := mutate(t, db, id)
 
-			_, _, err := repo.RecordMissingRevisionSource(context.Background(), tenantID, id, attempt, false)
+			object := verifiedObject(t, db, id)
+			_, _, err := repo.RecordMissingRevisionSource(context.Background(), tenantID, id, attempt, object, false)
+			require.ErrorIs(t, err, ErrRevisionSourceUnavailable)
+			var sources int64
+			require.NoError(t, db.Table("knowledge_revision_sources").
+				Where("knowledge_id = ?", id).Count(&sources).Error)
+			require.Zero(t, sources)
+		})
+	}
+}
+
+// R1 (#513 review): the object the service hashed must still be the resource the knowledge points
+// at inside the locked write; a swap between the two steps records nothing and backfills nothing.
+func TestRecordMissingRevisionSourceRefusesAnObjectSwappedAfterVerification(t *testing.T) {
+	db := setupRevisionTestDB(t)
+	repo := NewKnowledgeRepository(db).(*knowledgeRepository)
+	id := committedOffice(t, db, repo, "", "deck.pptx")
+	require.NoError(t, db.Exec(`DELETE FROM knowledge_revision_sources WHERE knowledge_id = ?`, id).Error)
+	verified := verifiedObject(t, db, id) // the service hashed resource A here
+
+	other := "bbbbbbbbbbbbbbbbbbbbbb"
+	require.NoError(t, db.Exec(`
+INSERT INTO resources (
+	id, handle, tenant_id, provider, physical_path, location_hash, kind,
+	mime_type, original_name, size, content_hash, lifecycle, state, created_at, updated_at
+) VALUES ('resource-b', ?, 1, 'local', '/files/b.pptx', ?, 'file', '', 'deck.pptx', 1024, '', 'persistent',
+	'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, other, strings.Repeat("e", 64)).Error)
+	require.NoError(t, db.Exec(`
+INSERT INTO resource_bindings (id, resource_id, tenant_id, owner_type, owner_id, relation, created_at)
+VALUES ('binding-b', 'resource-b', 1, 'knowledge', ?, 'source_file', CURRENT_TIMESTAMP)`, id).Error)
+	require.NoError(t, repo.UpdateKnowledgeColumns(context.Background(), id,
+		map[string]any{"file_path": types.BuildResourcePath(other)}))
+
+	for _, dryRun := range []bool{true, false} {
+		_, _, err := repo.RecordMissingRevisionSource(context.Background(), 1, id, 1, verified, dryRun)
+		require.ErrorIs(t, err, ErrRevisionSourceUnavailable)
+	}
+	var sources int64
+	require.NoError(t, db.Table("knowledge_revision_sources").Where("knowledge_id = ?", id).Count(&sources).Error)
+	require.Zero(t, sources)
+	var digest string
+	require.NoError(t, db.Raw(`SELECT content_hash FROM resources WHERE id = 'resource-b'`).Row().Scan(&digest))
+	require.Empty(t, digest, "the unverified resource gets no digest")
+}
+
+func TestRecordMissingRevisionSourceRefusesAnyDriftFromTheVerifiedObject(t *testing.T) {
+	for name, drift := range map[string]func(*types.RevisionSourceObject){
+		"resource id":     func(o *types.RevisionSourceObject) { o.ResourceID = "resource-other" },
+		"handle":          func(o *types.RevisionSourceObject) { o.ResourceHandle = strings.Repeat("z", 22) },
+		"provider":        func(o *types.RevisionSourceObject) { o.Provider = "minio" },
+		"storage backend": func(o *types.RevisionSourceObject) { o.StorageBackendID = "backend-2" },
+		"physical path":   func(o *types.RevisionSourceObject) { o.PhysicalPath = "/files/other.pptx" },
+		"size":            func(o *types.RevisionSourceObject) { o.Size++ },
+		"object digest":   func(o *types.RevisionSourceObject) { o.ObjectSHA256 = strings.Repeat("c", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			db := setupRevisionTestDB(t)
+			repo := NewKnowledgeRepository(db).(*knowledgeRepository)
+			id := committedOffice(t, db, repo, "", "deck.docx")
+			require.NoError(t, db.Exec(`DELETE FROM knowledge_revision_sources WHERE knowledge_id = ?`, id).Error)
+			object := verifiedObject(t, db, id)
+			drift(&object)
+
+			_, _, err := repo.RecordMissingRevisionSource(context.Background(), 1, id, 1, object, false)
 			require.ErrorIs(t, err, ErrRevisionSourceUnavailable)
 			var sources int64
 			require.NoError(t, db.Table("knowledge_revision_sources").

@@ -23,15 +23,18 @@ type revisionSourceRecorderStub struct {
 	gotID       string
 	gotAttempt  int64
 	gotDryRun   bool
+	gotObject   types.RevisionSourceObject
 	outcome     types.RevisionSourceRecordOutcome
 	recordErr   error
 }
 
 func (s *revisionSourceRecorderStub) RecordMissingRevisionSource(
-	_ context.Context, tenantID uint64, knowledgeID string, parseAttempt int64, dryRun bool,
+	_ context.Context, tenantID uint64, knowledgeID string, parseAttempt int64,
+	object types.RevisionSourceObject, dryRun bool,
 ) (*types.KnowledgeRevisionSource, types.RevisionSourceRecordOutcome, error) {
 	s.recordCalls++
 	s.gotTenant, s.gotID, s.gotAttempt, s.gotDryRun = tenantID, knowledgeID, parseAttempt, dryRun
+	s.gotObject = object
 	if s.recordErr != nil {
 		return nil, "", s.recordErr
 	}
@@ -109,6 +112,13 @@ func TestRecordMissingSourceVerifiesObjectBytesThenDelegates(t *testing.T) {
 		require.Equal(t, uint64(10003), repo.gotTenant)
 		require.Equal(t, int64(1), repo.gotAttempt)
 		require.Equal(t, dryRun, repo.gotDryRun)
+		// R1 (#513 review): the write is bound to the exact object whose bytes were hashed.
+		require.Equal(t, types.RevisionSourceObject{
+			ResourceID: repo.resource.ID, ResourceHandle: repo.resource.Handle,
+			Provider: repo.resource.Provider, StorageBackendID: repo.resource.StorageBackendID,
+			PhysicalPath: repo.resource.PhysicalPath, Size: repo.resource.Size,
+			ObjectSHA256: repo.knowledge.FileSHA256,
+		}, repo.gotObject)
 	}
 }
 
