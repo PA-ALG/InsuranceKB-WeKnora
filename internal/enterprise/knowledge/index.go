@@ -13,10 +13,12 @@ import (
 )
 
 type entityPayload struct {
-	ID     string   `json:"entity_id"`
-	Type   string   `json:"entity_type"`
-	Names  []string `json:"names"`
-	Labels []string `json:"classification_labels"`
+	ID        string     `json:"entity_id"`
+	Type      string     `json:"entity_type"`
+	Names     []string   `json:"names"`
+	Labels    []string   `json:"classification_labels"`
+	Lifecycle *Lifecycle `json:"lifecycle"`
+	Family    *Family    `json:"product_family"`
 }
 
 type claimPayload struct {
@@ -48,9 +50,10 @@ type profilePayload struct {
 }
 
 type navigationPayload struct {
-	OverviewFields []string              `json:"overview_fields"`
-	QuestionTerms  map[string][][]string `json:"question_terms,omitempty"`
-	Domains        []struct {
+	OverviewFields  []string              `json:"overview_fields"`
+	QuestionTerms   map[string][][]string `json:"question_terms,omitempty"`
+	QuestionIntents map[string][][]string `json:"question_intents,omitempty"`
+	Domains         []struct {
 		Types  []string `json:"entity_types"`
 		Groups []struct {
 			Key    string   `json:"group_key"`
@@ -97,6 +100,7 @@ func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error)
 		id: r.ID, entityByID: map[string]int{}, claims: map[string][]indexedClaim{},
 		claimBySlug: map[string]indexedClaim{},
 	}
+	var relations []relationPayload
 	for _, member := range r.Members {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -117,10 +121,20 @@ func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error)
 			if len(payload.Names) > 0 && payload.Names[0] != "" {
 				name = payload.Names[0]
 			}
+			if payload.Family != nil && strings.TrimSpace(payload.Family.Key) == "" {
+				payload.Family = nil
+			}
 			index.entityByID[payload.ID] = len(index.entities)
 			index.entities = append(index.entities, indexedEntity{Entity: Entity{
 				EntityID: payload.ID, Name: name, Names: payload.Names, Labels: payload.Labels,
+				Lifecycle: payload.Lifecycle, Family: payload.Family,
 			}, kind: payload.Type})
+		case "relation":
+			// A relation only adds version links: one that does not decode loses its link, not the read.
+			var payload relationPayload
+			if decodeMember(member, &payload) == nil {
+				relations = append(relations, payload)
+			}
 		case "claim":
 			var payload claimPayload
 			if err := decodeMember(member, &payload); err != nil {
@@ -196,6 +210,7 @@ func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error)
 			Entity: Entity{EntityID: subject, Name: subject}, placeholder: true,
 		})
 	}
+	index.linkVersions(relations)
 	return index, ctx.Err()
 }
 

@@ -6,6 +6,7 @@ import CitationPanel from './CitationPanel.vue'
 import EnterpriseField from './EnterpriseField.vue'
 import EnterpriseNavigation from './EnterpriseNavigation.vue'
 import ExpertEditForm from './ExpertEditForm.vue'
+import ProductVersionMeta from './ProductVersionMeta.vue'
 import { conceptKeys } from './conceptView'
 import { readRelease, type Release } from './enterpriseApi'
 import { canOfferExpertEdit } from './expertEditAccess'
@@ -161,6 +162,7 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
             <span v-if="view.profileName" class="ek-meta-tag">{{ view.profileName }}</span>
             <span class="ek-meta-tag">{{ t('enterpriseKnowledge.space.version', { epoch: release.epoch }) }}</span>
           </p>
+          <ProductVersionMeta :release="release" :space-id="spaceId" :entity-id="entityId" />
           <p v-if="publishedEpoch !== null" role="status" data-expert-notice class="ek-status">
             {{ t('enterpriseKnowledge.expert.published', { epoch: publishedEpoch }) }}
           </p>

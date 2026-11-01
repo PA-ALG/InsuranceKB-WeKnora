@@ -14,6 +14,10 @@ func (s *Service) FindEntities(
 	if err != nil {
 		return nil, err
 	}
+	return index.findEntities(ctx, query, limit)
+}
+
+func (index *releaseIndex) findEntities(ctx context.Context, query string, limit int) ([]Entity, error) {
 	query = normalize(query)
 	if query == "" {
 		return []Entity{}, nil

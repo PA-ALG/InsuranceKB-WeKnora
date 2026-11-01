@@ -258,6 +258,24 @@ export default {
       "noFields": "No fields yet",
       "noConcepts": "No shared concepts in this release"
     },
+    "version": {
+      "title": "Version",
+      "status": {
+        "on_sale": "On sale",
+        "discontinued": "Discontinued",
+        "not_yet_on_sale": "Not yet on sale",
+        "unknown": "Sale status unknown"
+      },
+      "onSaleAsOf": "On sale (as of {date} data)",
+      "period": "Sale period",
+      "periodRange": "{start} to {end}",
+      "periodFrom": "from {start}",
+      "periodUntil": "until {end}",
+      "family": "Family",
+      "predecessors": "Previous version",
+      "successors": "Next version",
+      "includeDiscontinued": "Include discontinued ({n})"
+    },
     "concept": {
       "definition": "Field definition",
       "summary": "Model summary (based on product sources)",

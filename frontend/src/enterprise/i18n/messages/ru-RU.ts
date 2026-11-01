@@ -258,6 +258,24 @@ export default {
       "noFields": "Нет полей",
       "noConcepts": "В этой версии нет общих понятий"
     },
+    "version": {
+      "title": "Версия",
+      "status": {
+        "on_sale": "В продаже",
+        "discontinued": "Снят с продажи",
+        "not_yet_on_sale": "Ещё не в продаже",
+        "unknown": "Статус продаж неизвестен"
+      },
+      "onSaleAsOf": "В продаже (по данным на {date})",
+      "period": "Период продаж",
+      "periodRange": "с {start} по {end}",
+      "periodFrom": "с {start}",
+      "periodUntil": "по {end}",
+      "family": "Серия",
+      "predecessors": "Предыдущая версия",
+      "successors": "Следующая версия",
+      "includeDiscontinued": "Включая снятые с продажи ({n})"
+    },
     "concept": {
       "definition": "Определение поля",
       "summary": "Обзор модели (на основе источников продуктов)",

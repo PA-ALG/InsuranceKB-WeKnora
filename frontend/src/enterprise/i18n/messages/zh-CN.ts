@@ -258,6 +258,24 @@ export default {
       "noFields": "暂无字段",
       "noConcepts": "该版本中暂无跨条目概念"
     },
+    "version": {
+      "title": "版本信息",
+      "status": {
+        "on_sale": "在售",
+        "discontinued": "停售",
+        "not_yet_on_sale": "未开售",
+        "unknown": "销售状态未知"
+      },
+      "onSaleAsOf": "在售（据 {date} 数据）",
+      "period": "销售期",
+      "periodRange": "{start} 至 {end}",
+      "periodFrom": "{start} 起",
+      "periodUntil": "至 {end}",
+      "family": "系列",
+      "predecessors": "前一版本",
+      "successors": "后续版本",
+      "includeDiscontinued": "含停售（{n}）"
+    },
     "concept": {
       "definition": "字段定义",
       "summary": "模型汇总（依据各产品原文）",

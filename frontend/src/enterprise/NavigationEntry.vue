@@ -4,10 +4,12 @@ import { routeLocationKey } from 'vue-router'
 import { useNavigationMemory } from './navigationMemory'
 import { useI18n } from 'vue-i18n'
 import type { Release } from './enterpriseApi'
+import type { SaleStatus } from './productVersions'
 import { entityView, type EntitySummary, type FieldView } from './releaseView'
 import { wikiPages, type WikiPageEntry } from './wikiPagesView'
 
-const props = defineProps<{ entry: EntitySummary; release: Release; spaceId: string; selected?: boolean; wikiPageKey?: string }>()
+// saleStatus is set only for an entry with version data (PV-4b).
+const props = defineProps<{ entry: EntitySummary; release: Release; spaceId: string; selected?: boolean; wikiPageKey?: string; saleStatus?: SaleStatus }>()
 const { t } = useI18n()
 const expanded = ref(false)
 watch(() => props.selected, selected => { expanded.value = !!selected }, { immediate: true })
@@ -81,6 +83,7 @@ function pageTarget(page: WikiPageEntry) {
       <RouterLink :to="target" :title="entry.name" :aria-current="selected && !wikiPageKey ? 'page' : undefined">
         <span>{{ entry.name }}</span>
       </RouterLink>
+      <span v-if="saleStatus" class="ek-sale-status" :data-sale-status="saleStatus">{{ t(`enterpriseKnowledge.version.status.${saleStatus}`) }}</span>
     </div>
     <div v-if="expanded" :id="contentId" class="ek-nav-fields">
       <details :key="`${spaceId}/${release.id}/${entry.entityId}/schema`" ref="schemaDetails"

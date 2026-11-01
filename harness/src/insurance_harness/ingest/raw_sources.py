@@ -224,3 +224,12 @@ def material_pages(reader: _Pages, space_id: str, source: RawSource) -> list[Pag
     if not read or any(page.document_sha256 != source.sha256 for page in read):
         raise SourcePagesError("PARSE_ARTIFACT_INTEGRITY")
     return read
+
+
+def head_of(reader: _Pages, space_id: str, source: RawSource) -> str:
+    """The text attribution reads: the first two of the listed file's pages, in page order."""
+    return head_text(material_pages(reader, space_id, source))
+
+
+def head_text(read: Sequence[PageText]) -> str:
+    return "\n".join(page.text for page in read[:2])
