@@ -37,14 +37,15 @@ def expire_method_uses(
 ) -> None:
     """Expire, in place, the live records the completed listing no longer supports (Spec §3.4):
     another revision listed, not listed at all (a material still being parsed is not gone), or
-    the material ignored by a person."""
+    the material ignored by a person. A record whose answer is being carried out (it has a
+    settlement) is left as it is until `confirm` completes it (Spec §4.3)."""
     listed = {s.knowledge_id: (s.parse_attempt, s.sha256) for s in sources}
     parsing = {u.knowledge_id for u in unfinished}
     ignored = {d.knowledge_id for d in registry.decisions if d.attribution.outcome == "IGNORED"}
     kept = []
     for use in registry.method_uses:
         reason = None
-        if use.state in LIVE:
+        if use.state in LIVE and use.settlement is None:
             if use.knowledge_id in ignored:
                 reason = "ignored"
             elif use.knowledge_id in listed and listed[use.knowledge_id] != use.triple[1:]:

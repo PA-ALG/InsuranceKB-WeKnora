@@ -22,8 +22,8 @@ REASONS = ("wrong_version", "wrong_product", "not_product_material")
 
 
 class DetachError(ValueError):
-    """REGISTRY_V1, MATERIAL_NOT_ATTACHED, LAST_MATERIAL or REASON_INVALID; never a path or a
-    name."""
+    """REGISTRY_V1, MATERIAL_NOT_ATTACHED, LAST_MATERIAL, REASON_INVALID or SETTLEMENT_PENDING;
+    never a path or a name."""
 
     def __init__(self, code: str) -> None:
         self.code = code
@@ -36,6 +36,8 @@ def detach(registry: ProductRegistry, knowledge_id: str, reason: str) -> Product
         raise DetachError("REGISTRY_V1")
     if reason not in REASONS:
         raise DetachError("REASON_INVALID")
+    if any(u.knowledge_id == knowledge_id and u.settlement for u in registry.method_uses):
+        raise DetachError("SETTLEMENT_PENDING")  # a person's method answer is being carried out
     owner = next(
         (
             product_id

@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib.resources import files
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -331,8 +332,15 @@ class _MethodSync:
         except ValidationError:
             self.skipped["ANSWER_INVALID"] += 1
             return
+        ignore: Literal["material", "method_use"] | None = None
+        if not choice.labels:  # what the ignore covers is fixed now, as the question was asked
+            ignore = "material" if self.method_only(use) else "method_use"
         settlement = ScopeSettlement(
-            revision=item.revision, answer=ref, categories=choice.labels, editing=choice.editing
+            revision=item.revision,
+            answer=ref,
+            categories=choice.labels,
+            editing=choice.editing,
+            ignore=ignore,
         )
         self.commit(self.put(use.model_copy(update={"settlement": settlement})), settlement)
 
@@ -351,8 +359,13 @@ class _MethodSync:
         self.execute(use, settlement)
 
     def execute(self, use: MethodUse, settlement: ScopeSettlement) -> None:
-        """Do what the settlement says (Spec §4.4)."""
+        """Do exactly what the settlement says, never re-derived from the registry as it is now
+        (Spec §4.3, §4.4). An ignore of the whole material that can no longer be recorded fails
+        closed: the record keeps its settlement and every run reports it."""
         self.handled.add(settlement.answer.item_id)
+        if settlement.ignore == "material" and not self._ignore_material(use, settlement.answer):
+            self.skipped["SETTLEMENT_NOT_APPLICABLE"] += 1
+            return
         decided = {"decided_by": "person", "confirmation": settlement.answer, "settlement": None}
         if settlement.categories:
             labels = {"categories": settlement.categories, "editing": settlement.editing}
@@ -360,13 +373,12 @@ class _MethodSync:
             if settlement.editing:
                 self.following.add(use.triple)
         else:
-            if self.method_only(use):  # a method-only material is ignored as a whole
-                self._ignore_material(use, settlement.answer)
             ignored = {"state": "ignored", "categories": (), "editing": False}
             self.put(use.model_copy(update={**decided, **ignored}))
         self.applied.add(use.knowledge_id)
 
-    def _ignore_material(self, use: MethodUse, answer: ScopeAnswer) -> None:
+    def _ignore_material(self, use: MethodUse, answer: ScopeAnswer) -> bool:
+        """The IGNORED decision of a method-only material, recorded in place; False if refused."""
         source = RawSource(
             knowledge_id=use.knowledge_id,
             parse_attempt=use.parse_attempt,
@@ -387,8 +399,9 @@ class _MethodSync:
         )
         try:
             record(self.current, source, conclusion, ref)
-        except RegistryError as error:
-            self.skipped[error.code] += 1
+        except RegistryError:  # no longer waiting at this revision, or the answer is recorded
+            return False
+        return True
 
     def clean(self, wanted: set[tuple[object, ...]], listed: list[ConfirmationItem]) -> None:
         """Close the method items no longer asked; an answered one was answered too late."""

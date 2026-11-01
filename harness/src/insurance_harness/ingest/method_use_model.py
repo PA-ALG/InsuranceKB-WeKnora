@@ -50,11 +50,16 @@ class ScopeSettlement(_Strict):
     answer: ScopeAnswer
     categories: tuple[Label, ...]  # the labels after the answer; empty: ignored
     editing: bool  # the person goes on choosing: the next question is asked
+    # What an ignore covers, fixed when it is saved (review R1): the whole material when the
+    # question was asked of a method-only material, else only the method use.
+    ignore: Literal["material", "method_use"] | None
 
     @model_validator(mode="after")
     def _consistent(self) -> "ScopeSettlement":
         if not _ordered(self.categories) or (self.editing and not self.categories):
             raise ValueError("labels are sorted and unique; only a labelled record goes on editing")
+        if (self.ignore is None) != bool(self.categories):
+            raise ValueError("an answer either sets labels or ignores, and says what it ignores")
         return self
 
 

@@ -148,8 +148,10 @@ def _candidates(
         or (p.attribution.outcome == "NEEDS_CONFIRM" and p.attribution.policy_ref == policy_ref)
     }
     settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome in FINAL}
-    # A material detached without a product entry (a method material, SK-1 §3.4) ends here too.
+    # A material detached without a product entry (a method material, SK-1 §3.4) ends here too;
+    # one whose method answer is being carried out is not judged again either (SK-1 §4.3).
     settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome == "DETACHED"}
+    settled |= {u.knowledge_id for u in registry.method_uses if u.settlement is not None}
     return sorted(
         (s for s in sources if s.knowledge_id not in settled), key=lambda s: s.knowledge_id
     )
