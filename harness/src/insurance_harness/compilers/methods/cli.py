@@ -3,12 +3,14 @@
 Under the registry lock: load the registry, admit the candidates, compile every method from its
 saved answers (never sending a request), and assemble one candidate bundle against the Active
 release; then write the plan (`candidate.json` when anything changes, `review_items.json`,
-`report.json`) and only then the registry, in one atomic step. Any failure before that leaves the
+`report.json`, put in place as one set with the report last) and only then the registry, in one
+atomic step. Any failure before that leaves the
 registry as it was. Nothing is submitted: the live model stage, submission and withdrawal join in
 SK-2b. Output is codes and counts, never material text.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -43,19 +45,39 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _write_plan(run_root: Path, run: MethodRun) -> None:
+    """The plan files as one set (#516 R2). All are prepared beside their places first, so a
+    failure there leaves the previous set as it was; then `report.json` is removed, the others are
+    put in place, and `report.json` comes last, naming the digests of the others. A run root
+    without `report.json`, or whose digests differ, holds no complete plan."""
     run_root.mkdir(parents=True, exist_ok=True)
-    plan = run_root / "candidate.json"
-    if run.bundle is None:
-        plan.unlink(missing_ok=True)  # an earlier run's plan is not this run's
-    else:
-        plan.write_text(run.bundle.model_dump_json(indent=1) + "\n", encoding="utf-8")
     items = [item.model_dump(mode="json") for item in run.review_items]
-    (run_root / "review_items.json").write_text(
-        json.dumps(items, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-    )
-    (run_root / "report.json").write_text(
-        json.dumps(run.report, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-    )
+    texts = {"review_items.json": json.dumps(items, ensure_ascii=False, indent=1) + "\n"}
+    if run.bundle is not None:
+        texts["candidate.json"] = run.bundle.model_dump_json(indent=1) + "\n"
+    plan = {
+        name: _digest(texts[name]) if name in texts else None
+        for name in ("candidate.json", "review_items.json")
+    }
+    report = {**run.report, "plan": plan}
+    texts["report.json"] = json.dumps(report, ensure_ascii=False, indent=1) + "\n"
+    prepared: dict[str, Path] = {}
+    try:
+        for name, text in texts.items():
+            prepared[name] = run_root / f".{name}.prepared"
+            prepared[name].write_text(text, encoding="utf-8")
+        (run_root / "report.json").unlink(missing_ok=True)  # incomplete from here on
+        if run.bundle is None:
+            (run_root / "candidate.json").unlink(missing_ok=True)  # not this run's plan
+        for name in ("candidate.json", "review_items.json", "report.json"):
+            if name in prepared:
+                os.replace(prepared[name], run_root / name)
+    finally:
+        for path in prepared.values():
+            path.unlink(missing_ok=True)
+
+
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _summary(run: MethodRun) -> dict[str, Any]:

@@ -1,6 +1,7 @@
 # SK-2 方法登记、准入与编译
 
-> 状态：Spec r2（2026-11-01，Claude；r2 写 RED 时补全身份查找的先后、回放命令的模型名与停止代码）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §2–§5、§4.3 (b)(c)(d)、§9 SK-2 行；
+> 状态：Spec r3（2026-11-01，Claude；r2 写 RED 时补全身份查找的先后、回放命令的模型名与停止代码；r3 按 #516 审核 R1/R2
+> 补产品信息提示的依据集合与计划文件的成套写出）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §2–§5、§4.3 (b)(c)(d)、§9 SK-2 行；
 > [SK-1](SK-1-方法用途登记与方法材料归属.md)（材料级方法用途记录）；[PV-0](PV-0-产品版本与生命周期.md) 附录 A §2 与 SK-0 §7
 > 的接口修订（方法 Claim 不带版本引用）。跟踪 Issue #507。实现 Claude，审核 Codex。
 >
@@ -138,8 +139,9 @@ chunk 的文字定位得到）。文件里没有正文。
 `Entity(entity_id = method_id, entity_type = "sales_method", names = [规范名], aliases = 其余名称与别名（排序去重）,
 classification_labels = 有效链接所引记录的生效险种标签（SK-1）∪ 回答中给出的人生阶段与销售环节标签, owner_module =
 "harness/sales_methods")`。回答中的标签必须在可选标签内、`refs` 必须在本方法的段落中，否则丢弃（`LABEL_INVALID`）。
-任一方法 Claim 命中 §2.2 的产品信息信号 → 实体 `identifiers = {"notice": "product_info"}`，供 SK-3 显示“以条款与已发布
-知识为准”。
+变化判定后仍在 Active 的方法 Claim（Active 的 + 本次成员 − 移出；KEEP、CONFLICT 保留的旧 Claim 也算）任一命中 §2.2
+的产品信息信号 → 实体 `identifiers = {"notice": "product_info"}`，供 SK-3 显示“以条款与已发布知识为准”；路由理由与报告
+的 `product_info` 按同一集合（r3，#516 R1）。
 
 ### 4.5 人工路由信号
 
@@ -169,7 +171,9 @@ classification_labels = 有效链接所引记录的生效险种标签（SK-1）�
 `--registry`（v2，持 `uploads` 同一把锁；v1 → `REGISTRY_NOT_V2`，被占用 → `REGISTRY_BUSY`）、`--candidates`（不合
 `method-candidates.v1` → `CANDIDATES_INVALID`）、`--responses DIR`（保存的取值回答，文件名 = 请求摘要 `<sha256>.txt`；
 缺少的方法 `RESPONSE_MISSING`，从不发请求）、`--model`（写出这些回答的模型名，记入 Claim 的 `provenance.model`）、
-`--run-root DIR`（写 `candidate.json`（有变化时）、`review_items.json` 与 `report.json`）。原始来源页用现有的固定修订页面
+`--run-root DIR`（写 `candidate.json`（有变化时）、`review_items.json` 与 `report.json`；三者作为一套：先在旁边准备好，
+准备失败时旧的一套原样保留；再放入前两者，`report.json` 最后放入并写明前两者的摘要（`plan`），没有 `report.json` 或摘要
+不符的目录不是完整计划，r3，#516 R2）。原始来源页用现有的固定修订页面
 读取（`reader_from_env`，只读），Active 用平台客户端只读读取（缺少平台配置 → `CONFIGURATION_MISSING`）；测试注入假实现。
 标准输出只有代码与计数，不输出正文；组包失败输出 `{"stopped": "BUNDLE_INVALID", "reason": <代码>}`，不写任何文件。
 线上模型、提交与撤下在 SK-2b 接入。

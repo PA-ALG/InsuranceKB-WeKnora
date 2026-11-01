@@ -21,10 +21,11 @@ from insurance_harness.catalog.method_cards import MethodCards, load_method_card
 from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
 from insurance_harness.catalog.sales_taxonomy import SalesTaxonomy, load_sales_taxonomy
 from insurance_harness.changes import decide_changes
-from insurance_harness.changes.types import Verdict
+from insurance_harness.changes.types import ChangeSet, Verdict
 from insurance_harness.compilers.methods.admission import Admission, CandidateFile, admit
 from insurance_harness.compilers.methods.claims import (
     COMPILER,
+    claim_signals,
     compiler_version,
     method_content,
     method_entity,
@@ -149,31 +150,35 @@ def _method(run: _Run, method: MethodEntry) -> dict[str, Any]:
         return {**entry, "code": "RESPONSE_MISSING"}
     except (MethodResponseError, ParagraphsError, SourcePagesError) as error:
         return {**entry, "code": error.code}
+    names = sorted({name for product in run.registry.products.values() for name in product.names})
     content = method_content(
         method.method_id,
         response,
         paragraphs,
         run.cards,
         {term.label for term in labels},
-        sorted({name for product in run.registry.products.values() for name in product.names}),
+        names,
         run.port.model,
     )
-    records = {use.triple: use for use in run.registry.method_uses}
-    categories = {label for link in links for label in records[link.triple].categories}
-    entity = method_entity(method, categories, content, run.cards)
     changes = decide_changes(
         run.active, method.method_id, content.claims, {link.knowledge_id for link in links}
     )
-    review = _route(run, changes.members, bool(content.signals))
+    # The notice and the routing follow what Active shows once this delta is activated: a kept or
+    # conflicting old Claim stays published, and so does its product information (#516 R1).
+    signals = claim_signals(_in_force(run.active, method.method_id, changes), run.cards, names)
+    records = {use.triple: use for use in run.registry.method_uses}
+    categories = {label for link in links for label in records[link.triple].categories}
+    entity = method_entity(method, categories, content.labels, bool(signals), run.cards)
+    review = _route(run, changes.members, bool(signals))
     run.claims.extend(labelled(changes.members, review, None))
     run.removals.extend(changes.removals)
     if _changed(run.active, entity):
         run.entities.append(entity)
     run.reviews.extend(changes.review_items)
     run.reviews.extend(
-        _lint(claim, content.signals[claim.logical_key])
+        _lint(claim, signals[claim.logical_key])
         for claim in changes.members
-        if claim.logical_key in content.signals
+        if claim.logical_key in signals
     )
     counts = Counter(item.verdict.value for item in changes.items)
     return {
@@ -182,7 +187,7 @@ def _method(run: _Run, method: MethodEntry) -> dict[str, Any]:
         "predicates": {claim.predicate: claim.state.value for claim in content.claims},
         "dropped": content.dropped,
         "labels": len(content.labels),
-        "product_info": bool(content.signals),
+        "product_info": bool(signals),
         "counts": {verdict.value: counts[verdict.value] for verdict in Verdict},
         "conflicts": [i.logical_key for i in changes.items if i.verdict == Verdict.CONFLICT],
         "reasons": list(review.reasons),
@@ -203,6 +208,22 @@ def _route(run: _Run, claims: Sequence[Claim], product_info: bool) -> Route:
     )
     reasons = {*routed.reasons, *([PRODUCT_INFO] if product_info else [])}
     return Route(mode=ReviewMode.HUMAN, policy_ref=None, reasons=tuple(sorted(reasons)))
+
+
+def _in_force(active: Release | None, method_id: str, changes: ChangeSet) -> list[Claim]:
+    """The method's Claims once the delta is activated: Active's, replaced by the members,
+    without the removals (decide_changes has already validated every Active payload)."""
+    claims = {
+        member.logical_slug: Claim.model_validate(member.payload)
+        for member in (active.members if active else [])
+        if member.kind == "claim"
+        and isinstance(member.payload, dict)
+        and member.payload.get("subject_ref") == method_id
+    }
+    claims.update({claim.logical_key: claim for claim in changes.members})
+    for slug in changes.removals:
+        claims.pop(slug, None)
+    return list(claims.values())
 
 
 def _retired(active: Release | None, method_id: str) -> list[str]:
