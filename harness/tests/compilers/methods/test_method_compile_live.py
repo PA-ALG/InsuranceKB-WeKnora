@@ -10,7 +10,8 @@ from insurance_harness.bundle.client import Candidate, PlatformError, Release
 from insurance_harness.compilers.methods import cli
 from insurance_harness.compilers.methods.compile import compile_methods
 from insurance_harness.contracts.bundle import CandidateBundle
-from insurance_harness.contracts.enums import ReviewMode
+from insurance_harness.contracts.enums import ClaimState, ReviewMode, SourceClass
+from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.ingest.registry import ProductRegistry, save_registry
 from insurance_harness.ingest.source_map import API_KEY_ENV, BASE_URL_ENV
 from tests.compilers.methods.helpers import (
@@ -214,3 +215,36 @@ def test_without_live_nothing_is_submitted(
     summary = json.loads(capsys.readouterr().out)
     assert status == 0 and "submitted" not in summary and "candidate_id" not in summary
     assert live.platform.submitted == []
+
+
+def test_submitted_method_claims_meet_the_platform_publication_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """What #523 (SK-3) makes the platform check on both publication paths, whole candidate and
+    point by point: a present method Claim is SOURCE_SUPPORTED, holds at least one item, and every
+    item (the whole value, for text) has original evidence; without evidence it can only be
+    unknown."""
+    live = Live(tmp_path, monkeypatch, World())
+    for saved in live.responses.iterdir():  # one card answered unknown, one with every item dropped
+        answer = json.loads(saved.read_text(encoding="utf-8"))
+        for row in answer["predicates"]:
+            if row["predicate"] == "cautions":
+                row["state"] = "unknown"
+                row.pop("items")
+            if row["predicate"] == "key_phrases":
+                row["items"] = [{"text": "原文里没有这一句", "refs": row["items"][0]["refs"]}]
+        saved.write_text(json.dumps(answer, ensure_ascii=False), encoding="utf-8")
+    assert live.main(capsys)[0] == 0
+    (bundle,) = live.platform.submitted
+    claims = [Claim.model_validate(m.payload) for m in bundle.members if m.kind == "claim"]
+    states = {claim.predicate: claim.state for claim in claims}
+    assert states["cautions"] == states["key_phrases"] == ClaimState.UNKNOWN
+    assert states["method_steps"] == states["method_summary"] == ClaimState.PRESENT
+    for claim in claims:
+        if claim.state != ClaimState.PRESENT:
+            assert claim.value is None and claim.evidence == []
+            continue
+        assert claim.origin == SourceClass.SOURCE_SUPPORTED
+        assert claim.evidence and all(e.source_ref.startswith("source:v1:") for e in claim.evidence)
+        if isinstance(claim.value, list):
+            assert claim.value and len(claim.evidence) == len(claim.value)
