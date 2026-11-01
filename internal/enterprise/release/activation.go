@@ -29,19 +29,28 @@ func (s *Service) activationHead(ctx context.Context, p Principal, spaceID strin
 }
 
 // activationMembers is shared by approval precheck, detail and activation. It never
-// writes: an unchanged Head/base still validates removals through materialize.
+// writes: an unchanged Head/base still validates removals through materialize. An identity
+// refresh is checked against the exact active Release it names; it never rebases (PV-4a).
 func (s *Service) activationMembers(
 	ctx context.Context, p Principal, spaceID string, b Bundle, head Head, active Release,
 ) ([]Member, error) {
+	refresh := b.Origin == OriginIdentityRefresh
 	if err := checkBase(b, head); err != nil {
-		if b.BaseReleaseID == head.ReleaseID {
+		if b.BaseReleaseID == head.ReleaseID || refresh {
 			return nil, err
 		}
 		if err := s.checkRebase(ctx, p, spaceID, b, active); err != nil {
 			return nil, err
 		}
 	}
-	return materialize(active.Members, b)
+	target, err := materialize(active.Members, b)
+	if err != nil || !refresh {
+		return target, err
+	}
+	if err := s.checkIdentityRefresh(active.Members, b, target); err != nil {
+		return nil, err
+	}
+	return target, nil
 }
 
 func (s *Service) precheckActivation(ctx context.Context, p Principal, spaceID string, c Candidate) error {

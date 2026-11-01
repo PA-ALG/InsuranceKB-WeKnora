@@ -135,6 +135,11 @@ func (s *Service) Decide(
 	if err := s.noPointDecisions(ctx, p, spaceID, c.ID); err != nil {
 		return Decision{}, err
 	}
+	if in.Mode != "machine" {
+		if err := s.refuseRefresh(ctx, p, spaceID, c.ID); err != nil {
+			return Decision{}, err
+		}
+	}
 	d := Decision{
 		TenantID: p.TenantID, SpaceID: spaceID, CandidateID: c.ID, BundleDigest: c.BundleDigest,
 		Outcome: in.Outcome, Mode: in.Mode, PolicyRef: in.PolicyRef, Score: in.Score,

@@ -30,6 +30,9 @@ const (
 	// ContractsDirEnv points at the repository's contracts/ directory when the
 	// process does not run from the repository root (the app image ships no copy).
 	ContractsDirEnv = "ENTERPRISE_CONTRACTS_DIR"
+	// VersionedEntityTypesEnv lists, comma-separated, the entity types whose identity an
+	// identity_refresh bundle may change (PV-4 Spec §2.1); unset refuses such bundles.
+	VersionedEntityTypesEnv = "ENTERPRISE_VERSIONED_ENTITY_TYPES"
 
 	defaultContractsDir = "contracts"
 	bundleSchemaFile    = "candidate_bundle.schema.json"
@@ -87,7 +90,8 @@ func Register(container *dig.Container) error {
 		if captured := enterprisePages(spaces, knowledge, firstParse); captured != nil {
 			pages = captured
 		}
-		return Production(db, knowledge, os.Getenv(SpacesEnv), dir, pages)
+		versioned := release.WithVersionedEntityTypes(strings.Split(os.Getenv(VersionedEntityTypesEnv), ",")...)
+		return Production(db, knowledge, os.Getenv(SpacesEnv), dir, pages, versioned)
 	}); err != nil {
 		return err
 	}
@@ -155,7 +159,7 @@ func LoadSpaces(cfg *config.Config, raw string) (Spaces, error) {
 // Production builds the service for the configured Spaces. An empty configuration
 // disables publishing (nil service); every other problem is an error.
 func Production(
-	db *gorm.DB, knowledge any, rawSpaces, contractsDir string, pages PageReader,
+	db *gorm.DB, knowledge any, rawSpaces, contractsDir string, pages PageReader, options ...release.Option,
 ) (*release.Service, error) {
 	spaces, err := ParseSpaces(rawSpaces)
 	if err != nil {
@@ -184,7 +188,8 @@ func Production(
 	// keeps the captured-source path.
 	resolver := expert.NewResolver(store, NewEvidence(spaces, revisions))
 	verifier := expert.NewVerifier(store, NewEvidenceVerifier(spaces, pages))
-	return release.NewService(store, resolver, schemas,
-		release.WithPublisher(store), release.WithEvidenceVerifier(verifier),
-		release.WithRetirer(store)), nil
+	options = append([]release.Option{
+		release.WithPublisher(store), release.WithEvidenceVerifier(verifier), release.WithRetirer(store),
+	}, options...)
+	return release.NewService(store, resolver, schemas, options...), nil
 }

@@ -1,4 +1,106 @@
 {
+  "$defs": {
+    "ProductFamily": {
+      "additionalProperties": false,
+      "description": "The brand family a version belongs to: grouping only, never an attribution anchor.",
+      "properties": {
+        "display_name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Display Name",
+          "type": "string"
+        },
+        "key": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "display_name"
+      ],
+      "title": "ProductFamily",
+      "type": "object"
+    },
+    "ProductLifecycle": {
+      "additionalProperties": false,
+      "description": "A filed version's sale period from the pinned product repository (PV-0 appendix A §1.2).\n\nNot a claim's business effective period: the end of sale never ends a policy's terms. The\nsale status is derived when read (appendix A §3.2), never stored.",
+      "properties": {
+        "basis_commit": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Basis Commit"
+        },
+        "basis_date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Basis Date"
+        },
+        "sale_end": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sale End"
+        },
+        "sale_start": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sale Start"
+        },
+        "source_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "on_sale",
+                "discontinued"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Status"
+        }
+      },
+      "title": "ProductLifecycle",
+      "type": "object"
+    }
+  },
   "$id": "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/entity.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
@@ -36,6 +138,17 @@
       "title": "Identifiers",
       "type": "object"
     },
+    "lifecycle": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProductLifecycle"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "names": {
       "items": {
         "minLength": 1,
@@ -51,6 +164,17 @@
       "pattern": "\\S",
       "title": "Owner Module",
       "type": "string"
+    },
+    "product_family": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProductFamily"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

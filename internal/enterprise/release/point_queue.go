@@ -133,6 +133,15 @@ func (s *Service) pointDetail(
 		out.Blocker = ErrorCandidateDecided
 		return out, nil
 	}
+	if b.Origin == OriginIdentityRefresh {
+		out.Blocker = ErrorMachineDecisionOnly
+		for i := range out.Points {
+			if out.Points[i].Status == "pending" {
+				out.Points[i].Blocker = ErrorMachineDecisionOnly
+			}
+		}
+		return out, nil
+	}
 	err = checkBase(b, head)
 	if err == nil {
 		_, err = materialize(active.Members, b)

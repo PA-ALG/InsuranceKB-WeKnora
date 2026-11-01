@@ -75,6 +75,9 @@ func (s *Service) ReviewPoints(
 	if err != nil {
 		return PointResult{}, err
 	}
+	if bundle.Origin == OriginIdentityRefresh {
+		return PointResult{}, machineDecisionOnly() // a selected delta skips the full-target check
+	}
 	reads := newPointReads(s, p, spaceID)
 	points, err := reads.load(ctx, entry, bundle)
 	if err != nil {
