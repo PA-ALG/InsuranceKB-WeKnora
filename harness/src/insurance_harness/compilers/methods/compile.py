@@ -19,7 +19,7 @@ from insurance_harness.bundle.assemble import assemble, retired_claims
 from insurance_harness.bundle.client import Release
 from insurance_harness.catalog.method_cards import MethodCards, load_method_cards
 from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
-from insurance_harness.catalog.sales_taxonomy import SalesTaxonomy, load_sales_taxonomy
+from insurance_harness.catalog.sales_taxonomy import SalesTaxonomy, Term, load_sales_taxonomy
 from insurance_harness.changes import decide_changes
 from insurance_harness.changes.types import ChangeSet, Verdict
 from insurance_harness.compilers.methods.admission import Admission, CandidateFile, admit
@@ -39,12 +39,13 @@ from insurance_harness.compilers.methods.parse import MethodResponseError, parse
 from insurance_harness.compilers.methods.prompt import build_method_request, offered_labels
 from insurance_harness.compilers.methods.responses import ResponseMissing
 from insurance_harness.compilers.schema_fields.engine import CompletionPort
+from insurance_harness.compilers.schema_fields.prompt import JudgeLikeRequest
 from insurance_harness.contracts.bundle import CandidateBundle, ReviewPlan
 from insurance_harness.contracts.compile import ReviewItem
 from insurance_harness.contracts.enums import ReviewKind, ReviewMode, ReviewStatus
 from insurance_harness.contracts.knowledge import Claim, Entity
 from insurance_harness.evidence.weknora_pages import SourcePagesError
-from insurance_harness.ingest.method_registry import MethodEntry, valid_links
+from insurance_harness.ingest.method_registry import MethodEntry, MethodLink, valid_links
 from insurance_harness.ingest.registry import V2, ProductRegistry, RegistryError
 from insurance_harness.ingest.source_map import PageReader
 from insurance_harness.review.routing import Route, labelled, route
@@ -89,11 +90,7 @@ def compile_methods(
     taxonomy: SalesTaxonomy | None = None,
 ) -> MethodRun:
     """Admit the candidates and compile every method of a v2 registry against `active`."""
-    if registry.contract != V2:
-        raise RegistryError("REGISTRY_NOT_V2")
-    admission = admit(registry.methods, registry.method_uses, candidates)
-    admitted = registry.model_copy(update={"methods": list(admission.methods)})
-    updated = ProductRegistry.model_validate_json(admitted.model_dump_json())
+    updated, admission = admitted_registry(registry, candidates)
     run = _Run(
         registry=updated,
         active=active,
@@ -124,6 +121,32 @@ def compile_methods(
     return MethodRun(updated, bundle, report, tuple(run.reviews))
 
 
+def admitted_registry(
+    registry: ProductRegistry, candidates: CandidateFile
+) -> tuple[ProductRegistry, Admission]:
+    """The v2 registry with the candidates admitted into its methods section, validated again
+    as a whole; the value stage (values.py) admits the same way, so both make the same requests."""
+    if registry.contract != V2:
+        raise RegistryError("REGISTRY_NOT_V2")
+    admission = admit(registry.methods, registry.method_uses, candidates)
+    admitted = registry.model_copy(update={"methods": list(admission.methods)})
+    return ProductRegistry.model_validate_json(admitted.model_dump_json()), admission
+
+
+def method_request(
+    method: MethodEntry,
+    links: Sequence[MethodLink],
+    cache: MaterialCache,
+    cards: MethodCards,
+    taxonomy: SalesTaxonomy,
+) -> tuple[MethodParagraphs, tuple[Term, ...], JudgeLikeRequest]:
+    """A method's paragraphs, the labels on offer and its value request (Spec §4.1–§4.2)."""
+    paragraphs = MethodParagraphs(links, cache)
+    labels = offered_labels(taxonomy)
+    request = build_method_request(method.names[0], cards, labels, paragraphs.listing())
+    return paragraphs, labels, request
+
+
 def _admission_report(admission: Admission) -> dict[str, Any]:
     return {
         "dropped": admission.dropped,
@@ -141,9 +164,9 @@ def _method(run: _Run, method: MethodEntry) -> dict[str, Any]:
         run.removals.extend(removals)
         return {**entry, "status": "retired", "removals": len(removals)}
     try:
-        paragraphs = MethodParagraphs(links, run.cache)
-        labels = offered_labels(run.taxonomy)
-        request = build_method_request(method.names[0], run.cards, labels, paragraphs.listing())
+        paragraphs, labels, request = method_request(
+            method, links, run.cache, run.cards, run.taxonomy
+        )
         raw = run.port.complete(system=request.system, user=request.user)
         response = parse_method_response(raw, run.cards)
     except ResponseMissing:
