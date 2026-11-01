@@ -107,7 +107,7 @@ no-op / 已恢复 / 已提交。
 
 ## 5. 验收（RED，单独提交）
 
-- `tests/ingest/test_registry_v2.py`：v1/v2 合同与字段约束（v1 不得有版本字段；v2 必须有依据；版本键唯一；日期顺序；前驱存在）；
+- `tests/ingest/test_registry_version_fields.py`：v1/v2 合同与字段约束（v1 不得有版本字段；v2 必须有依据；版本键唯一；日期顺序；前驱存在）；
   `load_registry` 与 `changes.options.registry_inputs`（发布 dry-run 路径）对 v1、v2 都不写文件、不建锁/日志；v1 读入后
   `uploads run` 保存仍为 v1；`uploads run` 对 v2 读回目录并核对摘要，目录缺失或被改 → `CATALOG_INVALID`。
 - `tests/ingest/test_registry_migration.py`：含 retired、pending（含未完成 Settlement）、decisions（含 ConfirmationRef）的 v1

@@ -164,7 +164,7 @@ def test_a_v1_registry_gets_the_new_entry_without_version_fields() -> None:
 
 
 def test_a_person_choosing_the_registered_product_concludes_a_new_entry() -> None:
-    bare = upload("1828", "terms", sha256="e" * 64, head=fold(NEW_CODE) + "正文内容说明文字")
+    bare = upload("1828", "terms", sha256="e" * 64, head=fold(NEW_CODE) + "阅读指引正文内容")
     products = [registered("1828", "terms", "brochure", "rate_table")]
     pending = attribute(bare, products)
     expect(pending, "QUARANTINE", "no_product_anchor")

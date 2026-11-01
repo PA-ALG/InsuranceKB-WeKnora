@@ -13,6 +13,7 @@ from insurance_harness.ingest.registry import (
     ProductRegistry,
     RegistryError,
     load_registry,
+    registry_document,
     save_registry,
 )
 from insurance_harness.ingest.registry_migration import plan_migration
@@ -23,7 +24,7 @@ from insurance_harness.ingest.version_catalog import (
     save_catalog,
 )
 from tests.ingest.upload_helpers import Pages, entry, raw, registry
-from tests.ingest.version_helpers import catalog, of
+from tests.ingest.version_helpers import catalog, of, rich_v1
 
 ROLES = ("terms", "brochure", "rate_table")
 
@@ -135,3 +136,15 @@ def test_the_catalog_file_loads_back_and_a_changed_one_is_refused(tmp_path: Path
     with pytest.raises(CatalogError) as missing:
         load_catalog(path, "0" * 64)
     assert missing.value.code == "CATALOG_INVALID"
+
+
+def test_a_v1_file_keeps_the_v1_format_for_code_without_the_v2_fields() -> None:
+    def keys(value: object) -> set[str]:
+        if isinstance(value, dict):
+            return set(value) | {k for v in value.values() for k in keys(v)}
+        if isinstance(value, list):
+            return {k for v in value for k in keys(v)}
+        return set()
+
+    written = json.loads(registry_document(rich_v1()))
+    assert not keys(written) & {"version", "metadata_basis", "version_key"}

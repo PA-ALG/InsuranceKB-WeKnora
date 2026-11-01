@@ -1,5 +1,7 @@
 """Shared PV-1 test data: synthetic version catalogs and a registry with every kind of record."""
 
+from typing import Literal
+
 from insurance_harness.identity.attribution import Attribution
 from insurance_harness.ingest.registry import (
     ConfirmationRef,
@@ -22,7 +24,7 @@ def version(
     code: str | None,
     start: str | None = "2025-10-01",
     end: str | None = None,
-    status: str | None = "on_sale",
+    status: Literal["on_sale", "discontinued"] | None = "on_sale",
 ) -> VersionRecord:
     plan, number = key.rsplit("-", 1)
     return VersionRecord(

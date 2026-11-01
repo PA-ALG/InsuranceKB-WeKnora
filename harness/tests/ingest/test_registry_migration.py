@@ -70,7 +70,7 @@ CATALOG = catalog(of("1828"), of("1814"))
 def test_every_record_and_id_is_kept_and_only_version_fields_are_added() -> None:
     before = rich_v1()
     after, matches = plan_migration(before, CATALOG)
-    assert v1_projection(after) == json.loads(before.model_dump_json())
+    assert v1_projection(after) == v1_projection(before)
     assert sorted(after.products) == sorted(before.products)
     assert {m.product_id: (m.outcome, m.version_key) for m in matches} == {
         "1814": ("matched", "1814-1"),
