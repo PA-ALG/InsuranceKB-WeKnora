@@ -105,11 +105,15 @@ class Live:
         return status, json.loads(out)
 
     def receipt(self) -> dict[str, Any]:
-        return json.loads((self.run_root / "submitted.json").read_text(encoding="utf-8"))
+        receipt: dict[str, Any] = json.loads(
+            (self.run_root / "submitted.json").read_text(encoding="utf-8")
+        )
+        return receipt
 
     def plan(self) -> dict[str, Any]:
         report = json.loads((self.run_root / "report.json").read_text(encoding="utf-8"))
-        return report["plan"]
+        plan: dict[str, Any] = report["plan"]
+        return plan
 
 
 def test_live_submits_the_plan_after_writing_it_and_the_registry(
