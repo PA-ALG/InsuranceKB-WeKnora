@@ -1,14 +1,29 @@
-"""Saved method answers, replayed by request digest: an offline completion port (Spec §7).
+"""Saved method answers, replayed by request digest (SK-2 Spec §7, SK-2c Spec §3.1, §4.1).
 
-A missing answer is reported for its method and never sent: this port has no model behind it.
-The value stage (values.py, SK-2c) writes these answers on a model, with its call ledger and
-budget in the same directory; `saved_model` reads from that ledger which model wrote them.
+Two completion ports, neither with a model behind it; a missing answer is reported for its method
+and never sent:
+
+- `SavedResponses`: a directory prepared by hand (SK-2a's offline interface): answers are read as
+  files, under the model name the caller gives. Never for a live submission.
+- `LedgerAnswers`: a value directory `methods values` wrote. An answer counts only when the
+  directory's ledger holds the successful call that returned it: the record's request digest is
+  that of this request's body under the directory's stage (`stage.json`), its answer digest is
+  that of the file, and its model is the directory's one. Anything else is refused as corrupt
+  (RUN_ROOT_INVALID), so the values and the model the Claims name come from a recorded call.
 """
 
+import hashlib
 from pathlib import Path
+from typing import Any
 
 from insurance_harness.compilers.schema_fields.prompt import JudgeLikeRequest
+from insurance_harness.models import StageModelConfig
 from insurance_harness.models.durable import stored_records
+from insurance_harness.models.openai_compatible import request_sha256
+
+STAGE_FILE = "stage.json"
+# Settings that do not enter the request body: changing them keeps a value directory.
+_OPERATIONAL = frozenset({"timeout_s", "max_attempts", "api_key_env"})
 
 
 class ResponseMissing(Exception):
@@ -39,19 +54,76 @@ class SavedResponses:
             raise ResponseMissing() from None
 
 
-def saved_model(directory: Path) -> str | None:
-    """The model that wrote a value directory's answers (SK-2c Spec §4.1), or None when its ledger
-    records no successful call (a directory prepared by hand): the served version the provider
-    reported, else the configured name. One directory holds one model; anything else is corrupt."""
+def request_settings(config: StageModelConfig) -> dict[str, Any]:
+    """What a value directory is bound to: every stage setting that shapes the request."""
+    return {k: v for k, v in config.model_dump(mode="json").items() if k not in _OPERATIONAL}
+
+
+def directory_stage(directory: Path) -> StageModelConfig | None:
+    """The stage a value directory was created with, or None when it has none."""
+    path = directory / STAGE_FILE
+    if path.is_symlink():
+        raise ResponsesError("RUN_ROOT_INVALID")
+    if not path.exists():
+        return None
     try:
-        records = stored_records(directory)
+        return StageModelConfig.model_validate_json(path.read_bytes())
     except (OSError, ValueError):
         raise ResponsesError("RUN_ROOT_INVALID") from None
-    answered = [record for record in records if record.outcome == "ok"]
-    served = {record.served_model for record in records if record.served_model}
-    configured = {record.model for record in answered}
-    if len(served) > 1 or len(configured) > 1:
-        raise ResponsesError("RUN_ROOT_INVALID")
-    if not answered:
-        return None
-    return next(iter(served or configured))
+
+
+def is_value_directory(directory: Path) -> bool:
+    """Whether `methods values` wrote here (a stage file or a ledger): then answers need backing."""
+    return any((directory / name).exists() for name in (STAGE_FILE, "ledger.jsonl"))
+
+
+class LedgerAnswers:
+    """The answers of a value directory, each backed by the ledger record of its call."""
+
+    def __init__(self, directory: Path, model: str | None = None) -> None:
+        stage = directory_stage(directory)
+        if stage is None:
+            raise ResponsesError("RUN_ROOT_INVALID")  # a ledger without the stage it was sent with
+        try:
+            records = stored_records(directory)
+        except (OSError, ValueError):
+            raise ResponsesError("RUN_ROOT_INVALID") from None
+        identity = (stage.stage, stage.model, stage.policy_version)
+        served = {record.served_model for record in records if record.served_model}
+        if len(served) > 1 or any(
+            (r.stage, r.model, r.policy_version) != identity for r in records
+        ):
+            raise ResponsesError("RUN_ROOT_INVALID")
+        self.directory, self.stage = directory, stage
+        self._model = next(iter(served), stage.model)
+        if model is not None and model != self._model:
+            raise ResponsesError("MODEL_MISMATCH")
+        self._backed = {
+            (r.request_sha256, r.response_sha256): r.served_model or r.model
+            for r in records
+            if r.outcome == "ok" and r.response_sha256 is not None
+        }
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    def answer(self, *, system: str, user: str) -> str | None:
+        """The saved answer to this request once its call's record backs it; None without one."""
+        path = self.directory / f"{JudgeLikeRequest(system=system, user=user).sha256}.txt"
+        if not path.is_file():
+            return None
+        content = path.read_bytes()
+        key = (
+            request_sha256(self.stage, system=system, user=user),
+            hashlib.sha256(content).hexdigest(),
+        )
+        if self._backed.get(key) != self._model:
+            raise ResponsesError("RUN_ROOT_INVALID")  # altered, or not the answer of this request
+        return content.decode("utf-8")
+
+    def complete(self, *, system: str, user: str) -> str:
+        text = self.answer(system=system, user=user)
+        if text is None:
+            raise ResponseMissing()
+        return text

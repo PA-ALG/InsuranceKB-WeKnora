@@ -6,14 +6,18 @@ are admitted in memory and the requests are built by the compile's own functions
 written here, named by request digest, are exactly what `methods compile` replays (SK-2a §7).
 
 The value directory is a run root of models.durable, as for product compiles and reviews:
-budget.jsonl gains a line before every send, ledger.jsonl every attempt, .lock keeps runs apart,
-and the root must lie outside any git repository (raw answers may quote material). raw/NNN.txt
-keeps every answer as it arrives; `<digest>.txt` is written only for one that passed the answer's
-structure check, never replaced. One root holds one model identity and one served version.
+budget.jsonl gains a line before every send, ledger.jsonl every attempt (an answered one with the
+digest of its answer), .lock keeps runs apart, and the root must lie outside any git repository
+(raw answers may quote material); none of these, nor raw/, may be a link. stage.json binds the
+directory to one set of request settings. raw/NNN.txt keeps every answer text received, a cut-off
+one too, through the client's `keep`; `<digest>.txt` is written only for an answer that passed
+the structure check, never replaced, and counts only while its call's ledger record backs it
+(responses.LedgerAnswers, the port the compile replays through). One root, one served version.
 
 Saved answers are checked before anything is sent. A truncated or too-large request costs only its
 method; running out of budget, a transport or configuration failure, or a changed served version
-stops the run, and a rerun sends only what is still missing.
+(seen on any answer received, a cut-off one too) stops the run, and a rerun sends only what is
+still missing.
 """
 
 import re
@@ -28,6 +32,13 @@ from insurance_harness.compilers.methods.admission import CandidateFile
 from insurance_harness.compilers.methods.compile import admitted_registry, method_request
 from insurance_harness.compilers.methods.paragraphs import MaterialCache, ParagraphsError
 from insurance_harness.compilers.methods.parse import MethodResponseError, parse_method_response
+from insurance_harness.compilers.methods.responses import (
+    STAGE_FILE,
+    LedgerAnswers,
+    ResponsesError,
+    directory_stage,
+    request_settings,
+)
 from insurance_harness.compilers.schema_fields.prompt import JudgeLikeRequest
 from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.ingest.method_registry import valid_links
@@ -48,11 +59,12 @@ from insurance_harness.models.durable import (
     ServedModelChanged,
     prior_sends,
     run_lock,
-    stored_records,
     write_new,
 )
 
 ANSWERED, SAVED = "answered", "saved"
+# What a value run writes into its directory: never through a link (review #526 R5).
+_PERSISTED = ("raw", "ledger.jsonl", "budget.jsonl", STAGE_FILE, ".lock")
 _NUMBER = re.compile(r"[0-9]+")
 
 
@@ -105,9 +117,12 @@ def method_values(
             codes[method.method_id] = error.code
             continue
         requests.append((method.method_id, request))
+    _check_links(root)
     try:
         with run_lock(root):
             return _answer(root, config, max_sent, cards, requests, codes)
+    except ResponsesError as error:
+        raise ValuesStopped(error.code) from None
     except RunRootBusy:
         raise ValuesStopped("RUN_ROOT_BUSY") from None
     except ValueError:  # inside a git repository, or a corrupt budget or ledger
@@ -122,15 +137,14 @@ def _answer(
     requests: Sequence[tuple[str, JudgeLikeRequest]],
     codes: dict[str, str],
 ) -> dict[str, Any]:
-    identity = (config.stage, config.model, config.policy_version)
-    if any((r.stage, r.model, r.policy_version) != identity for r in stored_records(root)):
-        raise ValuesStopped("RUN_ROOT_MODEL_CHANGED")
+    _bind_stage(root, config)
+    book = LedgerAnswers(root)
     before = prior_sends(root)
     try:
         ledger = DurableLedger.open(root, max_sent=max_sent)
     except ServedModelChanged:
         raise ValuesStopped("SERVED_MODEL_CHANGED", sent=0, sent_total=before) from None
-    stage = _Stage(root, config, ledger, cards)
+    stage = _Stage(root, config, ledger, cards, book)
     try:
         pending = []
         for method_id, request in requests:  # every saved answer is checked before any send
@@ -158,6 +172,26 @@ def _answer(
     }
 
 
+def _check_links(root: Path) -> None:
+    """Before anything is written: no persisted target is a link, raw/ is a directory (R5)."""
+    if any((root / name).is_symlink() for name in _PERSISTED):
+        raise ValuesStopped("RUN_ROOT_INVALID")
+    if (root / "raw").exists() and not (root / "raw").is_dir():
+        raise ValuesStopped("RUN_ROOT_INVALID")
+
+
+def _bind_stage(root: Path, config: StageModelConfig) -> None:
+    """A new directory takes this stage; an existing one must have been made with the same request
+    settings (operational ones may differ), and nothing may predate its stage file."""
+    stage = directory_stage(root)
+    if stage is None:
+        if (root / "ledger.jsonl").exists() or any(root.glob("*.txt")):
+            raise ValuesStopped("RUN_ROOT_INVALID")
+        write_new(root / STAGE_FILE, config.model_dump_json(indent=1) + "\n")
+    elif request_settings(stage) != request_settings(config):
+        raise ValuesStopped("RUN_ROOT_MODEL_CHANGED")
+
+
 def _stop_code(stop: BaseException) -> tuple[str, str | None]:
     if isinstance(stop, _Stop):
         return stop.code, None
@@ -173,45 +207,62 @@ def _stop_code(stop: BaseException) -> tuple[str, str | None]:
 
 
 class _Stage:
-    """The root's saved answers, and the model client created only when a send is needed."""
+    """The root's backed answers, and the model client created only when a send is needed."""
 
     def __init__(
-        self, root: Path, config: StageModelConfig, ledger: DurableLedger, cards: MethodCards
+        self,
+        root: Path,
+        config: StageModelConfig,
+        ledger: DurableLedger,
+        cards: MethodCards,
+        book: LedgerAnswers,
     ) -> None:
         self._root, self._config, self._ledger, self._cards = root, config, ledger, cards
+        self._book = book
         self._client: OpenAICompatibleCompletion | None = None
 
     def saved(self, request: JudgeLikeRequest) -> bool:
-        path = self._root / f"{request.sha256}.txt"
-        if not path.is_file():
-            return False
         try:
-            parse_method_response(path.read_text(encoding="utf-8"), self._cards)
-        except MethodResponseError:
-            raise _Stop("RUN_ROOT_INVALID") from None  # it passed this check once: altered since
+            text = self._book.answer(system=request.system, user=request.user)
+            if text is None:
+                return False
+            parse_method_response(text, self._cards)
+        except (ResponsesError, MethodResponseError):
+            raise _Stop("RUN_ROOT_INVALID") from None  # altered, or no recorded call behind it
         return True
 
     def ask(self, request: JudgeLikeRequest) -> str:
         if self._client is None:
-            self._client = OpenAICompatibleCompletion(self._config, ledger=self._ledger)
+            self._client = OpenAICompatibleCompletion(
+                self._config, ledger=self._ledger, keep=self._keep
+            )
         try:
             raw = self._client.complete(system=request.system, user=request.user)
         except TruncatedCompletion:
+            self._same_served()  # a cut-off answer is an answer received too (review #526 R4)
             return "VALUE_TRUNCATED"
         except InputTooLarge:
             return "INPUT_TOO_LARGE"
-        if len(self._ledger.served) > 1:
-            # This answer came from another served version: it is neither kept nor used.
-            raise ServedModelChanged("served model changed within the run")
-        directory = self._root / "raw"
-        directory.mkdir(exist_ok=True)
-        write_new(directory / f"{_next_number(directory):03d}.txt", raw)
+        self._same_served()
         try:
             parse_method_response(raw, self._cards)
         except MethodResponseError as error:
             return error.code
         write_new(self._root / f"{request.sha256}.txt", raw)
         return ANSWERED
+
+    def _keep(self, text: str) -> None:
+        """Every answer text received goes to raw/, unless another served version sent it."""
+        if len(self._ledger.served) > 1:
+            return
+        directory = self._root / "raw"
+        directory.mkdir(exist_ok=True)
+        write_new(directory / f"{_next_number(directory):03d}.txt", text)
+
+    def _same_served(self) -> None:
+        if len(self._ledger.served) > 1:
+            # This answer came from another served version: it is neither kept nor used.
+            raise ServedModelChanged("served model changed within the run")
 
     def close(self) -> None:
         if self._client is not None:

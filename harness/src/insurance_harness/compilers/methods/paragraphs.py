@@ -67,6 +67,7 @@ class MaterialCache:
 class MethodParagraphs:
     def __init__(self, links: Sequence[MethodLink], cache: MaterialCache) -> None:
         ordered = sorted(links, key=lambda link: (link.knowledge_id, link.parse_attempt))
+        self.links = tuple(ordered)
         self.paragraphs: dict[str, Paragraph] = {}
         for number, link in enumerate(ordered, 1):
             source = cache.source(link)
@@ -85,6 +86,14 @@ class MethodParagraphs:
         return "\n".join(
             f"{p.ref} {_LINE_BREAK.sub(' ', p.segment.text)}" for p in self.paragraphs.values()
         )
+
+    def materials(self) -> list[dict[str, str]]:
+        """Which fixed source revision each material number names: part of the request, so an
+        answer for one revision is never taken for another with the same text (SK-2c §2)."""
+        return [
+            {"ref": f"M{number}", "revision": "/".join(str(part) for part in link.triple)}
+            for number, link in enumerate(self.links, 1)
+        ]
 
     def resolve(self, refs: Sequence[str]) -> tuple[Material, list[EvidenceSpan]] | str:
         """The one material and its slices that `refs` name, or why they cannot be used."""

@@ -39,12 +39,14 @@ from insurance_harness.compilers.methods.copies import (
 )
 from insurance_harness.compilers.methods.platform import MaterialPlatform, PlatformCallError
 from insurance_harness.compilers.methods.responses import (
+    LedgerAnswers,
     ResponsesError,
     SavedResponses,
-    saved_model,
+    is_value_directory,
 )
 from insurance_harness.compilers.methods.values import ValuesStopped, method_values
 from insurance_harness.compilers.methods.withdraw import WithdrawError, withdraw_method
+from insurance_harness.compilers.schema_fields.engine import CompletionPort
 from insurance_harness.compilers.wiki_pages.native import NativeWikiError, NativeWikiReader
 from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.contracts.compile import ReviewItem
@@ -148,19 +150,21 @@ def _summary(run: MethodRun) -> dict[str, Any]:
     }
 
 
-def _answers_model(directory: Path, given: str | None) -> str:
-    """The model named in the Claims: the one the value directory's ledger records (SK-2c §4.1)."""
-    recorded = saved_model(directory)
-    if given is not None and recorded is not None and given != recorded:
-        raise ResponsesError("MODEL_MISMATCH")
-    model = given or recorded
+def _answers(directory: Path, model: str | None, live: bool) -> CompletionPort:
+    """Where the compile reads its answers (SK-2c §4.1): a value directory's answers only with the
+    ledger records that back them, under the model those record; a directory prepared by hand only
+    offline, under the model the caller names."""
+    if is_value_directory(directory):
+        return LedgerAnswers(directory, model)
+    if live:
+        raise ResponsesError("ANSWERS_UNVERIFIED")
     if model is None:
-        raise ResponsesError("MODEL_UNKNOWN")  # a directory prepared by hand names no model
-    return model
+        raise ResponsesError("MODEL_UNKNOWN")
+    return SavedResponses(directory, model)
 
 
 def _compile(args: argparse.Namespace, base_url: str, api_key: str) -> dict[str, Any]:
-    model = _answers_model(args.responses, args.model)
+    port = _answers(args.responses, args.model, args.live)
     with RegistryLock(args.registry):
         registry = load_registry(args.registry)
         candidates = load_candidates(args.candidates)
@@ -169,7 +173,7 @@ def _compile(args: argparse.Namespace, base_url: str, api_key: str) -> dict[str,
             registry,
             candidates,
             pages=reader_from_env(),
-            port=SavedResponses(args.responses, model),
+            port=port,
             active=client.active(registry.space_id),
         )
         plan = _write_plan(args.run_root, run.bundle, run.review_items, run.report)
@@ -188,17 +192,18 @@ def _submit(
     plan: dict[str, str | None],
     run_root: Path,
 ) -> dict[str, Any]:
-    """Submit the planned candidate unless its receipt says the same content already was
-    (SK-2c §4.2); the receipt is written only after a success."""
+    """Submit the planned candidate unless its receipt says the same content already went to the
+    same Space (SK-2c §4.2); the receipt is written only after a success."""
     if bundle is None:
         return {"submitted": "nothing", "candidate_id": None}
     content, path = _content_digest(bundle), run_root / "submitted.json"
     if path.exists():
         earlier = _receipt(path)
-        if earlier["content_sha256"] == content:
+        if (earlier["space_id"], earlier["content_sha256"]) == (space_id, content):
             return {"submitted": "already", "candidate_id": earlier["candidate_id"]}
     candidate_id = client.submit(space_id, bundle).id
     receipt: dict[str, str | None] = {
+        "space_id": space_id,
         "content_sha256": content,
         "candidate_sha256": plan["candidate.json"],
         "candidate_id": candidate_id,
@@ -229,7 +234,7 @@ def _receipt(path: Path) -> dict[str, str]:
         raise ResponsesError("RECEIPT_INVALID") from None
     if not (
         isinstance(receipt, dict)
-        and set(receipt) == {"content_sha256", "candidate_sha256", "candidate_id"}
+        and set(receipt) == {"space_id", "content_sha256", "candidate_sha256", "candidate_id"}
         and all(isinstance(value, str) and value for value in receipt.values())
     ):
         raise ResponsesError("RECEIPT_INVALID")

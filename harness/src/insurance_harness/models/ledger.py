@@ -30,6 +30,9 @@ class CallRecord(BaseModel):
     finish_reason: str | None = None
     # Floating model aliases resolve server-side; quality numbers must name the served version.
     served_model: str | None = Field(default=None, pattern=r"^[A-Za-z0-9._:/-]{1,128}$")
+    # The digest of the answer an "ok" call returned, never the answer: a caller that keeps the
+    # answer can show it is the one this call received (SK-2c).
+    response_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class CallLedger:

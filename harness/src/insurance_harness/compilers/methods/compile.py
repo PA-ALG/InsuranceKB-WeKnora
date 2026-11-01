@@ -143,7 +143,9 @@ def method_request(
     """A method's paragraphs, the labels on offer and its value request (Spec §4.1–§4.2)."""
     paragraphs = MethodParagraphs(links, cache)
     labels = offered_labels(taxonomy)
-    request = build_method_request(method.names[0], cards, labels, paragraphs.listing())
+    request = build_method_request(
+        method.names[0], cards, labels, paragraphs.listing(), paragraphs.materials()
+    )
     return paragraphs, labels, request
 
 
