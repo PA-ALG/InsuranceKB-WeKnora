@@ -2,7 +2,9 @@ package knowledge
 
 import (
 	"regexp"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // The question intents a navigation may publish terms for (Spec §4.1).
@@ -94,32 +96,69 @@ func soldOutside(lifecycle *Lifecycle, first, last string) bool {
 		lifecycle.SaleEnd != "" && lifecycle.SaleEnd <= first)
 }
 
-// A date as YYYY年M月D日 (or 号), YYYY年M月, YYYY年, YYYY-MM-DD or YYYY/M/D, not inside a longer
-// number. These are calendar notations, not domain vocabulary.
+// A date as YYYY年M月D日 (or 号), YYYY年M月, YYYY年, YYYY-MM-DD or YYYY/M/D. These are calendar
+// notations, not domain vocabulary; wholeToken rejects one that is part of a longer number or code.
 var purchaseDate = regexp.MustCompile(
-	`(?:^|\D)(\d{4})(?:-(\d{1,2})-(\d{1,2})|/(\d{1,2})/(\d{1,2})|年(?:(\d{1,2})月(?:(\d{1,2})[日号])?)?)`)
+	`(\d{4})(?:-(\d{1,2})-(\d{1,2})|/(\d{1,2})/(\d{1,2})|年(?:(\d{1,2})月(?:(\d{1,2})[日号])?)?)`)
 
 // purchaseSpan is the first valid date of a normalized question as its first and last day.
 func purchaseSpan(question string) (first, last string, ok bool) {
-	for _, match := range purchaseDate.FindAllStringSubmatch(question, -1) {
-		month, day := match[2]+match[4]+match[6], match[3]+match[5]+match[7]
+	for _, index := range purchaseDate.FindAllStringSubmatchIndex(question, -1) {
+		if !wholeToken(question, index[0], index[1]) {
+			continue
+		}
+		group := func(i int) string {
+			if index[2*i] < 0 {
+				return ""
+			}
+			return question[index[2*i]:index[2*i+1]]
+		}
+		year, month, day := group(1), group(2)+group(4)+group(6), group(3)+group(5)+group(7)
 		switch {
 		case month == "":
-			start, err := time.Parse("2006", match[1])
+			start, err := time.Parse("2006", year)
 			if err == nil {
 				return start.Format(dateLayout), start.AddDate(1, 0, -1).Format(dateLayout), true
 			}
 		case day == "":
-			start, err := time.Parse("2006-1", match[1]+"-"+month)
+			start, err := time.Parse("2006-1", year+"-"+month)
 			if err == nil {
 				return start.Format(dateLayout), start.AddDate(0, 1, -1).Format(dateLayout), true
 			}
 		default:
-			date, err := time.Parse("2006-1-2", match[1]+"-"+month+"-"+day)
+			date, err := time.Parse("2006-1-2", year+"-"+month+"-"+day)
 			if err == nil {
 				return date.Format(dateLayout), date.Format(dateLayout), true
 			}
 		}
 	}
 	return "", "", false
+}
+
+// wholeToken reports whether text[start:end] stands alone: an ASCII letter or digit next to it, or a
+// joiner followed by one ("2023-06-18-0001", "no.2023-06-18"), makes it part of a longer code
+// such as a policy number, which is no purchase date (#517 R1).
+func wholeToken(text string, start, end int) bool {
+	before, size := utf8.DecodeLastRuneInString(text[:start])
+	after, next := utf8.DecodeRuneInString(text[end:])
+	return !continues(before, lastRune(text[:start-size])) && !continues(after, firstRune(text[end+next:]))
+}
+
+// continues reports whether r, with beyond on its far side, carries a code on past the date.
+func continues(r, beyond rune) bool { return codeRune(r) || joiner(r) && codeRune(beyond) }
+
+func codeRune(r rune) bool {
+	return r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'
+}
+
+func joiner(r rune) bool { return r < utf8.RuneSelf && strings.ContainsRune("-/._:", r) }
+
+func firstRune(text string) rune {
+	r, _ := utf8.DecodeRuneInString(text)
+	return r
+}
+
+func lastRune(text string) rune {
+	r, _ := utf8.DecodeLastRuneInString(text)
+	return r
 }
