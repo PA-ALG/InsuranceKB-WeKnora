@@ -1,6 +1,6 @@
 # SK-3 销售方法的阅读与问答
 
-> 状态：Spec（2026-11-01，Claude）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §3.4、§6、§7、§9 SK-3 行；
+> 状态：Spec r3（2026-11-01，Claude；r3 按 #523 R1/R2 把方法发布规则放进所有发布路径并补齐来源要求）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §3.4、§6、§7、§9 SK-3 行；
 > [SK-2](SK-2-方法登记准入与编译.md) §4.3–§4.4（方法成员合同）；[PV-4b](PV-4b-读取侧.md)（系列、问法意图）；S11e/S11h
 > （Office 查看器与文本视图）。跟踪 Issue #507。实现 Claude，审核 Codex。真实调用 0（问答回归在部署后线上做）。
 
@@ -90,16 +90,19 @@
 
 ## 4. 发布检查、专家编辑与材料日期
 
-### 4.1 激活检查（`release/methods.go`，`activationMembers` 里在 materialize 之后）
+### 4.1 发布检查（`release/methods.go`，r3：放进所有发布路径都经过的 `materialize`）
 
-对候选包里的每个 Claim：其 subject 在目标成员中是方法类型的实体（§1）时，要求
+对候选包（或逐点发布的这一批）里的每个 Claim：其 subject 在目标成员中是方法类型的实体（§1）时，要求
 
-1. 值是列表时，每项是非空字符串，且证据条数等于项数（`evidence[i]` 支撑 `value[i]`）；
-2. 每条证据都是来源原文定位（不是 `EXPERT_REVISION`），且 Claim 没有 `expert_lock`。
+1. 任何状态：证据都是来源原文定位（不是 `EXPERT_REVISION`），Claim 没有 `expert_lock`；
+2. `present`：`origin = SOURCE_SUPPORTED`；值是非空文本且至少一条证据，或是非空的文本列表、每项非空且证据条数等于
+   项数（`evidence[i]` 支撑 `value[i]`）。没有原文时只能是 `unknown`，不由模型补写（SK-0 §2.1）。
 
-任一不满足 → `CANDIDATE_INVALID`（细节写 slug），整包不激活；审核前的预检与详情共用这一步，所以待审列表也会看到。
+任一不满足 → `CANDIDATE_INVALID`（细节写 slug）。检查放在 `materialize` 里：整包激活与其审核前预检、逐点详情的每个
+point 与逐点发布批次都经过它（#523 R1），所以详情与 point 的 blocker 都显示这一拒绝；浏览器整包审核先预检再写决定，
+逐点批次的决定与 Head 一起写入，拒绝时都不写；机器接口 `Decide` 只记录决定，`Activate` 拒绝且不写 Head。
 “每项证据是同一页/同一块内的一段连续原文”已由现行回验保证：PDF 证据是单页上的 `[start, end)`，Office 证据必须落在一个
-块内（S11d），引文必须逐字等于该切片；所以本检查只补“逐项对齐”这一条方法约定。
+块内（S11d），引文必须逐字等于该切片。
 
 ### 4.2 专家编辑
 
