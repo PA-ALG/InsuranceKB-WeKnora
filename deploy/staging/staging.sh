@@ -147,7 +147,9 @@ cmd_images() {
   done
   local cfg contracts
   cfg="$(live inspect -f '{{range .Mounts}}{{if eq .Destination "/app/config/config.yaml"}}{{.Source}}{{end}}{{end}}' "$LIVE_PREFIX-app")"
-  contracts="$(live inspect -f '{{range .Mounts}}{{if eq .Destination "/app/contracts"}}{{.Source}}{{end}}{{end}}' "$LIVE_PREFIX-app")"
+  # The trailing `x` keeps trailing newlines of the source from being dropped by `$(...)` (I5).
+  contracts="$(live inspect -f '{{range .Mounts}}{{if eq .Destination "/app/contracts"}}{{.Source}}{{end}}{{end}}x' "$LIVE_PREFIX-app")"
+  contracts="${contracts%x}"
   [[ -n "$cfg" ]] || die "live app config mount not found"
   # I5: images built after I5 ship contracts/ (no mount); a pre-I5 live app mounts them.
   if [[ -n "$contracts" ]]; then
