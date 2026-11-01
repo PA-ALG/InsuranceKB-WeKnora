@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from insurance_harness.identity.attribution import Attribution, Upload, attribute
 from insurance_harness.ingest.confirmation_questions import question_of
@@ -122,13 +123,16 @@ def test_changed_evidence_with_the_same_candidates_is_a_new_question() -> None:
     assert len(revisions) == 2
 
 
-def test_a_v1_document_never_carries_version_evidence() -> None:
+def test_a_v1_registry_refuses_version_evidence_rather_than_dropping_it() -> None:
     pending, attribution = asked(v2(2))
     assert attribution.version_basis is not None
     legacy = registry(p1828=entry("1828", "terms"))
     legacy.pending = [pending]
+    with pytest.raises(ValidationError):  # as PV-1 review R5 does for version keys
+        ProductRegistry.model_validate(legacy.model_dump())
+    legacy.pending = []
     written = json.loads(registry_document(legacy))
-    assert "version_basis" not in written["pending"][0]["attribution"]
+    assert "version_basis" not in json.dumps(written)
 
 
 # --- uploads detach ----------------------------------------------------------------------------
