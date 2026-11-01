@@ -6,6 +6,7 @@ none is retried here (the copy run reconciles on its next pass instead of sendin
 content and transport diagnostics never leave this module.
 """
 
+import hashlib
 import json
 import re
 
@@ -82,8 +83,14 @@ class MaterialPlatform:
             raise PlatformCallError("SOURCE_UNAVAILABLE") from None
 
     def upload(self, kb_id: str, file_name: str, data: bytes) -> tuple[str, bool]:
-        """The copy's knowledge id, and whether it was created now; a duplicate of a file the base
-        already holds names that copy instead (409 `duplicate_file`)."""
+        """The copy's knowledge id, and whether it was created now (#518 R1).
+
+        Both answers carry the whole Knowledge, and either is taken only when it is a knowledge
+        item of this base holding exactly these bytes. A duplicate of a file the base already holds
+        (409 `duplicate_file`) that cannot be shown to be one is DUPLICATE_UNVERIFIED: never taken
+        as the copy, reconciled from the listing on a later run. A new copy that is not one is
+        UPLOAD_FAILED.
+        """
         path = f"/api/v1/knowledge-bases/{_checked(kb_id)}/knowledge/file"
         try:
             with self._client() as client:
@@ -94,18 +101,23 @@ class MaterialPlatform:
             body = json.loads(reply.content.decode("utf-8"))
         except (ValueError, UnicodeError):
             raise PlatformCallError("UPLOAD_FAILED") from None
-        created = reply.status_code == 200 and isinstance(body, dict) and body.get("success")
-        duplicate = (
-            reply.status_code == 409 and isinstance(body, dict)
-            and body.get("code") == "duplicate_file"
-        )
-        item = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(body, dict):
+            raise PlatformCallError("UPLOAD_FAILED")
+        created = reply.status_code == 200 and body.get("success") is True
+        duplicate = reply.status_code == 409 and body.get("code") == "duplicate_file"
+        if not (created or duplicate):
+            raise PlatformCallError("UPLOAD_FAILED")
+        item = body.get("data")
         copy_id = item.get("id") if isinstance(item, dict) else None
-        if not (created or duplicate) or not isinstance(copy_id, str):
-            raise PlatformCallError("UPLOAD_FAILED")
-        if not _IDENTIFIER.fullmatch(copy_id):
-            raise PlatformCallError("UPLOAD_FAILED")
-        return copy_id, bool(created)
+        if (
+            not isinstance(item, dict)
+            or not isinstance(copy_id, str)
+            or not _IDENTIFIER.fullmatch(copy_id)
+            or item.get("knowledge_base_id") != kb_id
+            or item.get("file_sha256") != hashlib.sha256(data).hexdigest()
+        ):
+            raise PlatformCallError("UPLOAD_FAILED" if created else "DUPLICATE_UNVERIFIED")
+        return copy_id, created
 
     def delete(self, knowledge_id: str) -> None:
         path = f"/api/v1/knowledge/{_checked(knowledge_id)}"

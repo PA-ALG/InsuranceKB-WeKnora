@@ -35,8 +35,10 @@ from insurance_harness.ingest.registry import ProductRegistry
 
 _Identifier = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")]
 _Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
-# A material that cannot be read as the record's revision is skipped, not the whole run.
-_SKIPPED = frozenset({"SOURCE_TOO_LARGE", "SOURCE_UNAVAILABLE"})
+# A material that cannot be read as the record's revision, or whose duplicate answer names no copy
+# of its bytes in this base (#518 R1), is skipped and reported, not the whole run: the next run
+# reconciles it from the listing.
+_SKIPPED = frozenset({"SOURCE_TOO_LARGE", "SOURCE_UNAVAILABLE", "DUPLICATE_UNVERIFIED"})
 
 
 class CopiesError(ValueError):
@@ -120,6 +122,8 @@ def save_copies(book: CopyBook, path: Path) -> None:
 
 
 class CopyPlatform(Protocol):
+    """`upload` returns only a knowledge item of `kb_id` holding exactly the given bytes."""
+
     def listing(self, kb_id: str) -> RawListing: ...
 
     def download(self, knowledge_id: str) -> bytes: ...
@@ -209,7 +213,12 @@ def _copy(
         raise
     if hashlib.sha256(data).hexdigest() != use.sha256:
         return "SOURCE_CHANGED"  # another revision now: SK-1 judges it again first
-    copy_id, created = platform.upload(kb_id, use.file_name, data)
+    try:
+        copy_id, created = platform.upload(kb_id, use.file_name, data)
+    except PlatformCallError as error:
+        if error.code in _SKIPPED:
+            return error.code
+        raise
     if copy_id in taken:
         raise PlatformCallError("UPLOAD_FAILED")  # a duplicate of another mapped copy
     return _mapped(copy_id, use), "copied" if created else "adopted"
