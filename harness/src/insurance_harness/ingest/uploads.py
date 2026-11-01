@@ -192,7 +192,8 @@ def attribute_uploads(
     `unfinished` is passed through to the report: the listed materials that cannot be judged yet.
     `catalog` is the pinned version catalog a v2 registry names (PV-1 Spec §3).
     `withdrawn` names older questions whose item was withdrawn: judged again rather than kept as
-    asked; `unknown` names those kept because their items could not be read (S5b-9 Spec §2).
+    asked; `unknown` names those whose items could not be read: they take no part in the run, not
+    even through an automatic result, and stay exactly as asked (S5b-9 Spec §2).
     """
     current = registry.model_copy(deep=True)
     policy = policy or load_attribution_policy()
@@ -200,7 +201,11 @@ def attribute_uploads(
     previous = {p.knowledge_id: p for p in current.pending}
     heads: dict[str, str] = {}
     unreadable: list[UnreadableMaterial] = []
-    for source in _candidates(current, sources, policy.policy_ref):
+    kept = {p.knowledge_id for p in current.pending if p.knowledge_id in unknown}
+    candidates = [
+        s for s in _candidates(current, sources, policy.policy_ref) if s.knowledge_id not in kept
+    ]
+    for source in candidates:
         try:
             heads[source.knowledge_id] = head_of(pages, current.space_id, source)
         except SourcePagesError as error:
@@ -208,9 +213,7 @@ def attribute_uploads(
                 knowledge_id=source.knowledge_id, file_name=source.file_name, code=error.code,
                 reason=error.reason, page=error.page,
             ))
-    remaining = [
-        s for s in _candidates(current, sources, policy.policy_ref) if s.knowledge_id in heads
-    ]
+    remaining = [s for s in candidates if s.knowledge_id in heads]
     counts: Counter[str] = Counter()
     affected: set[str] = set()
     rejudged: set[str] = set()
@@ -226,11 +229,11 @@ def attribute_uploads(
                 head=heads[source.knowledge_id],
             )
             attribution = attribute(upload, current.registered(), policy, catalog=catalog)
-            if source.knowledge_id in asked and attribution.outcome in WAITING:
-                if source.knowledge_id not in withdrawn:
-                    held.append(source)  # the person's question stays as it was asked
-                    continue
+            if source.knowledge_id in asked and source.knowledge_id in withdrawn:
                 rejudged.add(source.knowledge_id)  # its item was withdrawn (S5b-9 Spec §2.1)
+            elif source.knowledge_id in asked and attribution.outcome in WAITING:
+                held.append(source)  # the person's question stays as it was asked
+                continue
             if attribution.outcome == "QUARANTINE":
                 deferred.append((source, attribution))  # its terms may arrive in this run
                 continue
@@ -258,7 +261,7 @@ def attribute_uploads(
         unreadable_reasons=sorted(unreadable, key=lambda m: m.knowledge_id),
         unfinished=sorted(unfinished, key=lambda u: u.knowledge_id),
         withdrawn_rejudged=sorted(rejudged),
-        question_state_unknown=sorted(unknown & {p.knowledge_id for p in current.pending}),
+        question_state_unknown=sorted(kept),
     )
     return UploadRun(registry=current, report=report)
 
