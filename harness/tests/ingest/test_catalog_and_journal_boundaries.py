@@ -9,6 +9,7 @@ written.
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -165,5 +166,41 @@ def test_r3_the_command_refuses_it_too(
     before = path.read_bytes()
     assert main(command(path, tmp_path / "repo", commit)) == 1
     assert capsys.readouterr().err == "MIGRATION_JOURNAL_INVALID\n"
+    assert path.read_bytes() == before
+    assert not path.with_name(path.name + ".lock").exists()
+
+
+# R2, round 3: a reader that exits before the first request ---------------------------------------
+
+
+def test_r2_a_reader_that_already_exited_is_a_typed_refusal_with_everything_released(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    commit = repository(tmp_path / "repo", ("在售", "A", GOOD))
+    real_popen = subprocess.Popen
+    started: list[subprocess.Popen[bytes]] = []
+
+    def exited(args: list[str], **options: object) -> subprocess.Popen[bytes]:
+        if "cat-file" not in args:
+            return real_popen(args, **options)  # type: ignore[call-overload,no-any-return]
+        child = real_popen([sys.executable, "-c", "pass"], **options)  # type: ignore[call-overload]
+        child.wait()  # it is gone before the first request: its real pipe is broken
+        started.append(child)
+        return child  # type: ignore[no-any-return]
+
+    monkeypatch.setattr(subprocess, "Popen", exited)
+    with pytest.raises(CatalogError) as caught:
+        catalog_from_checkout(tmp_path / "repo", commit)
+    assert caught.value.code == "CATALOG_INVALID"
+    [child] = started
+    assert child.returncode is not None
+    assert child.stdin is not None and child.stdin.closed
+    assert child.stdout is not None and child.stdout.closed
+
+    path = tmp_path / "registry.json"
+    save_registry(rich_v1(), path)
+    before = path.read_bytes()
+    assert main(command(path, tmp_path / "repo", commit)) == 1
+    assert capsys.readouterr().err == "CATALOG_INVALID\n"
     assert path.read_bytes() == before
     assert not path.with_name(path.name + ".lock").exists()

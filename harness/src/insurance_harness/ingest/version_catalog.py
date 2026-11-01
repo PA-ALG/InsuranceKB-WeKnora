@@ -179,8 +179,7 @@ def _blobs(directory: Path, blobs: list[str]) -> list[bytes]:
     try:
         contents = []
         for blob in blobs:
-            process.stdin.write(f"{blob}\n".encode("ascii"))
-            process.stdin.flush()
+            _send(process.stdin.fileno(), f"{blob}\n".encode("ascii"))  # unbuffered: no flush
             header = process.stdout.readline(128)
             parts = header.removesuffix(b"\n").split(b" ")
             if (
@@ -196,14 +195,36 @@ def _blobs(directory: Path, blobs: list[str]) -> list[bytes]:
                 raise CatalogError("CATALOG_INVALID")  # truncated
             contents.append(body[:-1])
         return contents
-    except OSError:
+    except OSError:  # the reader exited early (a broken pipe) or a read failed
         raise CatalogError("CATALOG_INVALID") from None
     finally:
         watchdog.cancel()
-        process.kill()
-        process.wait()
-        process.stdin.close()
-        process.stdout.close()
+        _release(process)
+
+
+def _send(descriptor: int, data: bytes) -> None:
+    view = memoryview(data)
+    while view:
+        written = os.write(descriptor, view)
+        if written <= 0:
+            raise OSError("no progress writing")
+        view = view[written:]
+
+
+def _release(process: "subprocess.Popen[bytes]") -> None:
+    """Reap the child and close both pipes, each step on its own: a cleanup error never replaces
+    the error that ended the read (review R2, round 3)."""
+    for action in (process.kill, process.wait):
+        try:
+            action()
+        except OSError:
+            pass
+    for pipe in (process.stdin, process.stdout):
+        try:
+            if pipe is not None:
+                pipe.close()
+        except OSError:
+            pass
 
 
 def _text(meta: dict[str, Any], key: str) -> str | None:
