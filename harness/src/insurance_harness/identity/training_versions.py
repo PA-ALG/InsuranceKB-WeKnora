@@ -106,7 +106,8 @@ def judge(
     family = [p for p in products if p.product_id in named and _related(hits[p.product_id], widest)]
     if not family:
         return Judgement("none", VersionBasis(signals=signals, metadata_commit=commit))
-    named_editions = _material_editions(text, family, named, policy)
+    cores = {hits[p.product_id] for p in family}
+    named_editions = _material_editions(text, cores, policy)
     excluded = {p.product_id for p in family if _type_conflict(p, named_editions, text, policy)}
     if not signals:
         verdicts = tuple(_verdict(p, "undated", p.product_id in excluded) for p in family)
@@ -131,7 +132,8 @@ def judge(
     choices = tuple(v.product_id for v in candidates if v.verdict == "consistent")
     if not candidates:
         return Judgement("none", basis)
-    if len(candidates) == 1 and candidates[0].verdict == "consistent":
+    several_editions = len(named_editions) > 1  # never settled by the machine (review R3)
+    if len(candidates) == 1 and candidates[0].verdict == "consistent" and not several_editions:
         return Judgement("unique", basis, product_id=candidates[0].product_id, choices=choices)
     return Judgement("candidates", basis, choices=choices)
 
@@ -268,20 +270,32 @@ def _related(core: str, widest: set[str]) -> bool:
     return any(core.startswith(name) or name.startswith(core) for name in widest)
 
 
-def _material_editions(
-    text: str,
-    family: Sequence["RegisteredProduct"],
-    named: dict[str, str],
-    policy: "AttributionPolicy",
-) -> set[str]:
-    """The editions the material names explicitly — in brackets, or right after the brand —
-    whether or not that edition is registered, plus registered editions it names (review R3)."""
-    found = {match.group(1) for match in re.finditer(_bracketed(policy), text)}
-    for prefix in set(named.values()):  # the same edition word, right after the written brand
-        after = re.escape(prefix) + f"({policy.edition_word})"
-        found |= {match.group(1) for match in re.finditer(after, text)}
-    registered = {e for p in family for e in _editions(p, policy)}
-    return found | {e for e in registered if _edition_core(e) in text}
+def _material_editions(text: str, cores: set[str], policy: "AttributionPolicy") -> set[str]:
+    """The editions the material names (review R3, round 3): at every occurrence of the family's
+    brand, the brand ends where the longest family core written there ends — never at a shorter
+    recalled prefix — and an edition is read only right after it, bracketed or bare, with the one
+    versioned edition word. A brand tail is never mistaken for an edition."""
+    word = policy.edition_word
+    after = re.compile(rf"\(({word})(?:\d{{2}})?\)|({word})")
+    starts = {
+        match.start()
+        for core in cores
+        for match in re.finditer(re.escape(core[: policy.brand_min_chars]), text)
+    }
+    found = set()
+    for start in sorted(starts):
+        end = start + max(_written(text, start, core, policy) for core in cores)
+        if (match := after.match(text, end)) is not None:
+            found.add((match.group(1) or match.group(2)).casefold())
+    return found
+
+
+def _written(text: str, start: int, core: str, policy: "AttributionPolicy") -> int:
+    """How much of a core is written at this position: its longest prefix found there."""
+    for length in range(len(core), policy.brand_min_chars - 1, -1):
+        if text.startswith(core[:length], start):
+            return length
+    return 0
 
 
 def _type_conflict(
@@ -311,9 +325,8 @@ def _type_conflict(
     riders = [fold(word).casefold() for word in policy.rider_words]
     if any(word in text for word in riders) and not any(word in names for word in riders):
         return True
-    if len(named_editions) == 1:  # a version of another edition, or of none, contradicts it
-        return not named_editions <= _editions(product, policy)
-    return False
+    # One named edition: only that edition's versions; several: only theirs, and never automatic.
+    return bool(named_editions) and not named_editions & _editions(product, policy)
 
 
 def _bracketed(policy: "AttributionPolicy") -> str:
@@ -327,9 +340,3 @@ def _editions(product: "RegisteredProduct", policy: "AttributionPolicy") -> set[
         for name in product.names
         for match in re.finditer(_bracketed(policy), fold(name))
     }
-
-
-def _edition_core(edition: str) -> str:
-    """悦享版 → 悦享; a one-character core such as A款 stays whole."""
-    core = edition[:-1]
-    return core if len(core) >= 2 else edition
