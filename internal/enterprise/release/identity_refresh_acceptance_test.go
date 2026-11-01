@@ -25,9 +25,13 @@ const evidenceRef = "source:v1:k-1:1:abc"
 
 func realSchemas(t *testing.T) map[string][]byte {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "candidate_bundle.schema.json"))
-	require.NoError(t, err)
-	return map[string][]byte{"candidate_bundle": raw}
+	out := map[string][]byte{}
+	for _, name := range []string{"candidate_bundle", "evidence"} {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", name+".schema.json"))
+		require.NoError(t, err)
+		out[name] = raw
+	}
+	return out
 }
 
 func refreshService(t *testing.T, p *platform, versioned ...string) *release.Service {
