@@ -14,11 +14,13 @@ version of the shorter one.
 Sales and training materials, and Office files of no recognised role, often print only a brand
 (S11c Spec §2.5). When no anchor settles them, the products whose brand they carry are offered to a
 person as candidates; a brand is never an anchor, so even one candidate is only a question.
+
+With the pinned version catalog (PV-1), a clause code is first matched to a filed version (PV-0
+appendix A §1.3), and new terms of a registered name are a new entry beside it, never a replacement.
 """
 
 import hashlib
 import re
-import unicodedata
 from collections.abc import Callable, Sequence
 from functools import lru_cache
 from importlib.resources import files
@@ -27,12 +29,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from insurance_harness.identity.brands import brand_candidates, unqualified
 from insurance_harness.identity.material_roles import load_material_roles, role_of
+from insurance_harness.identity.text import fold as _fold
 from insurance_harness.identity.title_lines import line_titles, title_pattern
+from insurance_harness.identity.versions import VersionIndex, match_version
 
 TERMS = "terms"  # the material role that prints the clause filing code and may create a product
 _SHA256 = r"^[0-9a-f]{64}$"
-_QUALIFIER = re.compile(r"\([^()]*\)")  # after NFKC, as in 年金保险(分红型) or 意外(A款)医疗保险
 
 # REPLACE and IGNORED only follow a person's choice (S5b-3c-1); attribute() never returns them.
 Outcome = Literal[
@@ -157,6 +161,7 @@ class RegisteredProduct(_Frozen):
     clause_codes: tuple[str, ...]
     schema_pack_id: str = Field(min_length=1)
     materials: tuple[RegisteredMaterial, ...] = ()
+    version_key: str | None = None  # the filed version, planCode-versionNo (PV-1)
 
 
 class Upload(_Frozen):
@@ -175,7 +180,8 @@ class Attribution(_Frozen):
     display_name: str | None = None
     schema_pack_id: str | None = None
     replaces: tuple[str, ...] = ()
-    candidates: tuple[str, ...] = ()
+    candidates: tuple[str, ...] = ()  # for NEW_VERSION: the registered entry of the same name
+    version_key: str | None = None  # of the entry CREATE or NEW_VERSION adds, if catalogued
     policy_ref: str
 
 
@@ -187,16 +193,6 @@ def load_attribution_policy() -> AttributionPolicy:
         return AttributionPolicy.model_validate_json(text)
     except (OSError, ValidationError) as error:
         raise AttributionPolicyError("ATTRIBUTION_POLICY_INVALID") from error
-
-
-def _fold(text: str) -> str:
-    """NFKC without whitespace or private-use code points (font bullets such as U+F043 carry no
-    text, and extraction puts them in front of titles)."""
-    return "".join(
-        c
-        for c in unicodedata.normalize("NFKC", text)
-        if not c.isspace() and unicodedata.category(c) != "Co"
-    )
 
 
 def _title(text: str, policy: AttributionPolicy) -> str:
@@ -281,58 +277,8 @@ def _named_inside(title: str, products: Sequence[RegisteredProduct]) -> list[Reg
     return [found[key] for key in sorted(found)] if len(found) > 1 else []
 
 
-def _unqualified(name: str) -> str:
-    """A name without its parenthesised qualifiers, nested ones included."""
-    while (stripped := _QUALIFIER.sub("", name)) != name:
-        name = stripped
-    return name
-
-
-def _brand(name: str, policy: AttributionPolicy) -> str:
-    """A registered name's brand core: no company or rider prefix, qualifier or type suffix."""
-    core = _fold(name).casefold()
-    prefixes = [_fold(prefix).casefold() for prefix in policy.brand_prefixes]
-    while prefix := next((p for p in prefixes if core.startswith(p)), ""):
-        core = core[len(prefix) :]  # repeatedly, as in 平安附加…
-    core = _unqualified(core)
-    suffixes = [_fold(entry.suffix).casefold() for entry in policy.classifications]
-    found = max((s for s in suffixes if core.endswith(s)), key=len, default="")
-    return core[: len(core) - len(found)]
-
-
-def _years(text: str, patterns: Sequence[str]) -> set[str]:
-    return {match.group(1) for pattern in patterns for match in re.finditer(pattern, text)}
-
-
-def _brand_candidates(
-    upload: Upload, window: str, products: Sequence[RegisteredProduct], policy: AttributionPolicy
-) -> list[str]:
-    """Products whose brand the material's file name or opening carries (Spec §2.5).
-
-    A brand matches by its first brand_min_chars characters: registered names add type words the
-    materials leave out (…养老, …长期). A year the material carries keeps the products of that
-    year, when any; more than brand_max_candidates candidates are no candidates at all.
-    """
-    text = (_fold(PurePosixPath(upload.file_name).stem) + "\n" + window).casefold()
-    found = []
-    for product in products:
-        brands = {_brand(name, policy) for name in product.names}
-        if any(len(b) >= policy.brand_min_chars and b[: policy.brand_min_chars] in text
-               for b in brands):
-            found.append(product)
-    wanted = _years(text, (policy.upload_year_pattern,))
-    dated = [
-        p for p in found
-        if wanted & _years(" ".join(_fold(n) for n in p.names), policy.product_year_patterns)
-    ]
-    chosen = dated or found
-    if len(chosen) > policy.brand_max_candidates:
-        return []
-    return sorted(p.product_id for p in chosen)
-
-
 def _pack(name: str, policy: AttributionPolicy) -> str | None:
-    base = _unqualified(name)
+    base = unqualified(name)
     hits = [entry for entry in policy.classifications if base.endswith(_fold(entry.suffix))]
     return max(hits, key=lambda entry: len(_fold(entry.suffix))).schema_pack_id if hits else None
 
@@ -345,12 +291,14 @@ def attribute(
     product: str | None = None,
     role: str | None = None,
     pack: str | None = None,
+    catalog: VersionIndex | None = None,
 ) -> Attribution:
     """The attribution of one uploaded material against the registered products (Spec §2.3).
 
     The keyword arguments carry what a person confirmed (S5b-3c-1 Spec §2.1): the product the
     material belongs to, which skips identifying it by code or title; its role, in place of the
-    recognised one; and the pack for terms whose title no classification suffix matches.
+    recognised one; and the pack for terms whose title no classification suffix matches. With the
+    pinned version catalog (PV-1 §3) a code is first matched to a filed version.
     """
     policy = policy or load_attribution_policy()
 
@@ -410,6 +358,17 @@ def attribute(
     by_code = [
         p for p in products if code is not None and code in {_fold(c) for c in p.clause_codes}
     ]
+    key, by_key = None, False
+    if catalog is not None and code is not None:
+        found = match_version(code, products, catalog, policy.clause_code_pattern)
+        if found.kind in {"conflict", "shared"}:
+            reason = "shared_clause_code" if found.kind == "shared" else "anchor_conflict"
+            return decided("QUARANTINE", reason, **anchors)
+        key, by_key = found.version_key, found.by_key
+        if found.kind == "registered":
+            by_code = [p for p in products if p.product_id == found.product_id]
+    created = _created_id(own_code, policy) if own_code is not None else None
+    version = (created, key, any(p.product_id == created for p in products))
     if chosen is not None:
         # A person named the product; its code may confirm it, never point elsewhere, also when
         # the file is one this product already holds.
@@ -417,7 +376,7 @@ def attribute(
             return decided("QUARANTINE", "anchor_conflict", **anchors)
         if owners:
             return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
-        return _existing(chosen, "confirmed_by_person", decided, role, code, own_code)
+        return _existing(chosen, "confirmed_by_person", decided, role, code, own_code, version)
     # The start names the product; the reader guide only stands in when the start has no title.
     title = _head_title(window, own_code, policy) or (
         _guide_title(head, policy) if role == TERMS else ""
@@ -432,10 +391,13 @@ def attribute(
     # when the title is missing, too long or names nothing registered.
     if len(by_code) > 1 or (by_code and by_code[0] not in named):
         return decided("QUARANTINE", "anchor_conflict", **anchors)
+    if by_code and by_key:  # its own code is not one of the entry's: still the same version
+        return _existing(by_code[0], "matched_by_version_key", decided, role, code, None, version)
     if by_code:
-        return _existing(by_code[0], "matched_by_clause_code", decided, role, code, own_code)
+        reason = "matched_by_clause_code"
+        return _existing(by_code[0], reason, decided, role, code, own_code, version)
     if len(named) == 1:
-        return _existing(named[0], "matched_by_name", decided, role, code, own_code)
+        return _existing(named[0], "matched_by_name", decided, role, code, own_code, version)
     if named:
         return decided(
             "NEEDS_CONFIRM",
@@ -446,7 +408,7 @@ def attribute(
     extension = PurePosixPath(upload.file_name).suffix.casefold()
     office = extension in {e.casefold() for e in policy.brand_extensions}
     if role in policy.brand_roles or (role is None and office):
-        if brands := _brand_candidates(upload, window, products, policy):
+        if brands := brand_candidates(upload, window, products, policy):
             return decided("NEEDS_CONFIRM", "brand_candidates", candidates=tuple(brands), **anchors)
     if role != TERMS or own_code is None or not title:
         return decided("QUARANTINE", "no_product_anchor", **anchors)
@@ -454,20 +416,23 @@ def attribute(
     pack = _pack(title, policy) or pack
     if pack is None:
         return decided("NEEDS_CONFIRM", "pack_unresolved", display_name=title, **anchors)
-    product_id = (
-        policy.created_id_prefix
-        + hashlib.sha256(own_code.encode()).hexdigest()[: policy.created_id_hex]
-    )
-    if any(p.product_id == product_id for p in products):
+    if version[2]:  # the created ID is already registered
         return decided("QUARANTINE", "anchor_conflict", **anchors)
     return decided(
         "CREATE",
         "new_product",
-        product_id=product_id,
+        product_id=created,
         display_name=title,
         schema_pack_id=pack,
+        version_key=key,
         **anchors,
     )
+
+
+def _created_id(own_code: str, policy: AttributionPolicy) -> str:
+    """The internal ID of the entry a terms' own code creates (S5b-1; PV-0 appendix A §1.1)."""
+    digest = hashlib.sha256(own_code.encode()).hexdigest()[: policy.created_id_hex]
+    return policy.created_id_prefix + digest
 
 
 def _existing(
@@ -477,8 +442,13 @@ def _existing(
     role: str | None,
     code: str | None,
     own_code: str | None,
+    version: tuple[str | None, str | None, bool],
 ) -> Attribution:
-    """A registered product's material: a supplement, a new version or a question (§2.3 step 5)."""
+    """A registered product's material: a supplement, a new version or a question (§2.3 step 5).
+
+    New terms of its name are a new entry beside it (PV-1 §3): the created ID, its version key and
+    whether that ID is taken come in `version`; the registered entry is kept as the candidate.
+    """
     anchors = {"product_id": product.product_id, "role": role, "clause_code": code}
     if role is None:
         return decided(
@@ -486,8 +456,20 @@ def _existing(
         )
     known = {_fold(c) for c in product.clause_codes}
     if role == TERMS and own_code is not None and own_code not in known:
-        replaced = tuple(sorted(m.knowledge_id for m in product.materials if m.role == TERMS))
-        return decided("NEW_VERSION", "new_clause_code", replaces=replaced, **anchors)
+        created, key, taken = version
+        if taken:
+            return decided("QUARANTINE", "anchor_conflict", role=role, clause_code=code)
+        return decided(
+            "NEW_VERSION",
+            "new_clause_code",
+            product_id=created,
+            role=role,
+            clause_code=code,
+            display_name=product.names[0],
+            schema_pack_id=product.schema_pack_id,
+            candidates=(product.product_id,),
+            version_key=key,
+        )
     if any(m.role == role for m in product.materials):
         return decided(
             "NEEDS_CONFIRM", "same_role_differs", candidates=(product.product_id,), **anchors
