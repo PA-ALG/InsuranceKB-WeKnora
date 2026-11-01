@@ -1,6 +1,7 @@
 # SK-2b 方法发现编排、候选生成、撤下与失效接线
 
-> 状态：Spec r2（2026-11-01，Claude；r2 实现时补命令参数与输出文件名）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §3.4、§4.1、§4.3 (b)(d)、§5.1；
+> 状态：Spec r3（2026-11-01，Claude；r2 实现时补命令参数与输出文件名；r3 按 #518 审核 R1/R2 补上传回应的身份核对与
+> 各入口的发现库隔离）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §3.4、§4.1、§4.3 (b)(d)、§5.1；
 > [SK-2](SK-2-方法登记准入与编译.md)（SK-2a：登记表方法段、准入、编译，PR #516，本片依赖它）。跟踪 Issue #507。
 > 实现 Claude，审核 Codex。真实调用 0；不部署；不改 Go、前端与合同 schema。
 >
@@ -29,7 +30,8 @@
 ```
 
 - 一条映射 = 发现库中的一个复制件 → 一条原始三元组（SK-0 §4.1）；复制件 ID 唯一、三元组唯一，按
-  `(knowledge_id, parse_attempt)` 排序。发现库不能是登记表的 RAW 库（`DISCOVERY_KB_INVALID`）。
+  `(knowledge_id, parse_attempt)` 排序。发现库不能是登记表的 RAW 库（`DISCOVERY_KB_INVALID`）；**每个读取发现库的入口**
+  （`copies`、`candidates`）都在读清单或页面之前检查（r3，#518 R2）。
 - 复制件的摘要**不入文件**：每次从发现库清单读取平台对复制件字节算出的 `file_sha256`；候选文件的 `copy_sha256` 用它，
   由 SK-2a 准入与原始摘要比对（`COPY_MISMATCH`）。
 - 文件旁边有锁文件（与登记表同一机制），一次只有一个命令写它；写回是原子替换。
@@ -46,8 +48,10 @@
    - **对账**：清单中有已完成解析、`file_sha256` 等于原始摘要、且未被其他映射占用的复制件 → 采用（`adopted`），不上传；
    - 否则下载原始材料的当前文件（`GET /api/v1/knowledge/<id>/download`，上限 50 MiB，超过 `SOURCE_TOO_LARGE`），字节
      SHA-256 必须等于记录的摘要，否则 `SOURCE_CHANGED`（不复制；等 SK-1 按新修订重判）；上传到发现库
-     （`POST /api/v1/knowledge-bases/<kb>/knowledge/file`，文件名用原名）；平台返回重复（409 `duplicate_file`）→ 采用
-     它给出的已有复制件（`adopted`）。
+     （`POST /api/v1/knowledge-bases/<kb>/knowledge/file`，文件名用原名）。两种回应都带完整 Knowledge，只有
+     `knowledge_base_id` 是本发现库、`file_sha256` 等于上传字节的摘要时才成立（r3，#518 R1）：新建不符 → `UPLOAD_FAILED`；
+     平台返回重复（409 `duplicate_file`）且符合 → 采用它给出的已有复制件（`adopted`），不符或缺字段 →
+     `DUPLICATE_UNVERIFIED`（不采用、不写映射，下一次运行按清单摘要对账）。
    - 几条 `active` 记录摘要相同：只有第一条（按三元组）得到复制件，其余 `SAME_BYTES`。
 4. 远端写入逐条执行，全部结束后原子写回映射。中途失败：已完成的上传由下一次运行按摘要或平台的重复回应采用，
    不会重复上传；已完成的删除在下一次运行中表现为 `gone`。
