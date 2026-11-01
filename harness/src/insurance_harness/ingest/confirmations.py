@@ -64,13 +64,22 @@ __all__ = [
 _ENVELOPE = len(b'{"items": []}')
 
 
+class WithdrawnAnswer(BaseModel):
+    """A person's answer on an item closed as obsolete that no recorded decision applied."""
+    model_config = ConfigDict(extra="forbid")
+    knowledge_id: str
+    item_id: str
+    answer_id: str
+    option_key: str
+
+
 class ConfirmationReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pushed: list[str]
     applied: list[str]
     reopened: list[str]
     obsoleted: list[str]
-    answers_withdrawn: list[str] = []  # obsoleted with a person's answer not applied (S5b-7)
+    answers_withdrawn: list[WithdrawnAnswer] = []  # S5b-7 Spec §2.5
     waiting: int
     skipped: dict[str, int]
 
@@ -159,7 +168,6 @@ class _Sync:
         self.applied: set[str] = set()
         self.reopened: set[str] = set()
         self.obsoleted: set[str] = set()
-        self.withdrawn: set[str] = set()  # obsolete items that carried an unapplied answer
         self.skipped: Counter[str] = Counter()
         self.unaskable: dict[str, str] = {}  # knowledge id -> why its question cannot be built
         self.handled: set[str] = set()  # items closed (in a dry run: taken as closed) in this run
@@ -431,16 +439,41 @@ class _Sync:
                     continue
             self.handled.add(item.id)
             self.obsoleted.add(kid)
-            if item.answer is not None:  # never withdrawn unseen (S5b-7 Spec §2.5)
-                self.withdrawn.add(kid)
 
-    def report(self) -> ConfirmationReport:
+    def withdrawn(self, listed: list[ConfirmationItem]) -> list[WithdrawnAnswer]:
+        """Answers on items closed as obsolete that no recorded decision applied (S5b-7 §2.5).
+
+        Read from the platform's closed items, not from this run's memory: an answer is reported
+        even when a close receipt was lost (by the next run) or it came between listing and closing.
+        """
+        if self.write:
+            closed = self.client.confirmations(self.space, "closed")
+        else:  # a dry run takes the items it would close as closed obsolete
+            closed = [i for i in listed if i.closure is not None or i.id in self.handled]
+        applied = {d.knowledge_id for d in self.current.decisions if d.confirmation}
+        found = []
+        for item in closed:
+            kid = item.subject.removeprefix(SUBJECT_PREFIX)
+            if (
+                item.answer is None
+                or not item.subject.startswith(SUBJECT_PREFIX)
+                or (item.closure is not None and item.closure.reason != "obsolete")
+                or kid in applied
+            ):
+                continue
+            answer = item.answer
+            found.append(WithdrawnAnswer(
+                knowledge_id=kid, item_id=item.id, answer_id=answer.id, option_key=answer.option_key
+            ))
+        return sorted(found, key=lambda w: (w.knowledge_id, w.item_id))
+
+    def report(self, withdrawn: list[WithdrawnAnswer]) -> ConfirmationReport:
         return ConfirmationReport(
             pushed=sorted(self.pushed),
             applied=sorted(self.applied),
             reopened=sorted(self.reopened),
             obsoleted=sorted(self.obsoleted),
-            answers_withdrawn=sorted(self.withdrawn),
+            answers_withdrawn=withdrawn,
             waiting=len(self.waiting()),
             skipped=dict(sorted((self.skipped + Counter(self.unaskable.values())).items())),
         )
@@ -461,4 +494,4 @@ def sync(
     run.reconcile(listed)
     run.ask(listed)
     run.clean(listed)
-    return ConfirmationRun(registry=run.current, report=run.report())
+    return ConfirmationRun(registry=run.current, report=run.report(run.withdrawn(listed)))
