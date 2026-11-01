@@ -36,6 +36,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict
 
 from insurance_harness.bundle.client import PlatformClient, PlatformError
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.eval.product_sources import declared_pack, display_name, source_directory
 from insurance_harness.evidence.weknora_pages import SourcePagesError, WeKnoraSourcePages
 from insurance_harness.identity.attribution import (
@@ -48,7 +49,7 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.ingest.confirmations import ConfirmationsError, sync
 from insurance_harness.ingest.detach import REASONS, DetachError, detach
-from insurance_harness.ingest.identity_refresh import RefreshError, run_refresh
+from insurance_harness.ingest.identity_refresh import RefreshError, product_types, run_refresh
 from insurance_harness.ingest.publication import PublicationError, run_publication
 from insurance_harness.ingest.raw_sources import (
     RawSource,
@@ -323,6 +324,9 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     refreshing.add_argument("--registry", type=Path, required=True)
     refreshing.add_argument("--live", action="store_true")
     refreshing.add_argument("--max-bundles", type=int)
+    refreshing.add_argument(
+        "--catalog", type=Path, default=Path(__file__).resolve().parents[4] / SCHEMA_PACK_CATALOG
+    )
     detaching = commands.add_parser("detach")
     detaching.add_argument("--registry", type=Path, required=True)
     detaching.add_argument("--knowledge-id", required=True)
@@ -353,7 +357,8 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
             if args.command == "refresh-identity":  # the metadata publish path (PV-4 Spec §3.3)
                 refreshed = run_refresh(
                     PlatformClient(base_url, api_key, transport=transport),
-                    load_registry(args.registry), live=args.live, max_bundles=args.max_bundles,
+                    load_registry(args.registry), entity_types=product_types(args.catalog),
+                    live=args.live, max_bundles=args.max_bundles,
                 )
                 print(json.dumps(refreshed))
                 return 1 if "stopped" in refreshed else 0

@@ -88,6 +88,18 @@ class _Catalog(_Record):
     entries: list[_Entry]
 
 
+def _catalog(catalog_path: str | Path) -> _Catalog:
+    try:
+        return _Catalog.model_validate_json(Path(catalog_path).read_bytes())
+    except (OSError, ValidationError):
+        raise BundleError("CATALOG_UNREADABLE") from None
+
+
+def catalog_entity_types(catalog_path: str | Path) -> frozenset[str]:
+    """The entity types the catalog's packs compile product entities with."""
+    return frozenset(entry.pack.entity_type for entry in _catalog(catalog_path).entries)
+
+
 def product_page(
     catalog_path: str | Path,
     pack_id: str,
@@ -101,10 +113,7 @@ def product_page(
     Without metadata (no registry, or an entry without a version record) the entity keeps the
     identity it has always had: the internal ID as product code, no lifecycle or family.
     """
-    try:
-        catalog = _Catalog.model_validate_json(Path(catalog_path).read_bytes())
-    except (OSError, ValidationError):
-        raise BundleError("CATALOG_UNREADABLE") from None
+    catalog = _catalog(catalog_path)
     matches = [entry for entry in catalog.entries if entry.pack.schema_pack_id == pack_id]
     if not matches:
         raise BundleError("PACK_UNKNOWN")

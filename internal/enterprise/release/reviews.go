@@ -135,6 +135,10 @@ func (s *Service) ReviewCandidate(ctx context.Context, p Principal, spaceID, id 
 		detail.Blocker = ErrorCandidateDecided
 		return detail, nil
 	}
+	if bundle.Origin == OriginIdentityRefresh {
+		detail.Blocker = ErrorMachineDecisionOnly
+		return detail, nil
+	}
 	if err := s.precheckMembers(ctx, p, spaceID, entry.Candidate, bundle, head, active); err != nil {
 		var failure *Error
 		if errors.As(err, &failure) {
@@ -162,6 +166,9 @@ func (s *Service) Review(
 	}
 	entry, err := s.reviewEntry(ctx, p, spaceID, id)
 	if err != nil {
+		return ReviewResult{}, err
+	}
+	if err := s.refuseRefresh(ctx, p, spaceID, id); err != nil {
 		return ReviewResult{}, err
 	}
 	if err := s.noPointDecisions(ctx, p, spaceID, id); err != nil {

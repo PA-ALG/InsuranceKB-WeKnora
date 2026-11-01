@@ -2,6 +2,7 @@ package release
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -13,6 +14,11 @@ import (
 // (PV-4 Spec §2, PV-0 appendix A §2). The platform does not trust the marker: it checks
 // the whole target Release against the active one before activation.
 const OriginIdentityRefresh = "identity_refresh"
+
+// ErrorMachineDecisionOnly refuses a human or per-point decision on an identity refresh. Point
+// approvals publish a selected delta outside the whole-bundle activation and its full-target
+// check, so a refresh is decided only as a whole, by the machine decision of its publish path.
+const ErrorMachineDecisionOnly = "MACHINE_DECISION_ONLY"
 
 const (
 	kindEntity          = "entity"
@@ -47,6 +53,24 @@ func WithVersionedEntityTypes(types ...string) Option {
 	}
 }
 
+func machineDecisionOnly() error {
+	return &Error{
+		Code: ErrorMachineDecisionOnly, Detail: "an identity refresh is decided only as a whole, by machine",
+	}
+}
+
+// refuseRefresh is the guard of every human review entry point.
+func (s *Service) refuseRefresh(ctx context.Context, p Principal, spaceID, id string) error {
+	b, err := s.store.BundleOf(ctx, p.TenantID, spaceID, id)
+	if err != nil {
+		return err
+	}
+	if b.Origin == OriginIdentityRefresh {
+		return machineDecisionOnly()
+	}
+	return nil
+}
+
 // checkRefreshShape is the receive-time part: a refresh names its exact base, carries no
 // review plan and only entity, claim and relation members (PV-4 Spec §2.2).
 func (s *Service) checkRefreshShape(b Bundle) error {
@@ -71,7 +95,7 @@ func (s *Service) checkRefreshShape(b Bundle) error {
 // checkIdentityRefresh compares the target Release with the active one (PV-4 Spec §2.3):
 // only supersedes relations may appear or disappear, and kept members may change only
 // their version identity fields. Every violation rejects the whole bundle.
-func (s *Service) checkIdentityRefresh(active, target []Member) error {
+func (s *Service) checkIdentityRefresh(active []Member, b Bundle, target []Member) error {
 	if len(s.versioned) == 0 {
 		return invalid("identity refresh: versioned entity types are not configured")
 	}
@@ -110,6 +134,41 @@ func (s *Service) checkIdentityRefresh(active, target []Member) error {
 	if changes == 0 {
 		return invalid("identity refresh changes nothing")
 	}
+	touched := make(map[string]bool, len(b.Members))
+	for _, m := range b.Members {
+		touched[m.LogicalSlug] = true
+	}
+	return checkVersionRefs(target, touched, versioned)
+}
+
+// checkVersionRefs holds every claim of the target, changed or not, to the reference rule
+// (owner ruling on #510): a versioned product's claim references its subject; a null or absent
+// reference is tolerated only on a claim this bundle does not touch (legacy, never refreshed),
+// so an established reference can never be cleared or omitted; other claims carry none.
+func checkVersionRefs(target []Member, touched, versioned map[string]bool) error {
+	for _, m := range target {
+		if m.Kind != kindClaim {
+			continue
+		}
+		payload, ok := decodeObject(m.Payload)
+		if !ok {
+			return invalid("identity refresh claim is not an object: " + m.LogicalSlug)
+		}
+		subject, _ := payload["subject_ref"].(string)
+		ref := payload["product_version_ref"]
+		switch {
+		case !versioned[subject]:
+			if ref != nil {
+				return invalid("only a versioned product's claim carries product_version_ref: " + m.LogicalSlug)
+			}
+		case ref == nil:
+			if touched[m.LogicalSlug] {
+				return invalid("a refreshed claim must reference its subject: " + m.LogicalSlug)
+			}
+		case ref != subject:
+			return invalid("product_version_ref must equal the claim's subject: " + m.LogicalSlug)
+		}
+	}
 	return nil
 }
 
@@ -121,9 +180,11 @@ func bySlug(members []Member) map[string]Member {
 	return out
 }
 
-// versionedEntities maps the entity IDs of the target's versioned entities.
+// versionedEntities maps the entity IDs of the target's versioned entities. An ID that an
+// entity of another type also holds is no version: its claims cannot be told apart.
 func (s *Service) versionedEntities(target []Member) map[string]bool {
 	out := map[string]bool{}
+	shared := map[string]bool{}
 	for _, m := range target {
 		if m.Kind != kindEntity {
 			continue
@@ -136,7 +197,12 @@ func (s *Service) versionedEntities(target []Member) map[string]bool {
 		kind, _ := payload["entity_type"].(string)
 		if id != "" && s.versioned[kind] {
 			out[id] = true
+		} else if id != "" {
+			shared[id] = true
 		}
+	}
+	for id := range shared {
+		delete(out, id)
 	}
 	return out
 }
@@ -199,10 +265,7 @@ func checkClaimChange(slug string, before, after map[string]any, versioned map[s
 	if !sameJSON(stripped(before), stripped(after)) {
 		return invalid("identity refresh changed a claim field outside product_version_ref: " + slug)
 	}
-	if ref, ok := after["product_version_ref"]; ok && ref != nil && ref != subject {
-		return invalid("product_version_ref must equal the claim's subject: " + slug)
-	}
-	return nil
+	return nil // the reference itself is held to checkVersionRefs with every other claim
 }
 
 func checkAddedRelation(m Member, versioned map[string]bool) error {

@@ -7,15 +7,21 @@ changes only the registered version entities (identifiers, sale period, family) 
 claims (`product_version_ref`), adds the `supersedes` relation of every unique predecessor and
 removes stale ones; every other member is left exactly as it is.
 
+A version is an entity of a versioned product type (the types the catalog's packs compile
+product entities with) under a registered ID that no entity of another type shares; only
+`supersedes` relations between two versions are this registry's to add or remove (#510 R2).
+
 A run plans on the Active of each step, so an interruption or a moved Head is recovered by
 running again: there is no local receipt to trust.
 """
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.bundle.canonical import member_digest
 from insurance_harness.bundle.client import (
     MAX_BUNDLE_BYTES,
@@ -27,7 +33,7 @@ from insurance_harness.bundle.client import (
     ReleaseMember,
     publish,
 )
-from insurance_harness.compilers.schema_fields.page import EntityMetadata
+from insurance_harness.compilers.schema_fields.page import EntityMetadata, catalog_entity_types
 from insurance_harness.contracts.bundle import BundleMember, CandidateBundle
 from insurance_harness.contracts.enums import Origin
 from insurance_harness.contracts.knowledge import SUPERSEDES, Relation, supersedes_relation_id
@@ -59,18 +65,22 @@ class RefreshPlan:
         return not self.members and not self.removals
 
 
-def plan_refresh(active: Release, registry: ProductRegistry) -> RefreshPlan:
+def product_types(catalog_path: str | Path) -> frozenset[str]:
+    """The versioned product types: those the catalog's packs compile product entities with."""
+    try:
+        return catalog_entity_types(catalog_path)
+    except BundleError:
+        raise RefreshError("CATALOG_UNREADABLE") from None
+
+
+def plan_refresh(
+    active: Release, registry: ProductRegistry, entity_types: Collection[str]
+) -> RefreshPlan:
     """What Active needs so that every registered version carries its published identity."""
     if registry.contract != V2 or registry.metadata_basis is None:
         raise RefreshError("REGISTRY_NOT_V2")
     products, basis = registry.products, registry.metadata_basis
-    present = {
-        payload["entity_id"]
-        for m in active.members
-        if m.kind == "entity"
-        and isinstance(payload := m.payload, dict)
-        and payload.get("entity_id") in products
-    }
+    present = _versions(active, products, entity_types)
     members: list[BundleMember] = []
     groups: dict[str, str] = {}
     counts = {"entities": 0, "claims": 0, "relations_added": 0, "relations_removed": 0}
@@ -86,7 +96,12 @@ def plan_refresh(active: Release, registry: ProductRegistry) -> RefreshPlan:
             new = {**payload, "product_version_ref": payload["subject_ref"]}
             group, counted = payload["subject_ref"], "claims"
         else:
-            if m.kind == "relation" and payload.get("predicate") == SUPERSEDES:
+            if (
+                m.kind == "relation"
+                and payload.get("predicate") == SUPERSEDES
+                and payload.get("from") in present
+                and payload.get("to") in present
+            ):
                 existing[m.logical_slug] = m
             continue
         if member_digest(new) != member_digest(payload):
@@ -153,6 +168,7 @@ def run_refresh(
     client: PlatformClient,
     registry: ProductRegistry,
     *,
+    entity_types: Collection[str],
     live: bool,
     max_bytes: int = MAX_BUNDLE_BYTES,
     max_bundles: int | None = None,
@@ -169,7 +185,7 @@ def run_refresh(
     active = client.active(space)
     if active is None:
         raise RefreshError("NO_ACTIVE_RELEASE")
-    plan = plan_refresh(active, registry)
+    plan = plan_refresh(active, registry, entity_types)
     chunks = refresh_bundles(plan, active.head, max_bytes=max_bytes)
     summary: dict[str, Any] = {
         "dry_run": not live,
@@ -199,12 +215,26 @@ def run_refresh(
             active = client.active(space)
             if active is None:
                 raise RefreshError("NO_ACTIVE_RELEASE")
-            plan = plan_refresh(active, registry)
+            plan = plan_refresh(active, registry, entity_types)
             chunks = refresh_bundles(plan, active.head, max_bytes=max_bytes)
     except PlatformError as error:
         summary["stopped"] = error.code
     summary["releases"] = releases
     return summary
+
+
+def _versions(
+    active: Release, products: Mapping[str, object], entity_types: Collection[str]
+) -> set[str]:
+    """Registered IDs whose entities in Active are all of a versioned product type."""
+    versioned: set[str] = set()
+    other: set[str] = set()
+    for m in active.members:
+        payload = m.payload if isinstance(m.payload, dict) else {}
+        eid = payload.get("entity_id")
+        if m.kind == "entity" and isinstance(eid, str):
+            (versioned if payload.get("entity_type") in entity_types else other).add(eid)
+    return {eid for eid in versioned - other if eid in products}
 
 
 def _entity_payload(payload: dict[str, Any], meta: EntityMetadata) -> dict[str, Any]:

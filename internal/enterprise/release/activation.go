@@ -47,7 +47,7 @@ func (s *Service) activationMembers(
 	if err != nil || !refresh {
 		return target, err
 	}
-	if err := s.checkIdentityRefresh(active.Members, target); err != nil {
+	if err := s.checkIdentityRefresh(active.Members, b, target); err != nil {
 		return nil, err
 	}
 	return target, nil
