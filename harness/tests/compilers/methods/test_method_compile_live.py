@@ -126,9 +126,10 @@ def test_live_submits_the_plan_after_writing_it_and_the_registry(
     )
     assert bundle == planned
     assert [plan.mode for plan in bundle.review_plan] == [ReviewMode.HUMAN]
-    assert live.receipt() == {
-        "candidate_sha256": live.plan()["candidate.json"], "candidate_id": "cand-1",
-    }
+    receipt = live.receipt()
+    assert set(receipt) == {"content_sha256", "candidate_sha256", "candidate_id"}
+    assert receipt["candidate_sha256"] == live.plan()["candidate.json"]
+    assert receipt["candidate_id"] == "cand-1"
 
 
 def test_the_same_plan_is_not_submitted_twice(
@@ -136,10 +137,29 @@ def test_the_same_plan_is_not_submitted_twice(
 ) -> None:
     live = Live(tmp_path, monkeypatch, World())
     assert live.main(capsys)[0] == 0
-    status, summary = live.main(capsys)
+    first = live.receipt()
+    status, summary = live.main(capsys)  # a new compile time, the same content
     assert status == 0
     assert (summary["submitted"], summary["candidate_id"]) == ("already", "cand-1")
     assert len(live.platform.submitted) == 1
+    assert live.receipt() == first
+
+
+def test_a_changed_plan_is_submitted_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    live = Live(tmp_path, monkeypatch, World())
+    assert live.main(capsys)[0] == 0
+    first = live.receipt()
+    for saved in live.responses.iterdir():  # every value now unknown: other content
+        answer = json.loads(saved.read_text(encoding="utf-8"))
+        for row in answer["predicates"]:
+            row["state"] = "unknown"
+            row.pop("items", None)
+        saved.write_text(json.dumps(answer, ensure_ascii=False), encoding="utf-8")
+    status, summary = live.main(capsys)
+    assert (status, summary["submitted"], summary["candidate_id"]) == (0, "new", "cand-2")
+    assert live.receipt()["content_sha256"] != first["content_sha256"]
 
 
 def test_nothing_is_submitted_without_changes(

@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from insurance_harness.compilers.methods import values as values_module
-from insurance_harness.models import StageModelConfig
+from insurance_harness.models import OpenAICompatibleCompletion, StageModelConfig
 
 KEY_ENV = "TEST_METHOD_MODEL_KEY"
 SERVED = "served-model-1"
@@ -75,13 +75,12 @@ def install(monkeypatch: pytest.MonkeyPatch, provider: FakeProvider | None) -> l
 
     Returns a list that gains one entry per client created.
     """
-    real = values_module.OpenAICompatibleCompletion
     created: list[int] = []
 
     def factory(config: StageModelConfig, *, ledger: Any) -> Any:
         assert provider is not None, "no model client may be created"
         created.append(1)
-        return real(
+        return OpenAICompatibleCompletion(  # the real client; a second install must not wrap
             config,
             ledger=ledger,
             environ={KEY_ENV: "test-only"},
