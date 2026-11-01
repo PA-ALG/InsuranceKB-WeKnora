@@ -39,7 +39,7 @@
 
 版本引用不变量：SK-0 §7 要求“仅 subject 非 product 时允许版本引用为空”。现行平台只在 identity refresh 中检查版本引用
 （`checkVersionRefs`：只有版本化类型的 Claim 才带、也才必须带 `product_version_ref`），方法 Claim 不带版本引用正好满足，
-**无需收窄**；本片加一条回归测试锁住“identity refresh 的目标里含方法 Claim 时仍通过”。
+**无需收窄**；PV-4a 验收夹具里每个 identity refresh 的目标都含非版本类型实体的 Claim（`M1/s1`，类型 `method`），已锁住“目标里含方法 Claim 时仍通过”，本片不另加测试。
 
 ## 2. 合同与 Harness 数据
 
@@ -199,7 +199,7 @@ Harness：合同校验器；方法配置生成与摘要；编译带配置（Acti
 
 ## 8. 改动范围与门禁
 
-- Harness：`contracts/knowledge.py`、`contracts/export` 产物、`catalog/method_cards.*`、`catalog/navigation.json`、
+- Harness：`contracts/knowledge.py`（导航模型移到新的 `contracts/navigation.py`，使其保持 500 行以内）、`contracts/export` 产物、`catalog/method_cards.*`、`catalog/navigation.json`、
   `compilers/methods/{profile,compile}.py` 与测试。
 - Go：`internal/enterprise/{knowledge,release,expert,source,capture,chatsource}` 与 `internal/enterprise/{mount,citation}.go`。
 - 前端：`frontend/src/enterprise` 内（新文件 `methodView.ts`、`EnterpriseMethod.vue`、`RelatedMethods.vue`、样式）。
