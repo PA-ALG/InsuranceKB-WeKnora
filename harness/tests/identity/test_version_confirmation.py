@@ -9,7 +9,7 @@ version rules.
 
 import pytest
 
-from insurance_harness.identity.attribution import Attribution, attribute
+from insurance_harness.identity.attribution import Attribution, RegisteredProduct, attribute
 from insurance_harness.identity.confirmation import ConfirmationError, choices, conclude
 from tests.identity.test_training_versions import (
     NURSING,
@@ -26,7 +26,7 @@ UNDATED = deck("御享金越分红培训.pptx", "御享金越分红产品培训"
 NO_ROLE = deck("智盈倍护_20240527.pptx", "智盈倍护\n2024年5月")
 
 
-def key_of(question: Attribution, registry: list, value: str | None) -> str:
+def key_of(question: Attribution, registry: list[RegisteredProduct], value: str | None) -> str:
     return next(c.key for c in choices(question, registry) if c.value == value)
 
 
@@ -42,6 +42,7 @@ def test_a_person_picks_one_consistent_version() -> None:
     basis = result.version_basis
     assert basis is not None
     assert (basis.version_decided_by, basis.role_decided_by) == ("person", "machine")
+    assert question.version_basis is not None
     assert basis.candidates == question.version_basis.candidates  # the evidence the person saw
 
 
