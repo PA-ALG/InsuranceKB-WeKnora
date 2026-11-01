@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ExpertCitation from './ExpertCitation.vue'
 import OfficeSourceViewer from './OfficeSourceViewer.vue'
+import OfficeTextView from './OfficeTextView.vue'
 import SourcePageViewer from './SourcePageViewer.vue'
 import {
   EnterpriseError, isExpertCitation, readCitation, type Citation, type ExpertCitation as ExpertRecord,
@@ -59,6 +60,21 @@ const officeLabels = computed(() => ({
   region: t('enterpriseKnowledge.viewer.officeRegion', {
     document: citation.value?.source.document ?? '', position: position.value,
   }),
+}))
+
+// When the preview cannot show the citation, the viewer hands over the downloaded file and the
+// cited place is shown as text below it (S11h Spec §2.2).
+const textLabels = computed(() => ({
+  title: t('enterpriseKnowledge.viewer.text.title'),
+  failed: t('enterpriseKnowledge.viewer.text.failed'),
+  stalled: t('enterpriseKnowledge.viewer.text.stalled'),
+  notLocated: t('enterpriseKnowledge.viewer.text.notLocated'),
+  loading: t('enterpriseKnowledge.viewer.text.loading'),
+  empty: t('enterpriseKnowledge.viewer.text.empty'),
+  unavailable: t('enterpriseKnowledge.viewer.text.unavailable'),
+  quoteMissing: t('enterpriseKnowledge.viewer.text.quoteMissing'),
+  download: t('enterpriseKnowledge.viewer.text.download'),
+  notes: t('enterpriseKnowledge.viewer.text.notes'),
 }))
 
 async function load() {
@@ -121,7 +137,17 @@ watch(() => [props.spaceId, props.releaseId, props.member, props.evidence], load
         :document="citation.source.document"
         :target="office"
         :labels="officeLabels"
-      />
+      >
+        <template #fallback="{ reason, original }">
+          <OfficeTextView
+            :original="original"
+            :document="citation.source.document"
+            :target="office"
+            :reason="reason"
+            :labels="textLabels"
+          />
+        </template>
+      </OfficeSourceViewer>
       <p v-else role="note" class="ek-status">{{ t('enterpriseKnowledge.viewer.noViewer') }}</p>
     </template>
   </div>

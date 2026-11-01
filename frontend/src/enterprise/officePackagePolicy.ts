@@ -101,3 +101,14 @@ export const POLICIES: Record<OfficeFormat, FormatPolicy> = {
     required: ['sheet'],
   },
 }
+
+// The text view (S11h Spec §2.2) reads text and renders nothing: it also follows speaker notes,
+// which the platform captures under their slide's locator.
+export const TEXT_POLICIES: Record<OfficeFormat, FormatPolicy> = {
+  ...POLICIES,
+  pptx: {
+    ...POLICIES.pptx,
+    relationships: new Set([...POLICIES.pptx.relationships, `${T}notesSlide`]),
+    contentTypes: new Set([...POLICIES.pptx.contentTypes, `${OOXML}presentationml.notesSlide+xml`]),
+  },
+}

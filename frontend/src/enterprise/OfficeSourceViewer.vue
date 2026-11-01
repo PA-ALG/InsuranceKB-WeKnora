@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { get } from '@/utils/request'
 import type { SourceLocateRequest } from '@/utils/sourceLocator'
 import { officeLocateRequest, type OfficeFormat, type OfficeTarget } from './officeCitation'
 import { OfficePackageRejected, sanitizeOfficePackage } from './officePackage'
+import type { OfficeFallbackReason } from './officeText'
 
 // Upstream's original-file preview renders the Office file and highlights the citation; it is
 // loaded on demand so the Office renderers stay out of the enterprise pages' first bundle.
@@ -20,6 +21,9 @@ const props = defineProps<{
   }
 }>()
 
+// The citation panel puts the text view here (S11h Spec §2.2) with the downloaded bytes.
+defineSlots<{ fallback?(props: { reason: OfficeFallbackReason; original: ArrayBuffer }): unknown }>()
+
 type Located = { found: boolean; precise: boolean }
 
 const MEDIA_TYPES: Record<OfficeFormat, string> = {
@@ -31,7 +35,10 @@ const MEDIA_TYPES: Record<OfficeFormat, string> = {
 const state = ref<'loading' | 'ready' | 'failed' | 'rejected'>('loading')
 const retry = ref(0)
 const blob = shallowRef<Blob | null>(null)
+const original = shallowRef<ArrayBuffer | null>(null)
 const located = ref<Located | null>(null)
+const fallback = ref<OfficeFallbackReason | null>(null)
+const region = useTemplateRef<HTMLElement>('region')
 const request = shallowRef<SourceLocateRequest>()
 let token = 0
 const note = computed(() => {
@@ -54,6 +61,7 @@ watch(
     })
     state.value = 'loading'
     blob.value = null
+    original.value = null
     located.value = null
     void (async () => {
       try {
@@ -65,6 +73,7 @@ watch(
         const clean = await sanitizeOfficePackage(bytes, format)
         if (!active) return
         blob.value = new Blob([clean], { type: MEDIA_TYPES[format] })
+        original.value = bytes
         state.value = 'ready'
       } catch (error) {
         if (active) state.value = error instanceof OfficePackageRejected ? 'rejected' : 'failed'
@@ -80,6 +89,31 @@ watch(() => props.target, target => {
   located.value = null
 }, { immediate: true })
 
+// Upstream's preview catches its renderers' failures and shows an error element instead of
+// emitting (document-preview.vue `onErrorCaptured`, `.preview-error`); a renderer may also never
+// finish. The text view takes over when the preview fails, says nothing for 30 seconds, or does
+// not bring the quote into view (`onLocated`), and steps back once the preview shows it after all
+// (S11h Spec §2.2). Every opened file and every new citation starts over.
+const STALLED_MS = 30_000
+
+watch([region, request], ([element], _, onCleanup) => {
+  fallback.value = null
+  if (!element) return
+  const failed = () => {
+    if (element.querySelector('.preview-error')) fallback.value = 'failed'
+  }
+  const observer = new MutationObserver(failed)
+  observer.observe(element, { childList: true, subtree: true })
+  const timer = setTimeout(() => {
+    if (!located.value && !fallback.value) fallback.value = 'stalled'
+  }, STALLED_MS)
+  failed()
+  onCleanup(() => {
+    observer.disconnect()
+    clearTimeout(timer)
+  })
+})
+
 // A rendered Office file is untrusted: docx-preview writes a file's external link targets into
 // anchors as they are, `javascript:` included. The package rebuild already drops such targets;
 // here only web and mail links may be followed, and a link whose target was dropped goes nowhere.
@@ -93,6 +127,11 @@ function blockUnsafeLinks(event: MouseEvent) {
 
 function onLocated(result: Located) {
   located.value = { found: !!result?.found, precise: !!result?.precise }
+  // Upstream marks a whole slide when the quote is not in its rendered text (it is in the notes,
+  // a skipped grouped frame, a chart or a picture), so the quote is not in view. A sheet row is
+  // always marked whole, its cells in view.
+  const inView = located.value.found && (located.value.precise || props.target.format !== 'pptx')
+  fallback.value = inView ? null : 'notLocated'
 }
 </script>
 
@@ -106,7 +145,7 @@ function onLocated(result: Located) {
     </div>
     <template v-else-if="blob">
       <div
-        role="region" :aria-label="labels.region" class="office-source-preview"
+        ref="region" role="region" :aria-label="labels.region" class="office-source-preview"
         @click.capture="blockUnsafeLinks" @auxclick.capture="blockUnsafeLinks"
       >
         <DocumentPreview
@@ -120,6 +159,7 @@ function onLocated(result: Located) {
         />
       </div>
       <p v-if="note" data-located role="note" class="ek-status">{{ note }}</p>
+      <slot v-if="fallback && original" name="fallback" :reason="fallback" :original="original" />
     </template>
   </div>
 </template>
