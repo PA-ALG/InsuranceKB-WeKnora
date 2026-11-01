@@ -10,8 +10,10 @@ Managed env keys are carried over from the CURRENT app container, so a later pla
 them; `--set-env KEY=VALUE` adds one (`--replace-env` to change its value) and `--unset-env KEY`
 removes it. Before touching containers the tool writes the new container's managed values and
 whether it has Spaces to an intent record in the private dir (0600), so a rerun after a failed
-create recovers them. Managed values are type ids, not secrets; no other env value is written
-anywhere. The dry run shows key names only, and managed values as a sha256 prefix.
+create recovers them. The record is bound to the docker context, the App name and the rebuild
+source's container ID; a record from another environment is never inherited. Managed values are
+type ids, not secrets; no other env value is written anywhere. The dry run shows key names only,
+and managed values as a sha256 prefix.
 
 Usage:
   python3 -I deploy/local-live/swap_app.py <image-id> --private-dir DIR [--spaces FILE]
@@ -23,12 +25,15 @@ The container is created, not started: starting and checking it belong to the de
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import NamedTuple, NoReturn
 
@@ -46,6 +51,9 @@ CONTRACTS_DIR = "/app/contracts"
 SIGNING_KEY = "E2E_CITATION_SIGNING_KEY"
 SPACES_KEY = "ENTERPRISE_SPACES"
 INTENT_RECORD = "swap_app.intent.json"
+# The record belongs to an environment when these match: docker context, App name, rebuild source.
+RECORD_IDENTITY = ("context", "container", "source_id")
+RECORD_FIELDS = {"version", *RECORD_IDENTITY, "current_id", "managed", "spaces"}
 PLAIN_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]*")
 TYPE_IDS = re.compile(r"[a-z][a-z0-9_]*(?:,[a-z][a-z0-9_]*)*")
 # Env keys this tool may add, change or remove, with the accepted value format. Add a key only
@@ -169,59 +177,122 @@ def read_spaces(path: str | None) -> str | None:
     return spaces
 
 
-def read_record(path: Path) -> dict | None:
-    """The last intent: managed values and Spaces presence of the container being created."""
-    if not path.exists():
-        return None
-    try:
-        record = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        raise Refused("intent record is unreadable; stop") from None
-    managed = record.get("managed") if isinstance(record, dict) else None
-    if not (
-        isinstance(managed, dict)
+def unique_members(pairs: list[tuple[str, object]]) -> dict:
+    """JSON object hook: a duplicate member makes the record ambiguous, so it counts as corrupt."""
+    members = dict(pairs)
+    if len(members) != len(pairs):
+        raise ValueError("duplicate member")
+    return members
+
+
+def well_formed(record: object) -> bool:
+    if not isinstance(record, dict) or set(record) != RECORD_FIELDS:
+        return False
+    managed, current_id = record["managed"], record["current_id"]
+    return (
+        type(record["version"]) is int
+        and record["version"] == 1
+        and all(isinstance(record[k], str) for k in RECORD_IDENTITY)
+        and (current_id is None or isinstance(current_id, str))
+        and isinstance(managed, dict)
         and set(managed) <= set(MANAGED_ENV)
         and all(isinstance(v, str) for v in managed.values())
-        and isinstance(record.get("spaces"), bool)
-    ):
-        raise Refused("intent record is malformed; stop")
+        and isinstance(record["spaces"], bool)
+    )
+
+
+def regular_or_absent(path: Path) -> bool:
+    """True when nothing is at `path`; refuses anything but a regular file (links included)."""
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        raise Refused("intent_record_invalid: cannot stat the intent record; stop") from None
+    if not stat.S_ISREG(info.st_mode):
+        raise Refused("intent_record_invalid: intent record is not a regular file; stop")
+    return False
+
+
+def read_record(path: Path) -> dict | None:
+    """The intent of the last swap that reached the write step; None when there is none."""
+    if regular_or_absent(path):
+        return None
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, encoding="utf-8") as handle:
+            record = json.loads(handle.read(), object_pairs_hook=unique_members)
+    except (OSError, ValueError):
+        raise Refused("intent_record_invalid: intent record is unreadable; stop") from None
+    if not well_formed(record):
+        raise Refused("intent_record_invalid: intent record is malformed; stop")
     return record
 
 
 def write_record(path: Path, record: dict) -> None:
-    tmp = path.with_name(path.name + ".tmp")
+    """A fresh exclusive temp file in the private dir, fsynced, then renamed onto the record."""
+    regular_or_absent(path)
+    tmp: str | None = None
     try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        # mkstemp opens O_CREAT|O_EXCL|O_NOFOLLOW under a random name: never an existing file.
+        fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             os.fchmod(handle.fileno(), 0o600)
+            made = os.fstat(handle.fileno())
+            if made.st_uid != os.geteuid() or made.st_nlink != 1:
+                raise OSError("temporary record file is not exclusively ours")
             json.dump(record, handle)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp, path)
+        os.replace(tmp, path)  # rename replaces a link at `path` itself, never its target
+        tmp = None
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     except OSError:
-        raise Refused("cannot write the intent record; no container was touched; stop") from None
+        raise Refused(
+            "intent_record_unwritable: cannot write the intent record; no container was touched"
+        ) from None
+    finally:
+        if tmp is not None:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
 
 
 def carried_managed(
-    current_env: dict[str, str] | None, record: dict | None, explicit: set[str]
+    current_env: dict[str, str] | None, record: dict | None, foreign: bool, explicit: set[str]
 ) -> dict[str, str]:
-    """Managed values to carry: from the serving app, else from the record (a failed create).
+    """Managed values to carry: from the serving app, else from this environment's record.
 
-    With neither source the values cannot be recovered, so every managed key must be explicit.
+    A record from another environment is never inherited, and with no source at all the values
+    cannot be recovered: in both cases every managed key must be stated explicitly.
     """
+    missing = sorted(set(MANAGED_ENV) - explicit)
+    keys = ", ".join(missing)
+    if foreign and missing:
+        raise Refused(
+            "intent_record_mismatch: the intent record belongs to another environment; "
+            f"--set-env or --unset-env {keys}; stop"
+        )
     if current_env is not None:
         carried = {k: current_env[k] for k in MANAGED_ENV if k in current_env}
-        if record is not None:
-            for key in sorted(set(MANAGED_ENV) - explicit):
-                if carried.get(key) != record["managed"].get(key):
-                    raise Refused(f"{key}: current app and intent record disagree; set or unset it")
+        recorded = record["managed"] if record is not None else carried
+        for key in missing:
+            if carried.get(key) != recorded.get(key):
+                raise Refused(
+                    f"intent_record_disagrees: current app and intent record differ on {key}; "
+                    "set or unset it; stop"
+                )
         return carried
     if record is not None:
         return dict(record["managed"])
-    missing = sorted(set(MANAGED_ENV) - explicit)
     if missing:
-        keys = ", ".join(missing)
-        raise Refused(f"no current app and no intent record: --set-env or --unset-env {keys}; stop")
+        raise Refused(
+            f"intent_record_missing: no current app and no intent record; --set-env or --unset-env "
+            f"{keys}; stop"
+        )
     return {}
 
 
@@ -256,11 +327,18 @@ def plan(opts: argparse.Namespace) -> Plan:
     if set(runtime) & set(MANAGED_ENV):
         raise Refused("source container sets a managed env key; stop")
 
-    # Managed keys and the Spaces guard read the serving container, else the intent record.
+    # Managed keys and the Spaces guard read the serving container, else the intent record of
+    # this environment (the backup's ID is stable: it is the container every swap rebuilds from).
+    context = docker("context", "show").strip()
+    identity = {"context": context, "container": APP, "source_id": old["Id"]}
+    own = record is not None and all(record[k] == identity[k] for k in RECORD_IDENTITY)
+    usable = record if own else None
     current = old if source == APP else inspect(APP) if APP in names else None
     current_env = env_map(current["Config"].get("Env")) if current else {}
-    managed = carried_managed(current_env if current else None, record, {*wanted, *unset})
-    if spaces is None and (SPACES_KEY in current_env or (record or {}).get("spaces")):
+    managed = carried_managed(
+        current_env if current else None, usable, record is not None and not own, {*wanted, *unset}
+    )
+    if spaces is None and (SPACES_KEY in current_env or (usable or {}).get("spaces")):
         raise Refused(f"current app or intent record has {SPACES_KEY}; pass --spaces; stop")
     absent = [k for k in unset if k not in managed]
     for key in unset:
@@ -321,9 +399,16 @@ def plan(opts: argparse.Namespace) -> Plan:
         "managed": {k: fingerprint(v) for k, v in sorted(effective.items())},
         "unset_absent": absent,
         "enterprise_spaces": spaces is not None,
+        "intent_record": "absent" if record is None else "own" if own else "foreign",
         "extra_networks": sorted(networks - {NETWORK}),
     }
-    record_next = {"managed": effective, "spaces": spaces is not None}
+    record_next = {
+        "version": 1,
+        **identity,
+        "current_id": current["Id"] if current else None,
+        "managed": effective,
+        "spaces": spaces is not None,
+    }
     return Plan(args, child_env, summary, private / INTENT_RECORD, record_next)
 
 
