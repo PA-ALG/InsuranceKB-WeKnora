@@ -1,6 +1,7 @@
 # SK-2c 方法取值的线上阶段与 `compile --live` 提交
 
-> 状态：Spec r1（2026-11-01，Claude）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §4.3 (c)、§5.2、§5.3；
+> 状态：Spec r2（2026-11-01，Claude；r2 实现时发现每次编译都给 Claim 写新的编译时间 `maintenance.changed_at`，
+> 同样的计划字节不同，§4.2 的提交回执改按去掉编译时间后的内容摘要比较）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §4.3 (c)、§5.2、§5.3；
 > [SK-2](SK-2-方法登记准入与编译.md)（SK-2a：取值协议、保存回答的格式、离线 `methods compile`）抬头的拆分；
 > [SK-2b](SK-2b-方法发现编排与撤下.md) 抬头的拆分修订。跟踪 Issue #507。实现 Claude，审核 Codex。
 > 真实调用 0（测试用假传输层）；不部署；不写线上登记表；不改 Go、前端与合同 schema。
@@ -100,10 +101,14 @@
 - 顺序：登记表锁内载入 → 读 Active → 准入、编译、组包（从不发请求）→ 写计划（SK-2a §7 的一套文件）→ 原子写回登记表
   → 提交计划中的 CandidateBundle（`PlatformClient.submit`）。方法 pack 未准入，审核计划为人工：只提交，决定与激活由人在
   平台完成。
-- 提交回执 `submitted.json`（在 `--run-root`）：`{"candidate_sha256": <candidate.json 的摘要，与 report.json 的 plan 相同>,
-  "candidate_id": …}`，提交成功后原子写入。再次运行时计划的 `candidate.json` 摘要等于回执 → 不再提交，输出回执中的
-  `candidate_id` 与 `"submitted": "already"`；新提交输出 `"submitted": "new"`。与产品发布的回执同一纪律：只记已成功提交的
-  输出字节，同样的输出不重复提交（人拒绝后要重新提交，需换运行目录）。
+- 提交回执 `submitted.json`（在 `--run-root`）：`{"content_sha256": <内容摘要>, "candidate_sha256": <所提交的
+  candidate.json 的摘要，与该次 report.json 的 plan 相同>, "candidate_id": …}`，提交成功后原子写入。
+- **内容摘要**：变化判定给每个成员 Claim 写本次编译的时间（`maintenance.changed_at`），成员摘要随之改变，所以同样的
+  输入每次编译出的 `candidate.json` 字节都不同。内容摘要 = 去掉各成员的 `member_digest` 与 Claim 的
+  `maintenance.changed_at` 之后，候选整体按键排序的紧凑 JSON 的 SHA-256；基线、成员、移出、审核计划与编译器身份都在内。
+- 再次运行时计划的内容摘要等于回执 → 不再提交，输出回执中的 `candidate_id` 与 `"submitted": "already"`，回执不变；
+  否则提交并写新回执，输出 `"submitted": "new"`。与产品发布的回执同一纪律：只记已成功提交的输出，同样的输出不重复提交
+  （人拒绝后要重新提交，需换运行目录）。回执不是这三个非空字符串 → `RECEIPT_INVALID`，不提交。
 - 没有变化（计划没有 `candidate.json`）→ 不提交，`"submitted": "nothing"`。
 - 提交失败 → `{"stopped": 平台代码}`，计划与登记表已写，回执不写；重跑得出同一计划并再次提交。提交成功而回执写入前
   中断 → 重跑会再提交一份同样的候选，由人在审核队列中按同一基线处理（与产品发布相同的已知情形）。
@@ -135,6 +140,6 @@
    策略 → `RUN_ROOT_MODEL_CHANGED`；目录在 git 仓库内 → `RUN_ROOT_INVALID`；目录被占用 → `RUN_ROOT_BUSY`。
 7. 退出的方法（撤下、没有有效链接）不发请求；输出不含材料文字与方法名。
 8. `compile --model`：省略时取目录的模型；与目录不符 → `MODEL_MISMATCH`；省略且没有台账 → `MODEL_UNKNOWN`。
-9. `compile --live`：先写计划、再写登记表、再提交；回执与计划摘要一致；同样输入重跑不再提交（`already`）；没有变化不
-   提交；提交失败 → 平台代码，回执不写，重跑再提交。
+9. `compile --live`：先写计划、再写登记表、再提交；回执与计划摘要一致；同样输入重跑（编译时间不同）不再提交
+   （`already`）；取值变了的计划再次提交；没有变化不提交；提交失败 → 平台代码，回执不写，重跑再提交。
 10. `stages.json` 的 `methods` 阶段：DeepSeek、思考开、不含密钥。
