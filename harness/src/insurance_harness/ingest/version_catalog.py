@@ -1,9 +1,12 @@
 """The filed versions of the product repository at one pinned commit (PV-1 Spec §2.1).
 
 Each folder of the repository's on-sale and off-sale trees is one filed version, keyed
-`planCode-versionNo`. The folders are untrusted input: every record is checked and the whole
-catalog is refused when one is malformed or a version key repeats. A registry stores the catalog
-it was built from beside itself, content-addressed and never rewritten, and names its digest.
+`planCode-versionNo`. The records are read from the commit's own tree objects, never from the
+working tree, so untracked, ignored or edited files cannot enter a catalog that names the commit;
+a tracked symlink is refused. The folders are untrusted input: every record is checked (a repeated
+JSON key included) and the whole catalog is refused when one is malformed or a version key repeats.
+A registry stores the catalog beside itself, content-addressed and never rewritten, and names its
+digest, repository and commit; reading it back checks all three (review R2 on #505).
 """
 
 import hashlib
@@ -35,6 +38,8 @@ _TREES = ("在售", "停售")
 _STATUSES = {"在售": "on_sale", "停售": "discontinued"}
 _MAX_META_BYTES = 256 * 1024
 _VERSION_NO = re.compile(r"^([A-Za-z0-9]{1,32})-([0-9]{1,4})$")
+_META_PATH = re.compile(r"^(在售|停售)/[^/]+/product_meta\.json$")
+_REGULAR = {"100644", "100755"}
 DateText = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
 _Commit = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40}$")]
 
@@ -110,17 +115,57 @@ def catalog_file(registry_path: Path, digest: str) -> Path:
     return registry_path.with_name(f"{registry_path.name}.catalog-{digest[:12]}.json")
 
 
-def _git(directory: Path, *args: str) -> str:
+def _git(directory: Path, *args: str, stdin: bytes | None = None) -> bytes:
     try:
         done = subprocess.run(
             ["git", "-C", str(directory), *args],
-            capture_output=True, text=True, timeout=60, check=False,
+            input=stdin, capture_output=True, timeout=300, check=False,
+            env=os.environ | {"GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0"},  # no network
         )
     except (OSError, subprocess.SubprocessError):
         raise CatalogError("CATALOG_COMMIT_MISMATCH") from None
     if done.returncode != 0:
         raise CatalogError("CATALOG_COMMIT_MISMATCH")
     return done.stdout
+
+
+def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    found: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in found:
+            raise CatalogError("CATALOG_INVALID")  # json.loads would keep only the last one
+        found[key] = value
+    return found
+
+
+def _tracked(directory: Path, commit: str) -> list[tuple[str, str]]:
+    """(tree, blob) of every product_meta.json in the commit's on-sale and off-sale trees."""
+    listing = _git(directory, "ls-tree", "-r", "-z", "--full-tree", commit, "--", *_TREES)
+    found = []
+    for line in filter(None, listing.split(b"\0")):
+        header, _, raw = line.partition(b"\t")
+        mode, kind, blob = header.decode("ascii").split(" ")
+        path = raw.decode("utf-8")
+        if not path.endswith("/product_meta.json"):
+            continue
+        if not _META_PATH.fullmatch(path) or mode not in _REGULAR or kind != "blob":
+            raise CatalogError("CATALOG_INVALID")  # a symlink, or a file deeper in the tree
+        found.append((path.split("/", 1)[0], blob))
+    return found
+
+
+def _blobs(directory: Path, blobs: list[str]) -> list[bytes]:
+    """The blobs' content from the object store, in order, each within the size limit."""
+    out = _git(directory, "cat-file", "--batch", stdin="".join(f"{b}\n" for b in blobs).encode())
+    contents, at = [], 0
+    for blob in blobs:
+        end = out.index(b"\n", at)
+        name, kind, size = out[at:end].decode("ascii").split(" ")
+        if name != blob or kind != "blob" or int(size) > _MAX_META_BYTES:
+            raise CatalogError("CATALOG_INVALID")
+        contents.append(out[end + 1 : end + 1 + int(size)])
+        at = end + 2 + int(size)
+    return contents
 
 
 def _text(meta: dict[str, Any], key: str) -> str | None:
@@ -158,26 +203,24 @@ def _record(meta: dict[str, Any], tree: str, pattern: str) -> VersionRecord:
 
 
 def catalog_from_checkout(directory: Path, commit: str) -> VersionCatalog:
-    """The catalog of a clean checkout of the repository at exactly this commit."""
+    """The catalog of exactly this commit of the repository cloned at `directory`, read from its
+    object store (the working tree may be sparse, dirty or hold untracked files)."""
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise CatalogError("CATALOG_COMMIT_MISMATCH")
-    if _git(directory, "rev-parse", "HEAD").strip() != commit:
+    resolved = _git(directory, "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}")
+    if resolved.decode("ascii", "replace").strip() != commit:
         raise CatalogError("CATALOG_COMMIT_MISMATCH")
-    if _git(directory, "status", "--porcelain", "--untracked-files=no").strip():
-        raise CatalogError("CATALOG_DIRTY")
     pattern = load_attribution_policy().clause_code_pattern
+    tracked = _tracked(directory, commit)
     records = []
-    for tree in _TREES:
-        for path in sorted((directory / tree).glob("*/product_meta.json")):
-            if path.is_symlink() or not path.is_file() or path.stat().st_size > _MAX_META_BYTES:
-                raise CatalogError("CATALOG_INVALID")
-            try:
-                meta = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, UnicodeDecodeError, ValueError):
-                raise CatalogError("CATALOG_INVALID") from None
-            if not isinstance(meta, dict):
-                raise CatalogError("CATALOG_INVALID")
-            records.append(_record(meta, tree, pattern))
+    for (tree, _), content in zip(tracked, _blobs(directory, [b for _, b in tracked]), strict=True):
+        try:
+            meta = json.loads(content.decode("utf-8"), object_pairs_hook=_unique)
+        except (UnicodeDecodeError, ValueError, RecursionError):
+            raise CatalogError("CATALOG_INVALID") from None
+        if not isinstance(meta, dict):
+            raise CatalogError("CATALOG_INVALID")
+        records.append(_record(meta, tree, pattern))
     if not records:
         raise CatalogError("CATALOG_INVALID")
     try:
@@ -214,8 +257,15 @@ def save_catalog(catalog: VersionCatalog, registry_path: Path) -> tuple[str, str
     return target.name, digest
 
 
-def load_catalog(registry_path: Path, digest: str) -> VersionCatalog:
-    """The catalog a v2 registry names, refused unless its bytes have exactly that digest."""
+def load_catalog(
+    registry_path: Path,
+    digest: str,
+    *,
+    repository: str | None = None,
+    commit: str | None = None,
+) -> VersionCatalog:
+    """The catalog a v2 registry names, refused unless its bytes have exactly that digest and it
+    comes from the repository and commit the registry's basis names (when given)."""
     if not re.fullmatch(r"[0-9a-f]{64}", digest):
         raise CatalogError("CATALOG_INVALID")
     try:
@@ -225,6 +275,11 @@ def load_catalog(registry_path: Path, digest: str) -> VersionCatalog:
     if hashlib.sha256(data).hexdigest() != digest:
         raise CatalogError("CATALOG_INVALID")
     try:
-        return VersionCatalog.model_validate_json(data)
+        catalog = VersionCatalog.model_validate_json(data)
     except ValidationError:
         raise CatalogError("CATALOG_INVALID") from None
+    if (repository is not None and catalog.repository != repository) or (
+        commit is not None and catalog.commit != commit
+    ):
+        raise CatalogError("CATALOG_INVALID")
+    return catalog

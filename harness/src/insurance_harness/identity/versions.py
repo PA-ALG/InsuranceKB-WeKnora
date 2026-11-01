@@ -31,10 +31,15 @@ class VersionMatch:
     by_key: bool = False  # found through its version key, not its clause codes
 
 
+def normal_clause_code(text: str) -> str:
+    """The one form clause codes are compared in, wherever they come from (PV-1 §2.2): folded,
+    ASCII brackets as 〔〕. The registry keeps the value as it was confirmed."""
+    return fold(text).replace("[", "〔").replace("]", "〕")
+
+
 def canonical_clause_code(text: str, pattern: str) -> str | None:
-    """A clause filing code in the one form the text and the registry compare in (PV-1 §2.2):
-    folded, ASCII brackets as 〔〕, matching the policy's code pattern as a whole."""
-    code = fold(text).replace("[", "〔").replace("]", "〕")
+    """The compared form, when it is a clause filing code as a whole (catalog and migration)."""
+    code = normal_clause_code(text)
     return code if re.fullmatch(pattern, code) else None
 
 
@@ -48,9 +53,7 @@ def match_version(
     keys = index.keys_for(code)
     key = keys[0] if len(keys) == 1 else None
     holders = [
-        p.product_id
-        for p in products
-        if code in {canonical_clause_code(c, pattern) for c in p.clause_codes}
+        p.product_id for p in products if code in {normal_clause_code(c) for c in p.clause_codes}
     ]
     keyed = [p.product_id for p in products if key is not None and p.version_key == key]
     if keyed:  # rows 1 and 2
