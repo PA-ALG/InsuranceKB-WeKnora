@@ -245,6 +245,15 @@ def test_an_unknown_sale_period_is_never_the_one_consistent_candidate() -> None:
     assert verdicts(result) == {"9201": "period_unknown"}
 
 
+def test_one_consistent_beside_another_candidate_is_still_a_question() -> None:
+    unknown = version("9401", "平安智盈倍护（2024）终身护理保险", NURSING, None, year_tag=2024)
+    registry = [ZYBH_2024, unknown]
+    result = attribute(deck("智盈倍护产品培训.pptx", "智盈倍护产品培训\n2024年5月"), registry)
+    assert (result.outcome, result.reason) == ("NEEDS_CONFIRM", "version_candidates")
+    assert verdicts(result) == {"2635": "consistent", "9401": "period_unknown"}
+    assert options(result, registry) == ["2635", None]
+
+
 def test_an_empty_end_counts_as_open_only_while_on_sale() -> None:
     selling = version("9301", "平安智盈倍护终身护理保险", NURSING, "2024-01-01")
     ended = version(
