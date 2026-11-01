@@ -179,6 +179,15 @@ def test_a_person_corrects_machine_labels_through_the_same_question() -> None:
     assert tuple(hit.label for hit in use.label_hits) == BOTH  # the machine's evidence stays
 
 
+def test_a_second_correction_with_unchanged_labels_is_a_new_question() -> None:
+    platform = FakePlatform()
+    first = sync(request_relabel(labelled_method(), "k-deck"), platform)
+    kept = answered(first.registry, platform, "done")  # the same labels as the first question
+    again = sync(request_relabel(kept, "k-deck"), platform)
+    assert "CONFIRMATION_CLOSED" not in again.report.skipped
+    assert "done" in open_keys(platform)  # a new open question, not the closed one
+
+
 def test_relabel_needs_a_live_record_and_leaves_an_asked_one_as_it_is() -> None:
     with pytest.raises(ConfirmationsError) as refused:
         request_relabel(v2(), "k-deck")
