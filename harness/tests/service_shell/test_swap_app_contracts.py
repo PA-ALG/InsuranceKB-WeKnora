@@ -7,6 +7,7 @@ with --legacy-contracts-dir (rollback to a pre-I5 image).
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 from typing import Any
@@ -85,6 +86,34 @@ def test_private_dir_without_contracts_is_accepted(world: World) -> None:
 def test_image_without_contracts_needs_the_legacy_dir(world: World) -> None:
     stderr = refused_before_any_write(without_contracts(world).with_current())
     assert "--legacy-contracts-dir" in stderr
+    assert not (world.private / world.swap.INTENT_RECORD).exists()
+
+
+def test_old_image_dry_run_names_its_build_source_then_the_rollback_proceeds(
+    world: World,
+) -> None:
+    # #525 R1: Spec §4 starts the rollback from the dry run's build_source_head.
+    without_contracts(world).with_current()
+    world.state["images"][NEW_IMAGE]["Config"]["Labels"] = {HEAD_LABEL: "e" * 40}
+    result = world.run("--dry-run")
+    assert result.returncode == 3 and world.writes() == []
+    out = json.loads(result.stdout)
+    assert out["dry_run"] is True and out["contracts"] == "missing"
+    assert out["new_image"] == NEW_IMAGE and out["build_source_head"] == "e" * 40
+    assert "--legacy-contracts-dir" in result.stderr
+    assert not (world.private / world.swap.INTENT_RECORD).exists()
+    directory = legacy_dir(world)
+    planned = summary(world.run("--legacy-contracts-dir", str(directory), "--dry-run"))
+    assert planned["contracts"] == "legacy_dir" and world.writes() == []
+    done = summary(world.run("--legacy-contracts-dir", str(directory)))
+    assert done["contracts"] == "legacy_dir" and done["created_image"] == NEW_IMAGE
+
+
+def test_old_image_without_a_build_source_label_still_reports_null(world: World) -> None:
+    result = without_contracts(world).with_current().run("--dry-run")
+    assert result.returncode == 3 and world.writes() == []
+    out = json.loads(result.stdout)
+    assert out["contracts"] == "missing" and out["build_source_head"] is None
 
 
 def test_legacy_dir_is_mounted_read_only_for_an_old_image(world: World) -> None:
