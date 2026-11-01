@@ -21,7 +21,7 @@ CATALOG = REPO / SCHEMA_PACK_CATALOG
 def test_the_product_domain_has_one_group_per_catalog_pack_in_catalog_order() -> None:
     navigation = load_navigation()
     assert navigation.navigation_id == "enterprise" and navigation.navigation_version
-    product, service = navigation.domains
+    product, service, *_ = navigation.domains  # SK-3 RED (Claude): the method domain follows
     assert (product.domain_key, product.display_name, product.entity_types) == (
         "product",
         "产品库",

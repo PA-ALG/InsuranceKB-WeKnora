@@ -178,9 +178,11 @@ def test_a_publish_carries_the_navigation_and_the_profile_display_data(
     navigation = members["navigation/enterprise"]
     assert navigation["kind"] == "navigation"
     assert navigation["payload"]["navigation_id"] == "enterprise"
+    # SK-3 (Claude): the shipped navigation also declares the sales_method domain.
     assert [d["domain_key"] for d in navigation["payload"]["domains"]] == [
         "product",
         "service_benefit",
+        "sales_method",
     ]
     profile = members["presentation/profile_pack"]["payload"]
     assert profile["display_name"] == "演示险"

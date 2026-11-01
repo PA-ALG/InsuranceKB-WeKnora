@@ -36,6 +36,7 @@ from insurance_harness.compilers.methods.paragraphs import (
     ParagraphsError,
 )
 from insurance_harness.compilers.methods.parse import MethodResponseError, parse_method_response
+from insurance_harness.compilers.methods.profile import method_profile, profile_needed
 from insurance_harness.compilers.methods.prompt import build_method_request, offered_labels
 from insurance_harness.compilers.methods.responses import ResponseMissing
 from insurance_harness.compilers.schema_fields.engine import CompletionPort
@@ -103,11 +104,16 @@ def compile_methods(
     reports = [_method(run, method) for method in updated.methods]
     bundle = None
     if run.claims or run.entities or run.removals:
+        # Readers know methods only from their profile (SK-3 §1): it goes with the first method
+        # members and whenever the cards change it; a removal-only candidate needs none.
+        profile = method_profile(run.cards)
+        carried = (run.claims or run.entities) and profile_needed(profile, active)
         bundle = assemble(
             run.claims,
             compiler_identity=f"{COMPILER}@{compiler_version(run.cards)}",
             base=active.head if active else None,
             entities=run.entities,
+            profiles=[profile] if carried else [],
             review_plan=[ReviewPlan(mode=ReviewMode.HUMAN, policy_ref=None)],
             removals=sorted(run.removals),
         )

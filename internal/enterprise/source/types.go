@@ -4,6 +4,7 @@ package source
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/Tencent/WeKnora/internal/enterprise/capture/ooxml"
 )
@@ -72,6 +73,9 @@ type Artifact struct {
 	ParserIdentitySHA256 string
 	Markdown             string
 	NativeJSON           []byte
+	// RevisedAt is when this revision of the material was read completely (zero when unknown): the
+	// only material date the platform knows (SK-3 Spec §4.3).
+	RevisedAt time.Time
 }
 
 // ArtifactStore must enforce Scope before reading the requested immutable
@@ -106,6 +110,8 @@ type PageSet struct {
 	ParserIdentitySHA256 string `json:"parser_identity_sha256"`
 	NativeSHA256         string `json:"native_sha256"`
 	Pages                []Page `json:"pages"`
+	// RevisedAt is the artifact's revision time; it is not part of the pages a source read returns.
+	RevisedAt time.Time `json:"-"`
 }
 
 // Error is safe to expose at the HTTP boundary; backend diagnostics stay private. Reason and Page

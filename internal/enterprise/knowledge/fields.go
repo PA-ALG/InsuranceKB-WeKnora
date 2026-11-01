@@ -152,10 +152,7 @@ func (s *Service) fieldsForSlugs(
 
 func (index *releaseIndex) profileFields(entity indexedEntity) (map[string]string, map[string]int) {
 	titles, order := map[string]string{}, map[string]int{}
-	for _, profile := range index.profiles {
-		if !intersects(profile.Labels, entity.Labels) {
-			continue
-		}
+	if profile := index.profileFor(entity.kind, entity.Labels); profile != nil {
 		for _, section := range profile.Sections {
 			for _, field := range section.Fields {
 				if field.Key == "" {
@@ -168,7 +165,6 @@ func (index *releaseIndex) profileFields(entity indexedEntity) (map[string]strin
 				titles[field.Key] = field.Title
 			}
 		}
-		break
 	}
 	return titles, order
 }
@@ -208,11 +204,18 @@ func (index *releaseIndex) field(entity indexedEntity, claim indexedClaim, title
 			Index: position, Quote: item.Quote, Page: item.Locator.Page, SourceRef: item.SourceRef,
 		})
 	}
-	return Field{
+	out := Field{
 		ReleaseID: index.id, Slug: claim.member.LogicalSlug, EntityID: entity.EntityID, EntityName: entity.Name,
 		EntityVersion: versionLabel(entity.Entity), FieldKey: payload.Predicate, FieldTitle: title,
 		State: payload.State, Value: value, Origin: payload.Origin, Review: payload.Review.Mode, Evidence: evidence,
 	}
+	if entity.Method {
+		out.Method, out.Note = true, index.methodNote(entity)
+		if payload.State == "present" {
+			out.Items = alignedItems(payload.Value, len(evidence))
+		}
+	}
+	return out
 }
 
 func valueText(value any) string {

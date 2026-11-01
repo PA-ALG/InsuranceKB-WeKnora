@@ -139,7 +139,8 @@
           "propertyNames": {
             "enum": [
               "sales",
-              "service"
+              "service",
+              "method"
             ]
           },
           "type": "object"

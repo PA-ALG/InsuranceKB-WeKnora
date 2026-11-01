@@ -333,7 +333,7 @@ func writeError(c *gin.Context, err error) {
 			spotcheck.ErrorSampleInvalid, spotcheck.ErrorVerdictInvalid, expert.ErrorInvalid,
 			confirm.ErrorConfirmationInvalid, confirm.ErrorAnswerInvalid:
 			status = http.StatusBadRequest
-		case expert.ErrorStale, confirm.ErrorConfirmationClosed, confirm.ErrorAnswerStale:
+		case expert.ErrorStale, expert.ErrorMethodKnowledge, confirm.ErrorConfirmationClosed, confirm.ErrorAnswerStale:
 			status = http.StatusConflict
 		}
 		c.AbortWithStatusJSON(status, gin.H{"success": false, "code": failure.Code, "error": failure.Detail})

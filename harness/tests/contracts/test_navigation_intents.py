@@ -44,7 +44,7 @@ def test_intents_are_optional_and_round_trip() -> None:
 @pytest.mark.parametrize(
     "intents",
     [
-        {"advice": [["推荐"]]},  # only sales and service are known intents
+        {"advice": [["推荐"]]},  # only sales, service and (SK-3) method are known intents
         {"sales": [[]]},  # an empty group
         {"sales": [["推荐", "哪款", "适合", "对比"]]},  # more than 3 terms
         {"sales": [["荐"]]},  # a term of one character
@@ -59,9 +59,10 @@ def test_malformed_intents_are_rejected(intents: dict[str, Any]) -> None:
 
 def test_the_shipped_navigation_publishes_both_intents() -> None:
     profile = load_navigation()
-    assert profile.navigation_version == "2026-11-01.1"
+    # SK-3 RED (Claude): 2026-11-01.2 adds the method domain and the independent method intent.
+    assert profile.navigation_version == "2026-11-01.2"
     assert profile.question_intents is not None
-    assert set(profile.question_intents) == {"sales", "service"}
+    assert set(profile.question_intents) == {"sales", "service", "method"}
     assert all(profile.question_intents[intent] for intent in ("sales", "service"))
     # A term in both intents would make every question that uses it ambiguous.
     sales = {term for group in profile.question_intents["sales"] for term in group}

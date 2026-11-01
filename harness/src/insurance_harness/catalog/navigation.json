@@ -1,7 +1,7 @@
 {
  "navigation_id": "enterprise",
- "navigation_version": "2026-11-01.1",
- "basis": "S3e: the product domain lists the schema pack catalog's packs in catalog order (display name and labels as filed); service domains are declared for entities published later (user 2026-10-18). QA3 (2026-10-28): question_terms per field key, drafted by Claude from the field cards' titles, definitions and includes; offline check on the #286 r2 questions (the author knew those questions, so that check is optimistic). PV-4b (2026-11-01): question_intents drafted by Claude from PV-0 §5.3's question kinds (sales: recommend, compare, can I buy; service: claims and policy changes on a held policy, or a purchase in the past). Terms that also name product features or pre-purchase questions (投保年龄, 保证续保, 报销, 保单贷款) are left out, so that a sales question about them is not made ambiguous; no live check yet (PV-4b Spec §6).",
+ "navigation_version": "2026-11-01.2",
+ "basis": "S3e: the product domain lists the schema pack catalog's packs in catalog order (display name and labels as filed); service domains are declared for entities published later (user 2026-10-18). QA3 (2026-10-28): question_terms per field key, drafted by Claude from the field cards' titles, definitions and includes; offline check on the #286 r2 questions (the author knew those questions, so that check is optimistic). PV-4b (2026-11-01): question_intents drafted by Claude from PV-0 §5.3's question kinds (sales: recommend, compare, can I buy; service: claims and policy changes on a held policy, or a purchase in the past). Terms that also name product features or pre-purchase questions (投保年龄, 保证续保, 报销, 保单贷款) are left out, so that a sales question about them is not made ambiguous; no live check yet (PV-4b Spec §6). SK-3 (2026-11-01): a sales_method domain repeats the product domain's insurance groups, then 通用 and the sales taxonomy's plan type, life stage and sales stage groups (named by each label's first word), so methods group like products and their labels have names; question_intents.method drafted by Claude from SK-0 §6 (how to sell, explain or answer objections), with no term shared with sales or service; no live check yet.",
  "display_name": "保险产品知识库",
  "overview_fields": [
   "entry_age_range",
@@ -103,6 +103,211 @@
     "service_benefit"
    ],
    "groups": []
+  },
+  {
+   "domain_key": "sales_method",
+   "display_name": "销售方法",
+   "entity_types": [
+    "sales_method"
+   ],
+   "groups": [
+    {
+     "group_key": "schemapack_medical_insurance",
+     "display_name": "医疗险",
+     "classification_labels": [
+      "medical_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_accident_medical_insurance",
+     "display_name": "意外医疗保险",
+     "classification_labels": [
+      "accident_medical_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_accident_insurance",
+     "display_name": "意外险",
+     "classification_labels": [
+      "accident_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_critical_illness_insurance",
+     "display_name": "重疾险",
+     "classification_labels": [
+      "critical_illness_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_term_life_insurance",
+     "display_name": "定期寿险",
+     "classification_labels": [
+      "term_life_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_whole_life_insurance",
+     "display_name": "终身寿险",
+     "classification_labels": [
+      "whole_life_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_endowment_insurance",
+     "display_name": "两全保险",
+     "classification_labels": [
+      "endowment_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_annuity_insurance",
+     "display_name": "年金险",
+     "classification_labels": [
+      "annuity_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_nursing_care_insurance",
+     "display_name": "护理保险",
+     "classification_labels": [
+      "nursing_care_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_supplementary_pension_insurance",
+     "display_name": "补充养老保险",
+     "classification_labels": [
+      "supplementary_pension_insurance"
+     ]
+    },
+    {
+     "group_key": "schemapack_disability_income_insurance",
+     "display_name": "失能收入损失保险",
+     "classification_labels": [
+      "disability_income_insurance"
+     ]
+    },
+    {
+     "group_key": "general",
+     "display_name": "通用",
+     "classification_labels": [
+      "scope:general"
+     ]
+    },
+    {
+     "group_key": "plan_type_participating",
+     "display_name": "分红",
+     "classification_labels": [
+      "plan_type:participating"
+     ]
+    },
+    {
+     "group_key": "plan_type_universal",
+     "display_name": "万能",
+     "classification_labels": [
+      "plan_type:universal"
+     ]
+    },
+    {
+     "group_key": "plan_type_unit_linked",
+     "display_name": "投资连结",
+     "classification_labels": [
+      "plan_type:unit_linked"
+     ]
+    },
+    {
+     "group_key": "plan_type_ordinary",
+     "display_name": "普通型",
+     "classification_labels": [
+      "plan_type:ordinary"
+     ]
+    },
+    {
+     "group_key": "life_stage_single",
+     "display_name": "单身",
+     "classification_labels": [
+      "life_stage:single"
+     ]
+    },
+    {
+     "group_key": "life_stage_family_formation",
+     "display_name": "家庭形成期",
+     "classification_labels": [
+      "life_stage:family_formation"
+     ]
+    },
+    {
+     "group_key": "life_stage_family_growth",
+     "display_name": "家庭成长期",
+     "classification_labels": [
+      "life_stage:family_growth"
+     ]
+    },
+    {
+     "group_key": "life_stage_mature",
+     "display_name": "家庭成熟期",
+     "classification_labels": [
+      "life_stage:mature"
+     ]
+    },
+    {
+     "group_key": "life_stage_retirement",
+     "display_name": "退休",
+     "classification_labels": [
+      "life_stage:retirement"
+     ]
+    },
+    {
+     "group_key": "sales_stage_approach",
+     "display_name": "接触",
+     "classification_labels": [
+      "sales_stage:approach"
+     ]
+    },
+    {
+     "group_key": "sales_stage_needs_analysis",
+     "display_name": "需求分析",
+     "classification_labels": [
+      "sales_stage:needs_analysis"
+     ]
+    },
+    {
+     "group_key": "sales_stage_presentation",
+     "display_name": "产品说明",
+     "classification_labels": [
+      "sales_stage:presentation"
+     ]
+    },
+    {
+     "group_key": "sales_stage_objection",
+     "display_name": "异议",
+     "classification_labels": [
+      "sales_stage:objection"
+     ]
+    },
+    {
+     "group_key": "sales_stage_closing",
+     "display_name": "促成",
+     "classification_labels": [
+      "sales_stage:closing"
+     ]
+    },
+    {
+     "group_key": "sales_stage_transfer",
+     "display_name": "转保",
+     "classification_labels": [
+      "sales_stage:transfer"
+     ]
+    },
+    {
+     "group_key": "sales_stage_after_sale",
+     "display_name": "售后",
+     "classification_labels": [
+      "sales_stage:after_sale"
+     ]
+    }
+   ]
   }
  ],
  "question_terms": {
@@ -531,6 +736,56 @@
    [
     "我的",
     "保单"
+   ]
+  ],
+  "method": [
+   [
+    "怎么卖"
+   ],
+   [
+    "如何卖"
+   ],
+   [
+    "怎么讲"
+   ],
+   [
+    "如何讲"
+   ],
+   [
+    "怎么介绍"
+   ],
+   [
+    "如何介绍"
+   ],
+   [
+    "怎么说服"
+   ],
+   [
+    "如何说服"
+   ],
+   [
+    "怎么推销"
+   ],
+   [
+    "如何推销"
+   ],
+   [
+    "话术"
+   ],
+   [
+    "异议"
+   ],
+   [
+    "销售技巧"
+   ],
+   [
+    "销售方法"
+   ],
+   [
+    "讲解"
+   ],
+   [
+    "促成"
    ]
   ]
  }

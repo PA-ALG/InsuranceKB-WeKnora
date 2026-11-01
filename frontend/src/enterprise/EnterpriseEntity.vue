@@ -4,12 +4,15 @@ import { useI18n } from 'vue-i18n'
 import { isNavigationFailure, NavigationFailureType, routeLocationKey, routerKey } from 'vue-router'
 import CitationPanel from './CitationPanel.vue'
 import EnterpriseField from './EnterpriseField.vue'
+import EnterpriseMethod from './EnterpriseMethod.vue'
 import EnterpriseNavigation from './EnterpriseNavigation.vue'
 import ExpertEditForm from './ExpertEditForm.vue'
 import ProductVersionMeta from './ProductVersionMeta.vue'
+import RelatedMethods from './RelatedMethods.vue'
 import { conceptKeys } from './conceptView'
 import { readRelease, type Release } from './enterpriseApi'
 import { canOfferExpertEdit } from './expertEditAccess'
+import { methodEntityIds } from './methodView'
 import { entityView } from './releaseView'
 import { previousReleaseId, releaseChanges } from './releaseChanges'
 
@@ -24,6 +27,8 @@ const updated = computed(() => {
   return new Map([...(changes?.added ?? []), ...(changes?.changed ?? [])].map(row => [row.slug, row.before]))
 })
 const view = computed(() => (release.value ? entityView(release.value, props.entityId) : null))
+// SK-3: a sales method has its own page body (training material, no expert edits).
+const method = computed(() => !!release.value && methodEntityIds(release.value).has(props.entityId))
 const selected = ref<{ member: string; evidence: number; releaseId: string } | null>(null)
 // S9b: administrators edit a field of the shown release; a published edit switches the page to
 // the release it produced and says so until another entry or release is shown.
@@ -166,6 +171,8 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
           <p v-if="publishedEpoch !== null" role="status" data-expert-notice class="ek-status">
             {{ t('enterpriseKnowledge.expert.published', { epoch: publishedEpoch }) }}
           </p>
+          <EnterpriseMethod v-if="method" :release="release" :space-id="spaceId" :entity-id="entityId" @open="open" />
+          <template v-else>
           <p class="ek-page__note" data-source-note>{{ t('enterpriseKnowledge.entity.sourceNote') }}</p>
           <section v-for="section in view.sections" :key="section.key" class="ek-section" :data-section="section.key">
             <h2 class="ek-section__title">{{ section.title }}</h2>
@@ -212,6 +219,8 @@ onUnmounted(() => { generation++; removeNavigationHook?.() })
               @open="evidence => open(field.slug, evidence)"
             />
           </section>
+          <RelatedMethods :release="release" :space-id="spaceId" :entity-id="entityId" />
+          </template>
           <t-drawer
             :visible="selected !== null"
             size="640px"
