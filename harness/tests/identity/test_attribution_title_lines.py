@@ -209,7 +209,5 @@ def test_the_policy_carries_the_title_line_rule_and_the_insurer() -> None:
     for words in ("费率表", "成本表", "金额表", "说明书", "现金价值表"):
         assert words in policy.title_line_pattern
     data = json.loads(policy.model_dump_json())
-    with pytest.raises(ValueError):  # the name must be the pattern's one group
-        AttributionPolicy.model_validate_json(
-            json.dumps(data | {"title_line_pattern": "^《[^》]+》费率表$"})
-        )
+    with pytest.raises(ValueError):  # every listed title line word has some text
+        AttributionPolicy.model_validate_json(json.dumps(data | {"title_line_documents": [" "]}))

@@ -155,7 +155,7 @@ def test_an_answer_given_before_the_automatic_settlement_is_never_withdrawn_unse
     settled = uploads_run(first.registry)
     second, _ = run(settled, platform, reader=pages())
     assert platform.closed == [(item["id"], "obsolete", None)]
-    assert second.report.answers_withdrawn == ["k-terms"]
+    assert [w.knowledge_id for w in second.report.answers_withdrawn] == ["k-terms"]
     assert all(d.confirmation is None for d in second.registry.decisions), "not a person's answer"
 
 
