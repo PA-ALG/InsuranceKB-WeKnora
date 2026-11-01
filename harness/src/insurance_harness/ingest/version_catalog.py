@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -40,6 +41,8 @@ _MAX_META_BYTES = 256 * 1024
 _VERSION_NO = re.compile(r"^([A-Za-z0-9]{1,32})-([0-9]{1,4})$")
 _META_PATH = re.compile(r"^(在售|停售)/[^/]+/product_meta\.json$")
 _REGULAR = {"100644", "100755"}
+_OID = re.compile(r"^[0-9a-f]{40}$")
+_OFFLINE = {"GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0"}  # never reach the network
 DateText = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
 _Commit = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40}$")]
 
@@ -119,8 +122,7 @@ def _git(directory: Path, *args: str, stdin: bytes | None = None) -> bytes:
     try:
         done = subprocess.run(
             ["git", "-C", str(directory), *args],
-            input=stdin, capture_output=True, timeout=300, check=False,
-            env=os.environ | {"GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0"},  # no network
+            input=stdin, capture_output=True, timeout=300, check=False, env=os.environ | _OFFLINE,
         )
     except (OSError, subprocess.SubprocessError):
         raise CatalogError("CATALOG_COMMIT_MISMATCH") from None
@@ -143,9 +145,14 @@ def _tracked(directory: Path, commit: str) -> list[tuple[str, str]]:
     listing = _git(directory, "ls-tree", "-r", "-z", "--full-tree", commit, "--", *_TREES)
     found = []
     for line in filter(None, listing.split(b"\0")):
-        header, _, raw = line.partition(b"\t")
-        mode, kind, blob = header.decode("ascii").split(" ")
-        path = raw.decode("utf-8")
+        header, tab, raw = line.partition(b"\t")
+        try:  # git allows any bytes in a name; one that is not UTF-8 refuses the catalog
+            mode, kind, blob = header.decode("ascii").split(" ")
+            path = raw.decode("utf-8")
+        except (UnicodeDecodeError, ValueError):
+            raise CatalogError("CATALOG_INVALID") from None
+        if not tab or not _OID.fullmatch(blob):
+            raise CatalogError("CATALOG_INVALID")
         if not path.endswith("/product_meta.json"):
             continue
         if not _META_PATH.fullmatch(path) or mode not in _REGULAR or kind != "blob":
@@ -155,17 +162,48 @@ def _tracked(directory: Path, commit: str) -> list[tuple[str, str]]:
 
 
 def _blobs(directory: Path, blobs: list[str]) -> list[bytes]:
-    """The blobs' content from the object store, in order, each within the size limit."""
-    out = _git(directory, "cat-file", "--batch", stdin="".join(f"{b}\n" for b in blobs).encode())
-    contents, at = [], 0
-    for blob in blobs:
-        end = out.index(b"\n", at)
-        name, kind, size = out[at:end].decode("ascii").split(" ")
-        if name != blob or kind != "blob" or int(size) > _MAX_META_BYTES:
-            raise CatalogError("CATALOG_INVALID")
-        contents.append(out[end + 1 : end + 1 + int(size)])
-        at = end + 2 + int(size)
-    return contents
+    """The blobs' content from the object store, in order. One object at a time: its header is
+    checked (a missing, non-blob or oversized object refuses the catalog) before its body is read,
+    so no read is larger than the size limit."""
+    try:
+        process = subprocess.Popen(
+            ["git", "-C", str(directory), "cat-file", "--batch"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            env=os.environ | _OFFLINE,
+        )
+    except OSError:
+        raise CatalogError("CATALOG_COMMIT_MISMATCH") from None
+    assert process.stdin is not None and process.stdout is not None
+    watchdog = threading.Timer(300, process.kill)
+    watchdog.start()
+    try:
+        contents = []
+        for blob in blobs:
+            process.stdin.write(f"{blob}\n".encode("ascii"))
+            process.stdin.flush()
+            header = process.stdout.readline(128)
+            parts = header.removesuffix(b"\n").split(b" ")
+            if (
+                not header.endswith(b"\n")
+                or len(parts) != 3
+                or parts[:2] != [blob.encode("ascii"), b"blob"]
+                or not parts[2].isdigit()
+                or int(parts[2]) > _MAX_META_BYTES
+            ):
+                raise CatalogError("CATALOG_INVALID")  # missing, not a blob, malformed or too big
+            body = process.stdout.read(int(parts[2]) + 1)
+            if len(body) != int(parts[2]) + 1 or not body.endswith(b"\n"):
+                raise CatalogError("CATALOG_INVALID")  # truncated
+            contents.append(body[:-1])
+        return contents
+    except OSError:
+        raise CatalogError("CATALOG_INVALID") from None
+    finally:
+        watchdog.cancel()
+        process.kill()
+        process.wait()
+        process.stdin.close()
+        process.stdout.close()
 
 
 def _text(meta: dict[str, Any], key: str) -> str | None:
