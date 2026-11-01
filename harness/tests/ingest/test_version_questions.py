@@ -146,15 +146,24 @@ def attached() -> ProductRegistry:
         role="sales_training",
         file_name="智盈倍护产品培训.pptx",
     )
+    other = material.model_copy(  # a second source: detaching never leaves an entry empty (R6)
+        update={
+            "knowledge_id": "k-terms",
+            "sha256": "f" * 64,
+            "role": "terms",
+            "file_name": "保险条款.pdf",
+        }
+    )
     current = v2(1)
-    current.products["p00"] = versioned("900-1", "2024-01-01", materials=[material])
+    current.products["p00"] = versioned("900-1", "2024-01-01", materials=[material, other])
     return current
 
 
 def test_detach_moves_the_material_off_its_entry_and_records_why() -> None:
     result = detach(attached(), "k-deck", "wrong_version")
     product = result.products["p00"]
-    assert product.materials == [] and [m.knowledge_id for m in product.retired] == ["k-deck"]
+    assert [m.knowledge_id for m in product.materials] == ["k-terms"]
+    assert [m.knowledge_id for m in product.retired] == ["k-deck"]
     decision = result.decisions[-1]
     assert (decision.knowledge_id, decision.attribution.outcome) == ("k-deck", "DETACHED")
     assert (decision.attribution.reason, decision.attribution.product_id) == (
@@ -187,7 +196,8 @@ def test_a_detached_material_is_not_judged_again() -> None:
         [source],
         Pages(heads={"k-deck": DECK.head}, sources=[source]),
     )
-    assert result.report.counts == {} and result.registry.products["p00"].materials == []
+    materials = result.registry.products["p00"].materials
+    assert result.report.counts == {} and [m.knowledge_id for m in materials] == ["k-terms"]
 
 
 def test_the_detach_command_holds_the_lock_and_honours_dry_run(tmp_path: Path) -> None:
