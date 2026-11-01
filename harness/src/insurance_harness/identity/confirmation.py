@@ -25,8 +25,16 @@ from insurance_harness.identity.attribution import (
     load_attribution_policy,
 )
 from insurance_harness.identity.material_roles import load_material_roles
+from insurance_harness.identity.training_versions import versioned
+from insurance_harness.identity.version_basis import VersionBasis
 
 MAX_CHOICES = 50  # the platform's limit on options per confirmation item (S5b-3a)
+# Training materials by version (PV-3 Spec §3): these questions are judged again when answered.
+VERSION_REASONS = frozenset({"version_candidates", "no_date_signal", "version_role_unresolved"})
+_ONLY_IGNORED = frozenset(
+    {"anchor_conflict", "text_unavailable", "no_registered_version", "date_signals_conflict",
+     "multiple_families"}
+)
 OPTION_KEY = r"^[a-z0-9][a-z0-9:._-]{0,127}$"  # the platform's option key format (S5b-3a)
 
 
@@ -82,13 +90,15 @@ def _quarantined(pending: Attribution, ids: list[str]) -> list[Choice]:
     only ignoring is offered."""
     if pending.reason == "no_product_anchor":
         return [Choice(key=_product_key(p), kind="product", value=p) for p in ids]
-    if pending.reason in {"anchor_conflict", "text_unavailable"}:
+    if pending.reason in _ONLY_IGNORED:  # PV-3: no version of that time, or self-contradicting
         return []
     raise ConfirmationError("NOT_CONFIRMABLE")
 
 
 def _offered(pending: Attribution, registered: set[str], policy: AttributionPolicy) -> list[Choice]:
-    if pending.reason in {"multiple_products", "brand_candidates"}:
+    if pending.reason in {"multiple_products", "brand_candidates", "version_candidates"} or (
+        pending.reason == "no_date_signal"
+    ):
         return [
             Choice(key=_product_key(product_id), kind="product", value=product_id)
             for product_id in pending.candidates
@@ -97,10 +107,12 @@ def _offered(pending: Attribution, registered: set[str], policy: AttributionPoli
     if pending.reason == "pack_unresolved":
         packs = dict.fromkeys(entry.schema_pack_id for entry in policy.classifications)
         return [Choice(key=f"pack:{pack}", kind="pack", value=pack) for pack in packs]
-    if pending.reason not in {"role_unresolved", "same_role_differs"}:
+    if pending.reason not in {"role_unresolved", "same_role_differs", "version_role_unresolved"}:
         raise ConfirmationError("NOT_CONFIRMABLE")
     if pending.product_id not in registered:
         return []
+    if pending.reason == "version_role_unresolved":  # only the roles a training material may take
+        return [Choice(key=f"role:{r}", kind="role", value=r) for r in policy.brand_roles]
     if pending.reason == "role_unresolved":
         roles = load_material_roles().roles
         return [Choice(key=f"role:{r.role}", kind="role", value=r.role) for r in roles]
@@ -129,6 +141,8 @@ def conclude(
         )
     if choice.kind in {"replace", "supplement"}:
         return _same_role(pending, choice.kind, registry, policy)
+    if choice.kind in {"product", "role"} and versioned(registry):
+        _still_asked(pending, choice, upload, registry, policy)
     try:
         if choice.kind == "product":
             result = attribute(upload, registry, policy, product=choice.value)
@@ -156,7 +170,50 @@ def conclude(
         raise ConfirmationError("CHOICE_STALE") from None
     if not fits:
         raise ConfirmationError("CHOICE_STALE")
+    if pending.version_basis is not None and pending.reason in VERSION_REASONS:
+        by_person = pending.reason != "version_role_unresolved"
+        role_by = "person" if choice.kind == "role" else ("machine" if result.role else None)
+        basis = pending.version_basis.model_copy(
+            update={
+                "version_decided_by": "person" if by_person else "machine",
+                "role_decided_by": role_by,
+            }
+        )
+        return result.model_copy(update={"version_basis": basis})
     return result
+
+
+def _evidence(basis: VersionBasis | None) -> VersionBasis | None:
+    """The evidence a question showed, without who decided."""
+    if basis is None:
+        return None
+    return basis.model_copy(update={"version_decided_by": None, "role_decided_by": None})
+
+
+def _still_asked(
+    pending: Attribution,
+    choice: Choice,
+    upload: Upload,
+    registry: Sequence[RegisteredProduct],
+    policy: AttributionPolicy,
+) -> None:
+    """A version answer applies only to the question the material still raises, with the same
+    evidence; an older question cannot carry a choice past the version rules (PV-3 Spec §3)."""
+    fresh = attribute(upload, registry, policy)
+    if pending.reason not in VERSION_REASONS:
+        if fresh.version_basis is not None:
+            raise ConfirmationError("CHOICE_STALE")
+        return
+    same = (fresh.reason, _evidence(fresh.version_basis)) == (
+        pending.reason,
+        _evidence(pending.version_basis),
+    )
+    if pending.reason == "version_role_unresolved":
+        same = same and fresh.product_id == pending.product_id
+    elif choice.value not in fresh.candidates:
+        same = False
+    if not same:
+        raise ConfirmationError("CHOICE_STALE")
 
 
 def _about(result: Attribution) -> str | None:

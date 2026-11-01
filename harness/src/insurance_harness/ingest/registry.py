@@ -40,6 +40,7 @@ from insurance_harness.ingest.product_versions import (
     check_versions,
     entry_version,
     predecessors,
+    registered_version,
     v1_excluded,
 )
 from insurance_harness.ingest.raw_sources import RawSource
@@ -56,7 +57,9 @@ _Principal = Annotated[str, StringConstraints(pattern=r"^[^\x00-\x1f\x7f-\x9f]{1
 # Applied outcomes change the products; waiting ones stay in pending; final ones end judging.
 APPLIED = frozenset({"SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE"})
 WAITING = frozenset({"NEEDS_CONFIRM", "QUARANTINE"})
-FINAL = frozenset({"DUPLICATE", "SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE", "IGNORED"})
+FINAL = frozenset(
+    {"DUPLICATE", "SUPPLEMENT", "NEW_VERSION", "CREATE", "REPLACE", "IGNORED", "DETACHED"}
+)
 _PERSON_ONLY = frozenset({"REPLACE", "IGNORED"})
 
 
@@ -215,6 +218,7 @@ class ProductRegistry(_Strict):
                     for m in product.materials
                 ),
                 version_key=product.version.version_key if product.version else None,
+                version=registered_version(product.version, self.metadata_basis),
             )
             for product_id, product in sorted(self.products.items())
         ]

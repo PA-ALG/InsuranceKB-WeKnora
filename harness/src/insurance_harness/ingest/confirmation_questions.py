@@ -12,6 +12,7 @@ import unicodedata
 from collections.abc import Callable
 from functools import lru_cache
 from importlib.resources import files
+from typing import get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -20,6 +21,7 @@ from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.identity.attribution import load_attribution_policy
 from insurance_harness.identity.confirmation import Choice, ConfirmationError, choices
 from insurance_harness.identity.material_roles import load_material_roles
+from insurance_harness.identity.version_basis import SignalSource, Verdict, VersionBasis
 from insurance_harness.ingest.registry import PendingEntry, ProductRegistry
 
 SUBJECT_PREFIX = "material:"
@@ -31,9 +33,20 @@ _REASONS = {
     "pack_unresolved",
     "role_unresolved",
     "same_role_differs",
+    # PV-3: added without a new version, as no asked question changes (as S11c did)
+    "version_candidates",
+    "no_date_signal",
+    "version_role_unresolved",
 }
 # Quarantined materials are asked too (S11a); one without a readable opening has no excerpt.
-_QUARANTINED = {"no_product_anchor", "anchor_conflict", "text_unavailable"}
+_QUARANTINED = {
+    "no_product_anchor",
+    "anchor_conflict",
+    "text_unavailable",
+    "no_registered_version",
+    "date_signals_conflict",
+    "multiple_families",
+}
 _UNREADABLE = "text_unavailable"
 _KINDS = {"product", "pack", "role", "replace", "supplement", "ignore"}
 _LIMITS = {"title": 200, "detail": 2000, "label": 200}
@@ -60,6 +73,15 @@ class ConfirmationWording(BaseModel):
     excerpt_chars: int = Field(gt=0)
     options: dict[str, str]
     roles: dict[str, str]
+    # A version question's evidence (PV-3 Spec §3): signals, then at most version_cap candidates.
+    evidence: str
+    no_signals: str
+    version_item: str
+    open_end: str
+    unknown_date: str
+    version_cap: int = Field(gt=0)
+    verdicts: dict[str, str]
+    sources: dict[str, str]
 
     @model_validator(mode="after")
     def _complete(self) -> "ConfirmationWording":
@@ -67,6 +89,10 @@ class ConfirmationWording(BaseModel):
         reasons = _REASONS | _QUARANTINED
         if set(self.details) != reasons or set(self.options) != _KINDS or set(self.roles) != roles:
             raise ValueError("the wording must cover every reason, choice and role")
+        if set(self.verdicts) != set(get_args(Verdict)) or set(self.sources) != set(
+            get_args(SignalSource)
+        ):
+            raise ValueError("the wording must cover every verdict and signal source")
         return self
 
 
@@ -150,6 +176,7 @@ def question_of(
         "role": role,
         "name": attribution.display_name or "",
         "code": attribution.clause_code or "",
+        "evidence": _evidence(attribution.version_basis, registry, wording),
     }
     unreadable = attribution.reason == _UNREADABLE
     excerpt = excerpt_of(head, wording.excerpt_chars)
@@ -195,6 +222,40 @@ def _option_facts(
     if choice.kind == "role":
         return facts | {"role": wording.roles.get(choice.value or "", "")}
     return facts
+
+
+def _evidence(
+    basis: VersionBasis | None, registry: ProductRegistry, wording: ConfirmationWording
+) -> str:
+    """The signals and every candidate with its verdict, the first version_cap of them listed
+    and the total stated (PV-3 Spec §3); the whole set was computed before this cap."""
+    if basis is None:
+        return ""
+    signals = "、".join(f"{s.value}（{wording.sources[s.source]}）" for s in basis.signals)
+    items = []
+    for verdict in basis.candidates[: wording.version_cap]:
+        product = registry.products.get(verdict.product_id)
+        version = product.version if product is not None else None
+        unknown = wording.unknown_date
+        start = version.sale_start if version and version.sale_start else unknown
+        selling = version is not None and version.source_status == "on_sale"
+        end = version.sale_end if version and version.sale_end else (
+            wording.open_end if selling else unknown
+        )
+        items.append(
+            wording.version_item.format(
+                name=product.names[0] if product is not None else verdict.product_id,
+                key=verdict.version_key or wording.unknown_date,
+                start=start,
+                end=end,
+                verdict=wording.verdicts[verdict.verdict],
+            )
+        )
+    return wording.evidence.format(
+        signals=signals or wording.no_signals,
+        count=len(basis.candidates),
+        versions="；".join(items) or wording.no_signals,
+    )
 
 
 def _pack_labels() -> dict[str, str]:

@@ -48,6 +48,25 @@ def years(text: str, patterns: Sequence[str]) -> set[str]:
     return {match.group(1) for pattern in patterns for match in re.finditer(pattern, text)}
 
 
+def brand_hits(
+    file_name: str,
+    window: str,
+    products: Sequence["RegisteredProduct"],
+    policy: "AttributionPolicy",
+) -> dict[str, str]:
+    """Each product whose brand the material's file name or opening carries, with the brand
+    prefix it matched (the brand core's first brand_min_chars characters, casefolded)."""
+    text = (fold(PurePosixPath(file_name).stem) + "\n" + window).casefold()
+    hits: dict[str, str] = {}
+    for product in products:
+        for brand in sorted({brand_core(name, policy) for name in product.names}):
+            prefix = brand[: policy.brand_min_chars]
+            if len(brand) >= policy.brand_min_chars and prefix in text:
+                hits[product.product_id] = prefix
+                break
+    return hits
+
+
 def brand_candidates(
     upload: "Upload",
     window: str,
@@ -60,15 +79,9 @@ def brand_candidates(
     materials leave out (…养老, …长期). A year the material carries keeps the products of that
     year, when any; more than brand_max_candidates candidates are no candidates at all.
     """
+    hits = brand_hits(upload.file_name, window, products, policy)
+    found = [product for product in products if product.product_id in hits]
     text = (fold(PurePosixPath(upload.file_name).stem) + "\n" + window).casefold()
-    found = []
-    for product in products:
-        brands = {brand_core(name, policy) for name in product.names}
-        if any(
-            len(b) >= policy.brand_min_chars and b[: policy.brand_min_chars] in text
-            for b in brands
-        ):
-            found.append(product)
     wanted = years(text, (policy.upload_year_pattern,))
     dated = [
         p
