@@ -3,8 +3,14 @@
 Same rules as swap_docreader.py: every check runs before any container is touched; env values
 never reach stdout or argv (they go from `docker inspect` and the private secrets file, in
 memory, to `docker create -e KEY` through the child environment). The 09-28 original is renamed
-once (`-pre-s4`) and kept stopped; every swap (forward or back) is rebuilt from it, plus the
-contracts dir, the citation signing key, ENTERPRISE_SPACES and the managed env keys below.
+once (`-pre-s4`) and kept stopped; every swap (forward or back) is rebuilt from it, plus
+ENTERPRISE_CONTRACTS_DIR, the citation signing key, ENTERPRISE_SPACES and the managed env keys
+below.
+
+Contracts (I5): the swap uses the image's own /app/contracts, checked first by a throwaway
+container (`test -f`; no network, env or mounts). A pre-I5 image without them needs
+--legacy-contracts-dir (contracts/ exported from the build source the dry run names); for an image
+that ships them the flag is refused, as an outside dir would shadow them (the drift behind #522).
 
 Managed env keys are carried over from the CURRENT app container, so a later plain swap keeps
 them; `--set-env KEY=VALUE` adds one (`--replace-env` to change its value) and `--unset-env KEY`
@@ -17,7 +23,8 @@ and managed values as a sha256 prefix.
 
 Usage:
   python3 -I deploy/local-live/swap_app.py <image-id> --private-dir DIR [--spaces FILE]
-      [--set-env KEY=VALUE ...] [--unset-env KEY ...] [--replace-env] [--dry-run]
+      [--set-env KEY=VALUE ...] [--unset-env KEY ...] [--replace-env]
+      [--legacy-contracts-dir DIR] [--dry-run]
   rollback: run again with the previous image id, unsetting any key the forward swap added.
 The container is created, not started: starting and checking it belong to the deploy steps.
 """
@@ -48,6 +55,9 @@ VOLUMES = (
     (f"{PREFIX}-docreader-tmp", "/tmp/docreader", False),
 )
 CONTRACTS_DIR = "/app/contracts"
+# The schemas the platform reads at startup (releasestore.Production).
+CONTRACT_SCHEMAS = ("candidate_bundle.schema.json", "evidence.schema.json")
+SOURCE_HEAD_LABEL = "io.insurancekb.app.build-source-head"
 SIGNING_KEY = "E2E_CITATION_SIGNING_KEY"
 SPACES_KEY = "ENTERPRISE_SPACES"
 INTENT_RECORD = "swap_app.intent.json"
@@ -150,13 +160,32 @@ def private_files(private_dir: str) -> Path:
     private = Path(private_dir).resolve()
     if ":" in str(private):
         raise Refused("private dir path contains ':', which docker -v cannot express; stop")
-    if not (
-        (private / "config.yaml").is_file()
-        and (private / "contracts").is_dir()
-        and (private / "secrets.env").is_file()
-    ):
-        raise Refused("private dir must hold config.yaml, contracts/ and secrets.env; stop")
+    if not ((private / "config.yaml").is_file() and (private / "secrets.env").is_file()):
+        raise Refused("private dir must hold config.yaml and secrets.env; stop")
     return private
+
+
+def legacy_contracts(path: str | None) -> Path | None:
+    if path is None:
+        return None
+    directory = Path(path).resolve()
+    if ":" in str(directory):
+        raise Refused("--legacy-contracts-dir path contains ':', which docker -v rejects; stop")
+    if not all((directory / name).is_file() for name in CONTRACT_SCHEMAS):
+        raise Refused(f"--legacy-contracts-dir must hold {', '.join(CONTRACT_SCHEMAS)}; stop")
+    return directory
+
+
+def image_contracts(image: str) -> bool:
+    """Whether the image ships the schemas: `test -f` in a throwaway, isolated container."""
+    checks: list[str] = []
+    for name in CONTRACT_SCHEMAS:
+        checks += [*(["-a"] if checks else []), "-f", f"{CONTRACTS_DIR}/{name}"]
+    probe = ["run", "--rm", "--network", "none", "--pull", "never", "--entrypoint", "test", image]
+    result = subprocess.run(["docker", *probe, *checks], capture_output=True, text=True)
+    if result.returncode not in (0, 1):  # 1 is `test` saying no; anything else is docker failing
+        raise Refused("docker run (contracts probe) failed; stop")
+    return result.returncode == 0
 
 
 def private_value(private: Path, key: str) -> str:
@@ -303,6 +332,15 @@ def plan(opts: argparse.Namespace) -> Plan:
     record = read_record(private / INTENT_RECORD)
     spaces = read_spaces(opts.spaces)
     new = inspect(opts.image, "image")  # an unknown image stops here
+    legacy = legacy_contracts(opts.legacy_contracts_dir)
+    shipped = image_contracts(new["Id"])
+    if shipped and legacy is not None:
+        raise Refused("new image ships contracts; --legacy-contracts-dir would shadow them; stop")
+    if not shipped and legacy is None:
+        raise Refused(
+            "new image ships no contracts; pass --legacy-contracts-dir with contracts/ exported "
+            "from its build source; stop"
+        )
 
     # Source of truth for runtime settings: the original container (renamed once).
     names = container_names()
@@ -372,7 +410,8 @@ def plan(opts: argparse.Namespace) -> Plan:
     for name, destination, writable in VOLUMES:
         args += ["-v", f"{name}:{destination}" + ("" if writable else ":ro")]
     args += ["-v", f"{private}/config.yaml:/app/config/config.yaml:ro"]
-    args += ["-v", f"{private}/contracts:{CONTRACTS_DIR}:ro"]
+    if legacy is not None:
+        args += ["-v", f"{legacy}:{CONTRACTS_DIR}:ro"]
     for key in sorted(runtime):
         args += ["-e", key]
     args += [new["Id"], *command]
@@ -393,6 +432,8 @@ def plan(opts: argparse.Namespace) -> Plan:
         "backup": BACKUP,
         "current_image": current["Image"] if current else None,
         "new_image": new["Id"],
+        "build_source_head": (new["Config"].get("Labels") or {}).get(SOURCE_HEAD_LABEL),
+        "contracts": "image" if legacy is None else "legacy_dir",
         "env_keys": sorted(runtime),
         "env_added": sorted(set(effective_env) - set(current_env)),
         "env_removed": sorted(set(current_env) - set(effective_env)),
@@ -430,11 +471,14 @@ def swap(plan: Plan) -> None:
 def main(argv: list[str]) -> int:
     parser = Parser(description=__doc__.splitlines()[0], allow_abbrev=False)
     parser.add_argument("image")
-    parser.add_argument("--private-dir", required=True, help="config.yaml, contracts/, secrets.env")
+    parser.add_argument("--private-dir", required=True, help="config.yaml, secrets.env")
     parser.add_argument("--spaces", help="ENTERPRISE_SPACES JSON file")
     parser.add_argument("--set-env", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--unset-env", action="append", default=[], metavar="KEY")
     parser.add_argument("--replace-env", action="store_true")
+    parser.add_argument(
+        "--legacy-contracts-dir", metavar="DIR", help="only for an image without contracts (pre-I5)"
+    )
     parser.add_argument("--dry-run", action="store_true")
     opts = parser.parse_args(argv)
     planned = plan(opts)

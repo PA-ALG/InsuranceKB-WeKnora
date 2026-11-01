@@ -32,7 +32,12 @@ guard() {
 live() { docker --context "$LIVE_CONTEXT" "$@"; }
 stage() { docker --context "$STAGING_CONTEXT" "$@"; }
 compose() {
-  stage compose -f "$HERE/compose.yaml" --env-file "$STAGING_HOME/images.env" "$@"
+  local files=(-f "$HERE/compose.yaml")
+  # I5: only a live app on a pre-I5 image mounts contracts/; staging mirrors that mount.
+  if [[ -f "$STAGING_HOME/contracts.compose.yaml" ]]; then
+    files+=(-f "$STAGING_HOME/contracts.compose.yaml")
+  fi
+  stage compose "${files[@]}" --env-file "$STAGING_HOME/images.env" "$@"
 }
 
 # env: write the per-service env files. Staging gets its OWN freshly generated secrets (kept in
@@ -143,11 +148,18 @@ cmd_images() {
   local cfg contracts
   cfg="$(live inspect -f '{{range .Mounts}}{{if eq .Destination "/app/config/config.yaml"}}{{.Source}}{{end}}{{end}}' "$LIVE_PREFIX-app")"
   contracts="$(live inspect -f '{{range .Mounts}}{{if eq .Destination "/app/contracts"}}{{.Source}}{{end}}{{end}}' "$LIVE_PREFIX-app")"
-  [[ -n "$cfg" && -n "$contracts" ]] || die "live app config/contracts mounts not found"
+  [[ -n "$cfg" ]] || die "live app config mount not found"
+  # I5: images built after I5 ship contracts/ (no mount); a pre-I5 live app mounts them.
+  if [[ -n "$contracts" ]]; then
+    [[ "$contracts" != *[\"\\]* ]] || die "live contracts mount path has a quote or backslash"
+    printf 'services:\n  app:\n    volumes:\n      - "%s:/app/contracts:ro"\n' "$contracts" \
+      >"$STAGING_HOME/contracts.compose.yaml"
+  else
+    rm -f "$STAGING_HOME/contracts.compose.yaml"
+  fi
   {
     echo "STAGING_HOME=$STAGING_HOME"
     echo "STAGING_CONFIG_YAML=$cfg"
-    echo "STAGING_CONTRACTS_DIR=$contracts"
     echo "STAGING_UI_PORT=${STAGING_UI_PORT:-18395}"
   } >>"$out"
   mv "$out" "$STAGING_HOME/images.env"
