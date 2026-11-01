@@ -264,3 +264,11 @@ def test_an_aliased_entry_still_rejects_another_edition() -> None:
                 result = attribute(deck(wrong + ".pptx", wrong + "\n2024年5月"), registry)
                 assert result.outcome != "SUPPLEMENT", (wrong, entry.names)
                 assert verdicts(result).get(entry.product_id) == "type_conflict", wrong
+
+
+def test_an_alias_core_shorter_than_a_brand_bounds_no_edition() -> None:
+    entry = version("8811", "平安星海安康（明朗版）医疗保险", MEDICAL, "2024-01-01")
+    entry = entry.model_copy(update={"names": (*entry.names, "平安星海（明朗版）医疗保险")})
+    written = "星海安康明朗版培训"
+    result = attribute(deck(written + ".pptx", f"{written}\n2024年5月\n星海周年版"), [entry])
+    assert (result.outcome, result.product_id) == ("SUPPLEMENT", "8811")
