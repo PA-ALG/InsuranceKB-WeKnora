@@ -15,6 +15,7 @@ A run plans on the Active of each step, so an interruption or a moved Head is re
 running again: there is no local receipt to trust.
 """
 
+import argparse
 import json
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -33,11 +34,12 @@ from insurance_harness.bundle.client import (
     ReleaseMember,
     publish,
 )
+from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.page import EntityMetadata, catalog_entity_types
 from insurance_harness.contracts.bundle import BundleMember, CandidateBundle
 from insurance_harness.contracts.enums import Origin
 from insurance_harness.contracts.knowledge import SUPERSEDES, Relation, supersedes_relation_id
-from insurance_harness.ingest.registry import V2, ProductRegistry
+from insurance_harness.ingest.registry import V2, ProductRegistry, load_registry
 from insurance_harness.ingest.version_metadata import entity_metadata
 
 COMPILER_IDENTITY = "harness/identity_refresh"
@@ -63,6 +65,28 @@ class RefreshPlan:
     @property
     def noop(self) -> bool:
         return not self.members and not self.removals
+
+
+def refresh_arguments(parser: argparse.ArgumentParser) -> None:
+    """`uploads refresh-identity`: a dry run unless `--live`."""
+    parser.add_argument("--registry", type=Path, required=True)
+    parser.add_argument("--live", action="store_true")
+    parser.add_argument("--max-bundles", type=int)
+    repo = Path(__file__).resolve().parents[4]
+    parser.add_argument("--catalog", type=Path, default=repo / SCHEMA_PACK_CATALOG)
+
+
+def refresh_command(args: argparse.Namespace, client: PlatformClient) -> int:
+    """Runs the parsed command and prints its summary; 1 when a run stopped early."""
+    summary = run_refresh(
+        client,
+        load_registry(args.registry),
+        entity_types=product_types(args.catalog),
+        live=args.live,
+        max_bundles=args.max_bundles,
+    )
+    print(json.dumps(summary))
+    return 1 if "stopped" in summary else 0
 
 
 def product_types(catalog_path: str | Path) -> frozenset[str]:
