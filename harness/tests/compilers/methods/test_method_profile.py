@@ -88,7 +88,7 @@ def test_a_compile_carries_the_profile_until_the_active_release_holds_it() -> No
     third = compiled(
         world,
         [candidate(METHOD_C, world.raw_c, world.hits("k-deck-c"))],
-        FakeModel({METHOD_C: full_answer}),
+        FakeModel({METHOD_C: unknown_answer}),
         stripped,
     )
     assert third.bundle is not None and profile_payload(third.bundle) is not None
