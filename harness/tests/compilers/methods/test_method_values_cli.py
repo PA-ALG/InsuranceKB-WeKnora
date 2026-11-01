@@ -164,3 +164,36 @@ def test_an_unknown_stage_is_a_configuration_stop(
     install(monkeypatch, None)
     status, summary = files.values(capsys, "--stage", "schema_fields")
     assert (status, summary) == (2, {"stopped": "MODEL_CONFIG_INVALID"})
+
+
+def test_the_compile_refuses_an_answer_its_ledger_does_not_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Review #526 R1: the saved answer is checked against its call's record before any write."""
+    world = World()
+    files = Files(tmp_path, monkeypatch, world)
+    install(monkeypatch, FakeProvider({METHOD_A: full_answer}))
+    assert files.values(capsys)[0] == 0
+    ledger = files.responses / "ledger.jsonl"
+    records = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+    for record in records:
+        record["request_sha256"] = "0" * 64
+    ledger.write_text("".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+    before = files.registry.read_bytes()
+    assert files.compile(capsys) == (2, {"stopped": "RUN_ROOT_INVALID"})
+    assert files.registry.read_bytes() == before
+    assert not (files.run_root / "report.json").exists()
+
+
+def test_live_needs_answers_backed_by_a_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Review #526 R1: a directory prepared by hand replays offline with `--model`, never live."""
+    world = World()
+    files = Files(tmp_path, monkeypatch, world)
+    files.responses.mkdir()
+    before = files.registry.read_bytes()
+    status, summary = files.compile(capsys, "--model", "hand-model", "--live")
+    assert (status, summary) == (2, {"stopped": "ANSWERS_UNVERIFIED"})
+    assert files.registry.read_bytes() == before
+    assert not files.run_root.exists()

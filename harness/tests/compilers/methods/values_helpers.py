@@ -46,8 +46,10 @@ class FakeProvider:
         self.answers = dict(answers)
         self.served = served
         self.calls: list[str] = []  # the method names sent, in order
+        self.bodies: list[bytes] = []  # the request bodies, in order
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.bodies.append(request.content)
         body = json.loads(request.content)
         payload = json.loads(body["messages"][1]["content"])
         name = payload["method"]["name"]
@@ -59,7 +61,7 @@ class FakeProvider:
         if callable(behaviour):
             content = json.dumps(behaviour(payload), ensure_ascii=False)
         else:
-            content = "not json" if behaviour is None else "{"
+            content = "not json" if behaviour is None else TRUNCATED_TEXT
         return httpx.Response(
             200,
             json={
@@ -90,3 +92,28 @@ def install(monkeypatch: pytest.MonkeyPatch, provider: FakeProvider | None) -> l
 
     monkeypatch.setattr(values_module, "OpenAICompatibleCompletion", factory)
     return created
+
+
+TRUNCATED_TEXT = "{"  # what FakeProvider returns, cut off, for a TRUNCATED method
+
+
+def answered(
+    monkeypatch: pytest.MonkeyPatch,
+    world: Any,
+    items: Any,
+    root: Any,
+    answers: Mapping[str, Behaviour],
+    **provider: Any,
+) -> dict[str, Any]:
+    """A value directory written the way the pilot writes it: `methods values` on a (fake) model."""
+    from tests.compilers.methods.helpers import candidates_of
+
+    install(monkeypatch, FakeProvider(answers, **provider))
+    return values_module.method_values(
+        world.registry,
+        candidates_of(world, items),
+        pages=world.reader,
+        root=root,
+        config=stage_config(),
+        max_sent=10,
+    )
