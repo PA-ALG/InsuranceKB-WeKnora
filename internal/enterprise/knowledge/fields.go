@@ -210,8 +210,8 @@ func (index *releaseIndex) field(entity indexedEntity, claim indexedClaim, title
 	}
 	return Field{
 		ReleaseID: index.id, Slug: claim.member.LogicalSlug, EntityID: entity.EntityID, EntityName: entity.Name,
-		FieldKey: payload.Predicate, FieldTitle: title, State: payload.State, Value: value,
-		Origin: payload.Origin, Review: payload.Review.Mode, Evidence: evidence,
+		EntityVersion: versionLabel(entity.Entity), FieldKey: payload.Predicate, FieldTitle: title,
+		State: payload.State, Value: value, Origin: payload.Origin, Review: payload.Review.Mode, Evidence: evidence,
 	}
 }
 

@@ -1,0 +1,27 @@
+{
+ "note": "PV-4b Spec §1: sale status on an evaluation day, and the business day of an instant (UTC+8). Read by internal/enterprise/knowledge and frontend/src/enterprise tests alike.",
+ "status": [
+  {"name": "no lifecycle", "lifecycle": null, "day": "2026-11-01", "status": "unknown"},
+  {"name": "empty lifecycle", "lifecycle": {}, "day": "2026-11-01", "status": "unknown"},
+  {"name": "before the first day", "lifecycle": {"sale_start": "2024-04-23", "sale_end": "2024-09-01", "source_status": "discontinued"}, "day": "2024-04-22", "status": "not_yet_on_sale"},
+  {"name": "first day is on sale", "lifecycle": {"sale_start": "2024-04-23", "sale_end": "2024-09-01"}, "day": "2024-04-23", "status": "on_sale"},
+  {"name": "last day before the end", "lifecycle": {"sale_start": "2024-04-23", "sale_end": "2024-09-01"}, "day": "2024-08-31", "status": "on_sale"},
+  {"name": "end day is discontinued", "lifecycle": {"sale_start": "2024-04-23", "sale_end": "2024-09-01", "source_status": "discontinued"}, "day": "2024-09-01", "status": "discontinued"},
+  {"name": "dates win over an older on-sale snapshot", "lifecycle": {"sale_start": "2024-04-23", "sale_end": "2024-09-01", "source_status": "on_sale", "basis_date": "2024-05-01"}, "day": "2026-11-01", "status": "discontinued"},
+  {"name": "open end, source on sale", "lifecycle": {"sale_start": "2025-10-01", "source_status": "on_sale", "basis_date": "2026-10-20"}, "day": "2026-11-01", "status": "on_sale"},
+  {"name": "open end, source discontinued", "lifecycle": {"sale_start": "2025-10-01", "source_status": "discontinued"}, "day": "2026-11-01", "status": "unknown"},
+  {"name": "open end, no source status", "lifecycle": {"sale_start": "2025-10-01"}, "day": "2026-11-01", "status": "unknown"},
+  {"name": "end passed, no start", "lifecycle": {"sale_end": "2024-09-01"}, "day": "2024-10-01", "status": "discontinued"},
+  {"name": "end ahead, no start", "lifecycle": {"sale_end": "2027-01-01", "source_status": "on_sale"}, "day": "2026-11-01", "status": "unknown"},
+  {"name": "end ahead, source discontinued contradicts", "lifecycle": {"sale_start": "2024-01-01", "sale_end": "2027-01-01", "source_status": "discontinued"}, "day": "2026-11-01", "status": "unknown"},
+  {"name": "end ahead, source on sale", "lifecycle": {"sale_start": "2024-01-01", "sale_end": "2027-01-01", "source_status": "on_sale"}, "day": "2026-11-01", "status": "on_sale"},
+  {"name": "end ahead, no source status", "lifecycle": {"sale_start": "2024-01-01", "sale_end": "2027-01-01"}, "day": "2026-11-01", "status": "on_sale"},
+  {"name": "starts later", "lifecycle": {"sale_start": "2027-01-01", "source_status": "on_sale"}, "day": "2026-11-01", "status": "not_yet_on_sale"}
+ ],
+ "business_day": [
+  {"instant": "2026-10-31T15:59:59Z", "day": "2026-10-31"},
+  {"instant": "2026-10-31T16:00:00Z", "day": "2026-11-01"},
+  {"instant": "2026-12-31T23:30:00+08:00", "day": "2026-12-31"},
+  {"instant": "2026-12-31T16:00:00Z", "day": "2027-01-01"}
+ ]
+}

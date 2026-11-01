@@ -5,6 +5,8 @@ import type { Release } from './enterpriseApi'
 import { navigationTree } from './navigationView'
 import { conceptKeys, conceptView } from './conceptView'
 import NavigationEntry from './NavigationEntry.vue'
+import { businessDay, discontinuedCount, familyClusters, saleStatuses, visibleEntries } from './productVersions'
+import type { EntitySummary } from './releaseView'
 
 const props = defineProps<{ release: Release; spaceId: string; entityId?: string; conceptKey?: string; wikiPageKey?: string }>()
 const { t } = useI18n()
@@ -26,8 +28,17 @@ const tablist = ref<HTMLElement>()
 const id = useId()
 const search = computed(() => query.value.trim().toLocaleLowerCase())
 const matches = (name: string) => name.toLocaleLowerCase().includes(search.value)
+// PV-4b: discontinued versions stay hidden unless included, except the entry on screen; the
+// business day is taken again whenever the release or entry changes.
+const day = ref(businessDay(new Date()))
+const includeDiscontinued = ref(false)
+const statuses = computed(() => saleStatuses(props.release, day.value))
+const discontinued = computed(() => discontinuedCount(props.release, tree.value.flatMap(domain => domain.groups.flatMap(group => group.entries)), day.value))
+const shown = (entries: EntitySummary[]) =>
+  visibleEntries(props.release, entries, day.value, { includeDiscontinued: includeDiscontinued.value, keep: props.entityId })
 const filteredTree = computed(() => tree.value.map(domain => ({ ...domain, groups: domain.groups
-  .map(group => ({ ...group, entries: group.entries.filter(entry => matches(entry.name)) })).filter(group => group.entries.length) })))
+  .map(group => ({ ...group, entries: shown(group.entries.filter(entry => matches(entry.name))) })).filter(group => group.entries.length)
+  .map(group => ({ ...group, clusters: familyClusters(props.release, group.entries) })) })))
 const filteredCategories = computed(() => categories.value.map(category => ({ ...category,
   entries: category.entries.filter(concept => matches(concept.title)),
 })).filter(category => category.entries.length))
@@ -55,6 +66,7 @@ watch(() => [props.release, props.entityId, props.conceptKey], () => {
   const index = tree.value.findIndex(domain => domain.groups.some(group => group.entries.some(entry => entry.entityId === props.entityId)))
   selected.value = props.conceptKey ? tree.value.length : Math.max(index, 0)
   query.value = ''
+  day.value = businessDay(new Date())
   for (const domain of tree.value) for (const group of domain.groups) {
     if (group.entries.some(entry => entry.entityId === props.entityId)) collapsed.value.delete(groupId(domain.key, group.key))
   }
@@ -89,6 +101,9 @@ function keydown(event: KeyboardEvent, index: number) {
           @click="selectTab(index)" @keydown="keydown($event, index)">{{ title }}</button>
       </div>
       <input v-model="query" data-nav-filter type="search" class="ek-nav-filter" :aria-label="t('enterpriseKnowledge.home.filter')" :placeholder="t('enterpriseKnowledge.home.filter')" />
+      <label v-if="discontinued" class="ek-nav-discontinued" data-nav-discontinued>
+        <input v-model="includeDiscontinued" type="checkbox" /> {{ t('enterpriseKnowledge.version.includeDiscontinued', { n: discontinued }) }}
+      </label>
       <div v-for="(domain, index) in filteredTree" v-show="selected === index" :id="`${id}-panel-${index}`" :key="domain.key"
         role="tabpanel" :aria-labelledby="`${id}-tab-${index}`">
         <section v-for="(group, groupIndex) in domain.groups" :key="group.key" class="ek-nav-group">
@@ -99,8 +114,21 @@ function keydown(event: KeyboardEvent, index: number) {
             <small>{{ group.entries.length }}</small>
           </button></h2>
           <ul v-show="isOpen(groupId(domain.key, group.key))" :id="`${id}-group-${index}-${groupIndex}`">
-            <NavigationEntry v-for="entry in group.entries" :key="entry.entityId" :entry="entry" :release="release" :space-id="spaceId"
-              :selected="entry.entityId === entityId" :wiki-page-key="entry.entityId === entityId ? wikiPageKey : undefined" />
+            <template v-for="(cluster, clusterIndex) in group.clusters" :key="cluster.family?.key ?? `entries-${clusterIndex}`">
+              <li v-if="cluster.family" class="ek-nav-family" data-nav-family>
+                <span class="ek-nav-family__name" :title="cluster.family.title" aria-hidden="true">{{ cluster.family.title }}</span>
+                <ul :aria-label="cluster.family.title">
+                  <NavigationEntry v-for="entry in cluster.entries" :key="entry.entityId" :entry="entry" :release="release" :space-id="spaceId"
+                    :selected="entry.entityId === entityId" :wiki-page-key="entry.entityId === entityId ? wikiPageKey : undefined"
+                    :sale-status="statuses.get(entry.entityId)" />
+                </ul>
+              </li>
+              <template v-else>
+                <NavigationEntry v-for="entry in cluster.entries" :key="entry.entityId" :entry="entry" :release="release" :space-id="spaceId"
+                  :selected="entry.entityId === entityId" :wiki-page-key="entry.entityId === entityId ? wikiPageKey : undefined"
+                  :sale-status="statuses.get(entry.entityId)" />
+              </template>
+            </template>
           </ul>
         </section>
         <p v-if="!domain.groups.length" class="ek-empty">{{ t('enterpriseKnowledge.home.noProducts') }}</p>

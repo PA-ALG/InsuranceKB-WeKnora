@@ -258,6 +258,24 @@ export default {
       "noFields": "필드가 없습니다",
       "noConcepts": "이 릴리스에 공통 개념이 없습니다"
     },
+    "version": {
+      "title": "버전 정보",
+      "status": {
+        "on_sale": "판매 중",
+        "discontinued": "판매 중지",
+        "not_yet_on_sale": "판매 전",
+        "unknown": "판매 상태 알 수 없음"
+      },
+      "onSaleAsOf": "판매 중({date} 기준 데이터)",
+      "period": "판매 기간",
+      "periodRange": "{start} ~ {end}",
+      "periodFrom": "{start}부터",
+      "periodUntil": "{end}까지",
+      "family": "시리즈",
+      "predecessors": "이전 버전",
+      "successors": "다음 버전",
+      "includeDiscontinued": "판매 중지 포함({n})"
+    },
     "concept": {
       "definition": "필드 정의",
       "summary": "모델 요약 (각 상품 원문 기준)",

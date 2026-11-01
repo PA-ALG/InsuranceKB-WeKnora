@@ -122,6 +122,35 @@
       "title": "Overview Fields",
       "type": "array"
     },
+    "question_intents": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "items": {
+              "items": {
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "propertyNames": {
+            "enum": [
+              "sales",
+              "service"
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Question Intents"
+    },
     "question_terms": {
       "anyOf": [
         {
