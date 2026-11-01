@@ -49,6 +49,7 @@ type KnowledgeRevisionSourceService struct {
 	config          *config.Config
 	repo            knowledgeRevisionSourceRepository
 	exact3Repo      knowledgeRevisionSourceExact3Repository
+	recorder        knowledgeRevisionSourceRecorder
 	files           interfaces.FileService
 	resources       interfaces.ResourceCatalog
 	storageResolver interfaces.StorageBackendResolver
@@ -67,8 +68,9 @@ func NewKnowledgeRevisionSourceService(
 ) *KnowledgeRevisionSourceService {
 	revisionRepo, _ := repo.(knowledgeRevisionSourceRepository)
 	exact3Repo, _ := repo.(knowledgeRevisionSourceExact3Repository)
+	recorder, _ := repo.(knowledgeRevisionSourceRecorder)
 	return &KnowledgeRevisionSourceService{
-		config: cfg, repo: revisionRepo, exact3Repo: exact3Repo,
+		config: cfg, repo: revisionRepo, exact3Repo: exact3Repo, recorder: recorder,
 		files: files, resources: resources, storageResolver: storageResolver, tenants: tenants,
 	}
 }

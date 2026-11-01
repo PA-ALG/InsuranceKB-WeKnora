@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -178,6 +179,64 @@ type KnowledgeRevisionSource struct {
 }
 
 func (KnowledgeRevisionSource) TableName() string { return "knowledge_revision_sources" }
+
+// RevisionSourceRecordOutcome is the result of recording a missing commit-time source row (S11g).
+type RevisionSourceRecordOutcome string
+
+// Outcomes of RecordMissingRevisionSource: an existing row is never modified.
+const (
+	RevisionSourceRecordPresent     RevisionSourceRecordOutcome = "present"
+	RevisionSourceRecordWouldRecord RevisionSourceRecordOutcome = "would_record"
+	RevisionSourceRecordRecorded    RevisionSourceRecordOutcome = "recorded"
+)
+
+// RevisionSourceObject is the identity of the stored object whose bytes the caller hashed. The
+// repository records a missing source row only while the locked resource is still exactly this
+// object (S11g, #513 review R1), so a swap between hashing and writing records nothing.
+type RevisionSourceObject struct {
+	ResourceID       string
+	ResourceHandle   string
+	Provider         string
+	StorageBackendID string
+	PhysicalPath     string
+	Size             int64
+	ObjectSHA256     string
+}
+
+// Matches reports whether a resource is still the verified object.
+func (o RevisionSourceObject) Matches(resource StoredResource) bool {
+	return o.ResourceID != "" && o.ResourceID == resource.ID &&
+		o.ResourceHandle == resource.Handle && o.Provider == resource.Provider &&
+		o.StorageBackendID == resource.StorageBackendID && o.PhysicalPath == resource.PhysicalPath &&
+		o.Size > 0 && o.Size == resource.Size && validRevisionSHA256(o.ObjectSHA256) &&
+		(resource.ContentHash == "" || resource.ContentHash == o.ObjectSHA256)
+}
+
+const pdfMIME = "application/pdf"
+
+// officeSourceMIME is a fixed table, not the host MIME database: the stored resource MIME comes
+// from mime.TypeByExtension and is empty when the image ships no /etc/mime.types (S11g).
+var officeSourceMIME = map[string]string{
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+// RevisionSourceMIME decides whether a stored source resource records a commit-time source
+// revision and under which MIME: PDFs exactly as before (by MIME only), and the three OOXML
+// formats S11 captures when the resource MIME is empty or equals the format's canonical MIME.
+// Anything else records nothing, so the commit still succeeds without a source row.
+func RevisionSourceMIME(resourceMIME, originalName string) (string, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(resourceMIME))
+	if normalized == pdfMIME {
+		return pdfMIME, true
+	}
+	canonical, ok := officeSourceMIME[strings.ToLower(filepath.Ext(strings.TrimSpace(originalName)))]
+	if !ok || (normalized != "" && normalized != canonical) {
+		return "", false
+	}
+	return canonical, true
+}
 
 // ComputeKnowledgeRevisionSourceID freezes the server-owned source-row key.
 func ComputeKnowledgeRevisionSourceID(source KnowledgeRevisionSource) (string, error) {

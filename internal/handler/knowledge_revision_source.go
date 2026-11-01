@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -79,6 +80,78 @@ func (h *KnowledgeRevisionSourceHandler) Backfill(c *gin.Context) {
 		ChunkCount: source.ChunkCount, BindingDigest: source.BindingDigest,
 		RetentionState: source.RetentionState,
 	}})
+}
+
+type knowledgeRevisionSourceRecorder interface {
+	RecordMissingSource(
+		context.Context, string, int64, bool,
+	) (*types.KnowledgeRevisionSource, types.RevisionSourceRecordOutcome, error)
+}
+
+type knowledgeRevisionSourceRecordReceiptV1 struct {
+	Contract          string `json:"contract"`
+	Outcome           string `json:"outcome"`
+	KnowledgeID       string `json:"knowledge_id"`
+	ParseAttempt      int64  `json:"parse_attempt"`
+	RevisionSourceID  string `json:"revision_source_id"`
+	FileSHA256        string `json:"file_sha256"`
+	Size              int64  `json:"size"`
+	MimeType          string `json:"mime_type"`
+	ManifestAlgorithm string `json:"manifest_algorithm"`
+	ManifestDigest    string `json:"manifest_digest"`
+	ChunkCount        int    `json:"chunk_count"`
+	RetentionState    string `json:"retention_state"`
+}
+
+// Record records the commit-time source row of an attempt committed without one (S11g). It is a
+// dry run unless dry_run=false is given explicitly.
+func (h *KnowledgeRevisionSourceHandler) Record(c *gin.Context) {
+	recorder, ok := any(h.service).(knowledgeRevisionSourceRecorder)
+	knowledgeID := strings.TrimSpace(c.Param("id"))
+	attempt, err := strconv.ParseInt(c.Param("attempt"), 10, 64)
+	dryRun, validMode := recordDryRun(c.Request.URL.RawQuery)
+	if !ok || err != nil || knowledgeID == "" || attempt <= 0 || !validMode {
+		writeKnowledgeRevisionSourceError(c, revisionsource.ErrRevisionSourceMismatch)
+		return
+	}
+	source, outcome, err := recorder.RecordMissingSource(c.Request.Context(), knowledgeID, attempt, dryRun)
+	if err != nil || source == nil {
+		if err == nil {
+			err = revisionsource.ErrRevisionSourceMismatch
+		}
+		writeKnowledgeRevisionSourceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": knowledgeRevisionSourceRecordReceiptV1{
+		Contract: "knowledge-revision-source-record.v1", Outcome: string(outcome),
+		KnowledgeID: source.KnowledgeID, ParseAttempt: source.ParseAttempt,
+		RevisionSourceID: source.RevisionSourceID, FileSHA256: source.FileSHA256,
+		Size: source.Size, MimeType: source.MimeType,
+		ManifestAlgorithm: source.ManifestAlgorithm, ManifestDigest: source.ManifestDigest,
+		ChunkCount: source.ChunkCount, RetentionState: source.RetentionState,
+	}})
+}
+
+// recordDryRun reads dry_run from the raw query: absent means a dry run; exactly one "true" or
+// "false" is honoured; a malformed query, a repeated or empty value is rejected (#513 review R2).
+func recordDryRun(rawQuery string) (bool, bool) {
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return false, false
+	}
+	modes, present := values["dry_run"]
+	switch {
+	case !present:
+		return true, true
+	case len(modes) != 1:
+		return false, false
+	case modes[0] == "true":
+		return true, true
+	case modes[0] == "false":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 func (h *KnowledgeRevisionSourceHandler) BackfillExact3(c *gin.Context) {
