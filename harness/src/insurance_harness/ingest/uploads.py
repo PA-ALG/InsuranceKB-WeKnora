@@ -252,6 +252,14 @@ def attribute_uploads(
                 methods.record(source, attribution)
             break
         remaining = [*(source for source, _ in deferred), *held]
+
+    def pages_of(source: RawSource) -> list[PageText] | None:
+        try:
+            return read.get(source.knowledge_id) or material_pages(pages, current.space_id, source)
+        except SourcePagesError:
+            return None  # a registered material's pages, unreadable now: tried again next run
+
+    methods.backfill(sources, pages_of)  # registered sales materials (SK-1 §3.1)
     revision_changes, not_listed = _changes(current, sources)
     report = UploadReport(
         counts=dict(sorted(counts.items())),

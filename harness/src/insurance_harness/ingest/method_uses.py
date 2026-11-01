@@ -7,7 +7,7 @@ also expires records whose source revision is no longer the listed one. The prod
 entries, their materials and roles, the source map — is never touched here.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import PurePosixPath
 
 from insurance_harness.catalog.sales_taxonomy import SalesTaxonomy, load_sales_taxonomy
@@ -88,16 +88,53 @@ class MethodStep:
         """The material's method blocks, if it may be a method material (Spec §3.1)."""
         if self.registry.contract != V2 or not self._eligible(source, attribution):
             return None
+        if self._settled(source):
+            return None
+        return self._detect(source, self.pages.get(source.knowledge_id, ()))
+
+    def backfill(
+        self,
+        sources: Sequence[RawSource],
+        read: Callable[[RawSource], Sequence[PageText] | None],
+    ) -> None:
+        """Registered sales materials without a method use for their listed revision — attached
+        before SK-1, or by a person — are detected too, once per run (Spec §3.1)."""
+        if self.registry.contract != V2:
+            return
+        held = {
+            m.knowledge_id: (m.parse_attempt, m.sha256, m.role)
+            for product in self.registry.products.values()
+            for m in product.materials
+        }
+        for source in sources:
+            known = held.get(source.knowledge_id)
+            if (
+                known is None
+                or known[:2] != (source.parse_attempt, source.sha256)
+                or known[2] not in self.policy.brand_roles
+                or self._settled(source)
+            ):
+                continue
+            pages = read(source)
+            hits = self._detect(source, pages) if pages is not None else None
+            if hits is not None:
+                self._add(source, hits)
+
+    def _settled(self, source: RawSource) -> bool:
+        """Already recorded for this revision, or the material no longer takes part."""
         ended = {
             d.knowledge_id for d in self.registry.decisions if d.attribution.outcome in _ENDED
         }
-        recorded = {use.triple for use in self.registry.method_uses}
         triple = (source.knowledge_id, source.parse_attempt, source.sha256)
-        if source.knowledge_id in ended or triple in recorded:
-            return None
+        return source.knowledge_id in ended or any(
+            u.triple == triple for u in self.registry.method_uses
+        )
+
+    def _detect(self, source: RawSource, pages: Sequence[PageText]) -> MethodHits | None:
+        triple = (source.knowledge_id, source.parse_attempt, source.sha256)
         if triple not in self._hits:
             try:
-                self._hits[triple] = detect(self.pages.get(source.knowledge_id, ()), self.taxonomy)
+                self._hits[triple] = detect(pages, self.taxonomy)
             except ValueError:  # pages the segmentation refuses: no method use, fail closed
                 self._hits[triple] = None
         return self._hits[triple]
@@ -120,6 +157,10 @@ class MethodStep:
         hits = self.hits(source, attribution)
         if hits is None:
             return False
+        self._add(source, hits)
+        return True
+
+    def _add(self, source: RawSource, hits: MethodHits) -> None:
         scope = machine_scope(hits, self.taxonomy)
         use = MethodUse(
             knowledge_id=source.knowledge_id,
@@ -140,7 +181,6 @@ class MethodStep:
         uses = [*self.registry.method_uses, use]
         check_method_uses(uses)  # one record per revision, one live record per material
         self.registry.method_uses = uses
-        return True
 
     def _eligible(self, source: RawSource, attribution: Attribution) -> bool:
         """Sales and training materials, and Office files of no recognised role: where S11c and
