@@ -29,7 +29,8 @@ func TestRevisionSourceMIMEKeepsPDFAndAddsOOXMLByAFixedTable(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			got, ok := RevisionSourceMIME(test.mime, test.file)
 			if ok != test.ok || got != test.want {
-				t.Fatalf("RevisionSourceMIME(%q, %q) = %q, %v; want %q, %v", test.mime, test.file, got, ok, test.want, test.ok)
+				t.Fatalf("RevisionSourceMIME(%q, %q) = %q, %v; want %q, %v",
+					test.mime, test.file, got, ok, test.want, test.ok)
 			}
 		})
 	}

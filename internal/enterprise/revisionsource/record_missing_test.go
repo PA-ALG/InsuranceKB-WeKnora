@@ -113,20 +113,25 @@ func TestRecordMissingSourceVerifiesObjectBytesThenDelegates(t *testing.T) {
 }
 
 func TestRecordMissingSourceRefusesBeforeWriting(t *testing.T) {
+	type (
+		recorder = revisionSourceRecorderStub
+		files    = revisionSourceFileServiceStub
+		service  = KnowledgeRevisionSourceService
+	)
 	for name, test := range map[string]struct {
 		mime, file  string
-		mutate      func(*KnowledgeRevisionSourceService, *revisionSourceRecorderStub, *revisionSourceFileServiceStub)
+		mutate      func(*service, *recorder, *files)
 		objectReads int
 	}{
-		"object bytes drift": {"", "deck.pptx", func(_ *KnowledgeRevisionSourceService, _ *revisionSourceRecorderStub, files *revisionSourceFileServiceStub) {
+		"object bytes drift": {"", "deck.pptx", func(_ *service, _ *recorder, files *files) {
 			files.data = []byte("synthetic office package bytes, edited")
 		}, 1},
 		"unsupported format":              {"text/markdown", "notes.md", nil, 0},
 		"foreign mime for an office name": {"image/png", "deck.docx", nil, 0},
-		"not the current attempt": {"", "deck.pptx", func(_ *KnowledgeRevisionSourceService, repo *revisionSourceRecorderStub, _ *revisionSourceFileServiceStub) {
+		"not the current attempt": {"", "deck.pptx", func(_ *service, repo *recorder, _ *files) {
 			repo.knowledge.CurrentParseAttempt = 2
 		}, 0},
-		"not completed": {"", "deck.pptx", func(_ *KnowledgeRevisionSourceService, repo *revisionSourceRecorderStub, _ *revisionSourceFileServiceStub) {
+		"not completed": {"", "deck.pptx", func(_ *service, repo *recorder, _ *files) {
 			repo.knowledge.ParseStatus = types.ParseStatusProcessing
 		}, 0},
 	} {

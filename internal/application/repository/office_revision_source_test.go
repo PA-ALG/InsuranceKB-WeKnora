@@ -121,10 +121,10 @@ func TestRecordMissingRevisionSourceNeverTouchesAnExistingPDFRow(t *testing.T) {
 
 func TestRecordMissingRevisionSourceRefusesUnboundOrDriftedAttempts(t *testing.T) {
 	cases := map[string]func(*testing.T, *gorm.DB, string) (uint64, int64){
-		"not the current attempt": func(t *testing.T, db *gorm.DB, id string) (uint64, int64) {
+		"not the current attempt": func(*testing.T, *gorm.DB, string) (uint64, int64) {
 			return 1, 2
 		},
-		"another tenant": func(t *testing.T, db *gorm.DB, id string) (uint64, int64) {
+		"another tenant": func(*testing.T, *gorm.DB, string) (uint64, int64) {
 			return 2, 1
 		},
 		"resource digest drift": func(t *testing.T, db *gorm.DB, id string) (uint64, int64) {
@@ -153,7 +153,8 @@ func TestRecordMissingRevisionSourceRefusesUnboundOrDriftedAttempts(t *testing.T
 			_, _, err := repo.RecordMissingRevisionSource(context.Background(), tenantID, id, attempt, false)
 			require.ErrorIs(t, err, ErrRevisionSourceUnavailable)
 			var sources int64
-			require.NoError(t, db.Table("knowledge_revision_sources").Where("knowledge_id = ?", id).Count(&sources).Error)
+			require.NoError(t, db.Table("knowledge_revision_sources").
+				Where("knowledge_id = ?", id).Count(&sources).Error)
 			require.Zero(t, sources)
 		})
 	}
