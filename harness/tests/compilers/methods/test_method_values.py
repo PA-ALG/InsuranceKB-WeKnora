@@ -208,8 +208,8 @@ def test_a_missing_model_key_is_a_configuration_stop(
     from insurance_harness.compilers.methods import values as values_module
     from insurance_harness.models import OpenAICompatibleCompletion
 
-    def keyless(config: StageModelConfig, *, ledger: Any) -> Any:
-        return OpenAICompatibleCompletion(config, ledger=ledger, environ={})
+    def keyless(config: StageModelConfig, *, ledger: Any, keep: Any = None) -> Any:
+        return OpenAICompatibleCompletion(config, ledger=ledger, environ={}, keep=keep)
 
     monkeypatch.setattr(values_module, "OpenAICompatibleCompletion", keyless)
     world = World()

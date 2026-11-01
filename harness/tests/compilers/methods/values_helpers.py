@@ -79,12 +79,13 @@ def install(monkeypatch: pytest.MonkeyPatch, provider: FakeProvider | None) -> l
     """
     created: list[int] = []
 
-    def factory(config: StageModelConfig, *, ledger: Any) -> Any:
+    def factory(config: StageModelConfig, *, ledger: Any, keep: Any = None) -> Any:
         assert provider is not None, "no model client may be created"
         created.append(1)
         return OpenAICompatibleCompletion(  # the real client; a second install must not wrap
             config,
             ledger=ledger,
+            keep=keep,
             environ={KEY_ENV: "test-only"},
             transport=httpx.MockTransport(provider),
             sleep=lambda _: None,
