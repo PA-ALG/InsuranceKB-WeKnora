@@ -187,3 +187,19 @@ def test_two_named_editions_never_attach_automatically() -> None:
     result = attribute(deck(written + ".pptx", written + "\n2024年5月"), [P_MINGYUE, Q_HENGAN])
     assert (result.outcome, result.reason) == ("NEEDS_CONFIRM", "version_candidates")
     assert options(result, [P_MINGYUE, Q_HENGAN]) == ["8601", None]
+
+
+HT_PLAIN = version("8603", "平安远山恒泰终身寿险", WHOLE_LIFE, "2024-01-01")
+
+
+def test_a_version_of_no_named_edition_is_never_a_candidate() -> None:
+    cases = (
+        ("远山恒泰明月版与远山恒泰蓝星版对比培训", "2024年5月", P_MINGYUE, HT_PLAIN),
+        ("星海安康长期明朗版与星海安康长期晨曦版对比培训", "2025年10月", XH_MINGLANG, XH_PLAIN),
+    )
+    for written, date, edition, plain in cases:
+        for registry in both_orders(edition, plain):
+            result = attribute(deck(written + ".pptx", f"{written}\n{date}"), registry)
+            assert (result.outcome, result.reason) == ("NEEDS_CONFIRM", "version_candidates")
+            assert options(result, registry) == [edition.product_id, None], written
+            assert verdicts(result)[plain.product_id] == "type_conflict", written
