@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // S11h acceptance (protected, written by Claude): when upstream's preview fails, stays silent for
-// 30 seconds or cannot find the quote, the citation still shows the cited slide, block or row as
-// text with the quote marked, and offers the original file (Spec
+// 30 seconds, cannot find the quote or can only mark the whole slide, the citation still shows the
+// cited slide, block or row as text with the quote marked, and offers the original file (Spec
 // docs/design/slices/S11h-Office渲染失败时的文本视图.md §2.2).
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -67,11 +67,11 @@ afterEach(() => {
 })
 
 /** The viewer with a fallback slot that reports what it was handed. */
-function viewer(arrange = () => {}) {
+function viewer(arrange = () => {}, target = TARGET) {
   vi.mocked(get).mockResolvedValue(new Uint8Array(BYTES).buffer as any)
   arrange()
   return mount(OfficeSourceViewer, {
-    props: { file: FILE, document: '演示.pptx', target: TARGET, labels: viewerLabels },
+    props: { file: FILE, document: `演示.${target.format}`, target, labels: viewerLabels },
     slots: {
       fallback: (slot: { reason: string; original: ArrayBuffer }) =>
         h('div', { 'data-fallback': slot.reason, 'data-bytes': [...new Uint8Array(slot.original)].join(',') }),
@@ -120,11 +120,24 @@ describe('office source viewer falls back to the text view', () => {
     expect(view.get('[role="note"]').text()).toBe(viewerLabels.notLocated)
   })
 
-  it('never when the preview located the quote', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  it('when the preview can only mark the whole slide: the quote is not in its rendered text', async () => {
     const view = viewer()
     await flushPromises()
-    preview(view).vm.$emit('located', { found: true, precise: false })
+    preview(view).vm.$emit('located', { found: true, precise: false, granularity: 'block' })
+    await flushPromises()
+    expect(fallback(view).attributes('data-fallback')).toBe('notLocated')
+    expect(view.get('[role="note"]').text()).toBe(viewerLabels.coarse)
+  })
+
+  it.each([
+    ['the quote is marked word for word', TARGET, { found: true, precise: true }],
+    ['a sheet row is marked whole', officeTarget({ kind: 'XLSX_CELL_RANGE', sheet: 'Rates', cell_range: 'A3:XFD3' }, QUOTE)!,
+      { found: true, precise: false, granularity: 'block' }],
+  ])('never when %s', async (_name, target, result) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const view = viewer(undefined, target)
+    await flushPromises()
+    preview(view).vm.$emit('located', result)
     vi.advanceTimersByTime(60_000)
     await flushPromises()
     expect(fallback(view).exists()).toBe(false)

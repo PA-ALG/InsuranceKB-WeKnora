@@ -169,7 +169,7 @@ export type Expectation =
   | { kind: 'blocked-link'; flag: string }
   | { kind: 'inert'; quote: string; within: string; index: number; flag: string }
   | { kind: 'rejected'; note: string }
-  /** The preview shows `shown` but not the quote; the text view below marks it. */
+  /** The preview shows `shown` but cannot highlight the quote; the text view below marks it. */
   | { kind: 'text-view'; quote: string; shown: string; note: string }
 
 export interface OfficeCase {
@@ -260,7 +260,7 @@ export const CASES: OfficeCase[] = [
   {
     name: 'pptx-quote-in-grouped-table', file: 'grouped',
     citation: citation('pptx-quote-in-grouped-table', 'grouped', 2, '保单贷款比例为八成', { kind: 'PPTX_SHAPE', slide: 2 }),
-    expect: { kind: 'text-view', quote: '保单贷款比例为八成', shown: '.pptx-preview-slide-wrapper', note: NOT_LOCATED },
+    expect: { kind: 'text-view', quote: '保单贷款比例为八成', shown: '.pptx-preview-slide-wrapper', note: COARSE },
   },
   {
     name: 'no-locator', file: 'deck',
