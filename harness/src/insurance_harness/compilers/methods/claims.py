@@ -38,7 +38,7 @@ class MethodContent:
     claims: tuple[Claim, ...]
     labels: tuple[str, ...]  # the answer's labels that passed
     dropped: dict[str, int]  # items and labels dropped, by code
-    signals: dict[str, frozenset[str]]  # product signals of each Claim that shows any
+    signals: dict[str, frozenset[str]]  # product signals of this run's Claims that show any
 
 
 def _item(item: AnswerItem, card: MethodCard, paragraphs: MethodParagraphs) -> list[Evidence] | str:
@@ -130,6 +130,18 @@ def method_content(
             dropped["LABEL_INVALID"] += 1
         elif answer.label not in labels:
             labels.append(answer.label)
+    return MethodContent(
+        tuple(claims),
+        tuple(sorted(labels)),
+        dict(sorted(dropped.items())),
+        claim_signals(claims, cards, product_names),
+    )
+
+
+def claim_signals(
+    claims: Sequence[Claim], cards: MethodCards, product_names: Sequence[str]
+) -> dict[str, frozenset[str]]:
+    """The product signals of each Claim whose value shows any (Spec §4.5)."""
     signals = {}
     for claim in claims:
         texts = claim.value if isinstance(claim.value, list) else [claim.value]
@@ -141,15 +153,18 @@ def method_content(
         )
         if found:
             signals[claim.logical_key] = found
-    return MethodContent(
-        tuple(claims), tuple(sorted(labels)), dict(sorted(dropped.items())), signals
-    )
+    return signals
 
 
 def method_entity(
-    method: MethodEntry, categories: Collection[str], content: MethodContent, cards: MethodCards
+    method: MethodEntry,
+    categories: Collection[str],
+    labels: Collection[str],
+    notice: bool,
+    cards: MethodCards,
 ) -> Entity:
-    """The method's entity: its names, applicability labels and the product-information flag."""
+    """The method's entity: its names, applicability labels and the product-information flag,
+    which the caller decides on the Claims in force after the change decisions (#516 R1)."""
     canonical = method.names[0]
     others = {*method.names[1:], *method.aliases} - {canonical}
     return Entity(
@@ -157,7 +172,7 @@ def method_entity(
         entity_type=cards.entity_type,
         names=[canonical],
         aliases=sorted(others),
-        identifiers=dict(NOTICE) if content.signals else {},
-        classification_labels=sorted({*categories, *content.labels}),
+        identifiers=dict(NOTICE) if notice else {},
+        classification_labels=sorted({*categories, *labels}),
         owner_module=cards.owner_module,
     )
