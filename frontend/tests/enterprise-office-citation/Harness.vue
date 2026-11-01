@@ -64,6 +64,15 @@ function check(c: OfficeCase): string | null {
     if (location.href !== before) return 'the link navigated'
     return (window as unknown as Record<string, unknown>)[e.flag] === undefined ? null : 'the script link ran'
   }
+  if (e.kind === 'text-view') {
+    if (highlighted().length) return 'the preview highlighted something'
+    if (!document.querySelector(e.shown)) return 'the file is not shown'
+    const view = document.querySelector('[data-office-text-view]')
+    if (!view) return 'no text view'
+    const marked = [...view.querySelectorAll('mark')].map(mark => mark.textContent).join('')
+    if (marked !== e.quote) return `the text view marked "${marked}"`
+    return note() === e.note ? null : `note: "${note()}"`
+  }
   if (e.kind === 'rejected') {
     if (document.querySelector('.document-preview')) return 'the package was rendered'
     if (!document.querySelector('.ek-citation__quote')?.textContent?.trim()) return 'the quote is not shown'
