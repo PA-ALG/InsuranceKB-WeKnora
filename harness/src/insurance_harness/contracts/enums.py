@@ -36,6 +36,7 @@ class Origin(StrEnum):
     INCREMENTAL = "incremental"
     FEEDBACK = "feedback"
     IMPORT = "import"
+    IDENTITY_REFRESH = "identity_refresh"  # version identity only, checked by the platform (PV-4a)
 
 
 class ChangedBy(StrEnum):

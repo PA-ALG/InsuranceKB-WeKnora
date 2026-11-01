@@ -55,7 +55,8 @@
         "revert",
         "incremental",
         "feedback",
-        "import"
+        "import",
+        "identity_refresh"
       ],
       "title": "Origin",
       "type": "string"

@@ -53,6 +53,11 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.ingest.confirmations import ConfirmationsError, sync
 from insurance_harness.ingest.detach import REASONS, DetachError, detach
+from insurance_harness.ingest.identity_refresh import (
+    RefreshError,
+    refresh_arguments,
+    refresh_command,
+)
 from insurance_harness.ingest.method_confirmations import request_relabel, sync_methods
 from insurance_harness.ingest.method_uses import MethodStep, expire_method_uses
 from insurance_harness.ingest.publication import PublicationError, run_publication
@@ -78,7 +83,7 @@ from insurance_harness.ingest.registry import (
     seed_registry,
 )
 from insurance_harness.ingest.registry_lock import RegistryBusy, RegistryLock
-from insurance_harness.ingest.registry_migration import MigrationError, migrate_registry
+from insurance_harness.ingest.registry_migration import migrate_command
 from insurance_harness.ingest.source_map import (
     API_KEY_ENV,
     BASE_URL_ENV,
@@ -89,7 +94,6 @@ from insurance_harness.ingest.source_map import (
 from insurance_harness.ingest.version_catalog import (
     CatalogError,
     VersionCatalog,
-    catalog_from_checkout,
     load_catalog,
 )
 from insurance_harness.ingest.withdrawn_questions import read_question_states
@@ -337,6 +341,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     migration.add_argument("--manifest-commit", required=True)
     migration.add_argument("--refresh", action="store_true")
     migration.add_argument("--dry-run", action="store_true")
+    refresh_arguments(commands.add_parser("refresh-identity"))
     for name in ("detach", "relabel"):  # one change to a v2 registry under its lock
         change = commands.add_parser(name)
         change.add_argument("--registry", type=Path, required=True)
@@ -345,7 +350,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     commands.choices["detach"].add_argument("--reason", choices=REASONS, required=True)
     args = parser.parse_args(argv)
     if args.command == "migrate-registry":
-        return _migrate(args)
+        return migrate_command(args)
     if args.command in {"detach", "relabel"}:
         return _change(args)
     base_url, api_key = os.environ.get(BASE_URL_ENV, ""), os.environ.get(API_KEY_ENV, "")
@@ -365,6 +370,8 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
                 print(report.model_dump_json())
                 return 1 if any((report.stopped, report.review_stopped, report.failed,
                                  report.samples_failed)) else 0
+            if args.command == "refresh-identity":  # the metadata publish path (PV-4 Spec §3.3)
+                return refresh_command(args, PlatformClient(base_url, api_key, transport=transport))
             listing = RawSources(base_url, api_key, transport=transport)
             pages = WeKnoraSourcePages(base_url, api_key, transport=transport)
             if args.command == "seed":
@@ -440,6 +447,7 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
         ConfirmationsError,
         PublicationError,
         CatalogError,
+        RefreshError,
         SalesTaxonomyError,
     ) as error:
         print(error.code, file=sys.stderr)
@@ -447,27 +455,6 @@ def main(argv: list[str] | None = None, *, transport: httpx.BaseTransport | None
     except OSError:  # lock or registry file; the message would carry the path
         print("REGISTRY_IO_ERROR", file=sys.stderr)
         return 1
-
-
-def _migrate(args: argparse.Namespace) -> int:
-    """`migrate-registry`: the registry lock, the pinned catalog, then the journaled migration."""
-    try:
-        with RegistryLock(args.registry):
-            catalog = catalog_from_checkout(args.manifest_dir, args.manifest_commit)
-            report = migrate_registry(
-                args.registry, catalog, refresh=args.refresh, dry_run=args.dry_run
-            )
-    except RegistryBusy:
-        print("REGISTRY_BUSY", file=sys.stderr)
-        return 3
-    except (CatalogError, MigrationError, RegistryError) as error:
-        print(error.code, file=sys.stderr)
-        return 1
-    except OSError:
-        print("REGISTRY_IO_ERROR", file=sys.stderr)
-        return 1
-    print(report.model_dump_json())
-    return 0
 
 
 def _change(args: argparse.Namespace) -> int:

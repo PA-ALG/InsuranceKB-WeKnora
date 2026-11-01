@@ -8,8 +8,10 @@ committed and only confirmed, the old content with its backup intact was never r
 done again, anything else stops without writing (PV-0 appendix A §4).
 """
 
+import argparse
 import json
 import os
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -46,9 +48,22 @@ from insurance_harness.ingest.registry import (
     load_registry,
     registry_document,
 )
-from insurance_harness.ingest.version_catalog import VersionCatalog, save_catalog
+from insurance_harness.ingest.registry_lock import RegistryBusy, RegistryLock
+from insurance_harness.ingest.version_catalog import (
+    CatalogError,
+    VersionCatalog,
+    catalog_from_checkout,
+    save_catalog,
+)
 
-__all__ = ["EntryMatch", "MigrationError", "MigrationReport", "migrate_registry", "plan_migration"]
+__all__ = [
+    "EntryMatch",
+    "MigrationError",
+    "MigrationReport",
+    "migrate_command",
+    "migrate_registry",
+    "plan_migration",
+]
 
 
 class EntryMatch(BaseModel):
@@ -231,3 +246,24 @@ def migrate_registry(
     return MigrationReport(
         status="committed", recovered=recovered, entries=entries, retired=retired
     )
+
+
+def migrate_command(args: argparse.Namespace) -> int:
+    """`migrate-registry`: the registry lock, the pinned catalog, then the journaled migration."""
+    try:
+        with RegistryLock(args.registry):
+            catalog = catalog_from_checkout(args.manifest_dir, args.manifest_commit)
+            report = migrate_registry(
+                args.registry, catalog, refresh=args.refresh, dry_run=args.dry_run
+            )
+    except RegistryBusy:
+        print("REGISTRY_BUSY", file=sys.stderr)
+        return 3
+    except (CatalogError, MigrationError, RegistryError) as error:
+        print(error.code, file=sys.stderr)
+        return 1
+    except OSError:
+        print("REGISTRY_IO_ERROR", file=sys.stderr)
+        return 1
+    print(report.model_dump_json())
+    return 0

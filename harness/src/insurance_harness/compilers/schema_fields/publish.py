@@ -75,6 +75,7 @@ from insurance_harness.ingest.source_map import (
     load_trusted_pages,
     reader_from_env,
 )
+from insurance_harness.ingest.version_metadata import registry_metadata
 from insurance_harness.review.spot_check import sample
 
 # Existing review-artifact readers use this same score-file type.
@@ -121,11 +122,12 @@ def main(argv: list[str] | None = None) -> int:
         return _stop("OUTPUT_UNREADABLE")
     if output.entity_id != args.product:
         return _stop("OUTPUT_MISMATCH")
-    registry_map, registered = None, None
+    registry_map, registered, metadata = None, None, None
     if args.registry:
         try:
             registry_map, facts = registry_inputs(args.registry, [args.product])
             registered = facts[args.product]
+            metadata = registry_metadata(args.registry, args.product)
         except RegistryError as error:
             return _stop(error.code)
         if output.pack_id != registered[1]:
@@ -144,7 +146,11 @@ def main(argv: list[str] | None = None) -> int:
         return _stop("PRODUCT_META_MISSING")
     try:
         page = product_page(
-            args.repo / SCHEMA_PACK_CATALOG, output.pack_id, entity_id=output.entity_id, name=name
+            args.repo / SCHEMA_PACK_CATALOG,
+            output.pack_id,
+            entity_id=output.entity_id,
+            name=name,
+            metadata=metadata,
         )
     except BundleError as error:
         return _stop("BUNDLE_INVALID", reason=error.reason)
