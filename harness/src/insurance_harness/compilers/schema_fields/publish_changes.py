@@ -34,7 +34,8 @@ from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.compilers.schema_fields.page import ProductPage, product_page
 from insurance_harness.contracts.bundle import CandidateBundle, ReviewPlan
 from insurance_harness.contracts.enums import ReviewMode
-from insurance_harness.contracts.knowledge import Claim, NavigationProfile
+from insurance_harness.contracts.knowledge import Claim
+from insurance_harness.contracts.navigation import NavigationProfile
 from insurance_harness.eval.product_sources import check_product_id, display_name, source_directory
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.evidence.weknora_pages import SourcePagesError
@@ -131,8 +132,9 @@ def main(argv: list[str] | None = None) -> int:
     }
     try:
         version = require_cards_version(output)
-        name = (registered[0] if registered else
-                display_name(source_directory(args.repo, args.product)))
+        name = (
+            registered[0] if registered else display_name(source_directory(args.repo, args.product))
+        )
         page = product_page(
             args.repo / SCHEMA_PACK_CATALOG,
             output.pack_id,

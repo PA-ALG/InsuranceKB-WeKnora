@@ -29,12 +29,8 @@ from insurance_harness.contracts.enums import (
     SourceClass,
     UnknownReason,
 )
-from insurance_harness.contracts.knowledge import (
-    Claim,
-    Evidence,
-    NavigationProfile,
-    Provenance,
-)
+from insurance_harness.contracts.knowledge import Claim, Evidence, Provenance
+from insurance_harness.contracts.navigation import NavigationProfile
 from insurance_harness.evidence.segments import SegmentedSource, same_text
 from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, labelled

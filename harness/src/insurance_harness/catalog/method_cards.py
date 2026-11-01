@@ -64,11 +64,20 @@ class ProductInfoPattern(_Strict):
         return pattern
 
 
+class MethodPresentation(_Strict):
+    """How readers show the methods (SK-3 Spec §2.2): never part of a value request."""
+
+    display_name: NonBlank
+    reading_note: NonBlank  # the first line of every method field text a model reads
+    notices: dict[NonBlank, NonBlank]  # a method entity's notice flag -> the sentence it adds
+
+
 class MethodCards(_Strict):
     version: NonBlank
     entity_type: NonBlank
     owner_module: NonBlank
     review_pack: NonBlank
+    presentation: MethodPresentation
     cards: tuple[MethodCard, ...] = Field(min_length=1)
     product_info_patterns: tuple[ProductInfoPattern, ...] = Field(min_length=1)
 

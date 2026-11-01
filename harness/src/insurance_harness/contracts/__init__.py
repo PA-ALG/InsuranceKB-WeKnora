@@ -58,15 +58,6 @@ from insurance_harness.contracts.knowledge import (
     Maintenance as Maintenance,
 )
 from insurance_harness.contracts.knowledge import (
-    NavigationDomain as NavigationDomain,
-)
-from insurance_harness.contracts.knowledge import (
-    NavigationGroup as NavigationGroup,
-)
-from insurance_harness.contracts.knowledge import (
-    NavigationProfile as NavigationProfile,
-)
-from insurance_harness.contracts.knowledge import (
     PresentationProfile as PresentationProfile,
 )
 from insurance_harness.contracts.knowledge import (
@@ -89,4 +80,13 @@ from insurance_harness.contracts.knowledge import (
 )
 from insurance_harness.contracts.knowledge import (
     WikiPage as WikiPage,
+)
+from insurance_harness.contracts.navigation import (
+    NavigationDomain as NavigationDomain,
+)
+from insurance_harness.contracts.navigation import (
+    NavigationGroup as NavigationGroup,
+)
+from insurance_harness.contracts.navigation import (
+    NavigationProfile as NavigationProfile,
 )
