@@ -1,6 +1,6 @@
 # PV-5 问答中的销售状态、登记标识识别与同一产品线的跨年版本
 
-> 状态：Spec r1（2026-11-01，Claude；r1 写 RED 时把年份标记条件写全：旧版带年份时新版须带更晚的年份）。设计依据：[PV-0](PV-0-产品版本与生命周期.md) §3、[附录 A](PV-0-附录A-身份发布同步与迁移.md)
+> 状态：Spec r2（2026-11-01，Claude；r1 写 RED 时把年份标记条件写全：旧版带年份时新版须带更晚的年份；r2 实现时补：每轮每个 Space 只读一次发布版本（状态行与字段合读、点名产品与销售比较范围合读），名称片段全为数字时不点名）。设计依据：[PV-0](PV-0-产品版本与生命周期.md) §3、[附录 A](PV-0-附录A-身份发布同步与迁移.md)
 > §1.4；[PV-4b](PV-4b-读取侧.md) §2、§4；[SK-3](SK-3-销售方法阅读与问答.md) §6（方法知识不进产品问答）。跟踪 Issue #501。
 > 实现 Claude，审核 Codex。真实调用 0（问答回归在部署后线上做，§7）。
 
@@ -43,7 +43,9 @@
 
 ### 1.2 快问快答（`internal/enterprise/chatsource`）
 
-- `publishedHits` 对每个 Wiki Space 先放状态行，再放字段命中；两者合计仍受 `maxPublishedHits`（12）约束。
+- `publishedHits` 对每个 Wiki Space 先放状态行，再放字段命中；两者合计仍受 `maxPublishedHits`（12）约束。状态行与字段由
+  `Service.QuestionReferences` 一次读取同一发布版本得到（平台读取没有缓存，每轮每个 Space 仍只读一次，既有“每轮读一次”
+  的验收不变）。
 - 状态命中：`ID = release:<release>:<Slug>`，`KnowledgeTitle = Title`，`Content = Text`，元数据
   `{source_tier: release, space_id, release_id, logical_slug: <Slug>, knowledge_class: sale_status}`，**没有
   `evidence_index`**（销售期来自登记表固定的产品仓库提交，不是材料原文，不能伪造出处）。元数据由 `knowledge.StatusMetadata`
@@ -78,7 +80,8 @@
   **没有点名产品**时，返回“只属于停售或未开售产品”的材料：材料被至少一款产品引用（`productMaterials` 的归属规则），且
   引用它的每款产品状态都是 `discontinued` 或 `not_yet_on_sale`。被任一在售/状态未知产品引用的材料、未归属的材料都不在
   其中。其余情况返回空。规则与已发布字段的 `forSale` 一致（PV-4b §4.2）；点名的产品一律不删。
-- `namedScope` 在问题没有点名产品时向每个选中的 RAW Space 取这份集合（`productScope.offSale`，按 `materialKey`）。
+- `namedScope` 改用 `Service.QuestionRawScope`：一次读取同时得到点名产品（即 `QuestionProducts`）与这份集合
+  （`productScope.offSale`，按 `materialKey`），不为销售比较多读发布版本。
   `RetrievalScope` 在 `CHUNK_MERGE` 与 `FILTER_TOP_K` 去掉这些材料的片段（同时处理原生阶段的回退列表：重排列表为空时的
   检索列表；合并与重排都为空时的检索列表），检索阶段不改目标。读取失败时记一条不含问题文本的告警并保持原检索（与产品识别
   失败的处理相同）。
@@ -93,6 +96,8 @@
   命中”点名（与实体 ID 命中同级）。标识值去空白后少于 3 个字符的不用。多个实体共用一个标识值时都点名，由版本规则与标注区分。
   于是“2635”点名 2635-1，“2635-1”点名该版本，“26351”“2635-0001”不点名。
 - `knowledge_find_entity`（`FindEntities`）：查询串（`normalize` 后）等于某个标识值时按直接命中排序，与 ID 相同。
+- 名称片段（QA2b 的唯一片段与系列名）全为数字时不点名：问题里的数字是日期或金额（“2025 年”对名称里的“(2026)”），
+  代码由登记标识识别。
 - 已知局限（与现有的实体 ID 子串匹配相同）：纯数字代码可能与金额等数字相撞（如“596 元”）。本片不改 ID 匹配，标识匹配
   已比 ID 更严（完整记号）。
 
