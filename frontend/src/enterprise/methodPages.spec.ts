@@ -6,7 +6,7 @@
 // and the latest update; a product page links its related methods without their content; the Space
 // home directory and the concept keys leave methods out; chat labels method sources apart. Strings
 // are checked in zh-CN; every enterprise locale carries the same method keys.
-import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
+import { flushPromises, mount, RouterLinkStub, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createI18n } from 'vue-i18n'
 import zhCN from '@/enterprise/i18n/locales/zh-CN'
@@ -32,7 +32,7 @@ import { sourceTier, sourceTierLabel } from './sourceTier'
 import { spaceHomeView } from './spaceHomeView'
 import { MATERIAL_A, methodRelease } from './__tests__/methodFixtures'
 
-function page(props: Record<string, unknown>) {
+function page(props: { spaceId: string; entityId: string; releaseId?: string }) {
   return mount(EnterpriseEntity, {
     props,
     global: {
@@ -91,7 +91,7 @@ describe('method page', () => {
     expect(view.get('[data-method-notice]').text()).toBe('含产品信息：以条款与已发布知识为准')
     expect(view.findAll('[data-method-label]').map(label => label.text())).toEqual(['医疗险', '系列：甲医疗系列', '需求分析'])
     const family = view.get('[data-method-family]').findAllComponents(RouterLinkStub)
-    expect(family.map(link => (link.props('to') as Target).params.entityId)).toEqual(['P1'])
+    expect(family.map((link: VueWrapper<any>) => (link.props('to') as Target).params.entityId)).toEqual(['P1'])
 
     expect(view.findAll('[data-method-field]').map(field => field.attributes('data-method-field')))
       .toEqual(['sm-1/method_summary', 'sm-1/method_steps', 'sm-1/key_phrases'])
@@ -128,7 +128,7 @@ describe('method page', () => {
     vi.mocked(readCitation).mockResolvedValue(materialCitation('培训B.pdf'))
     const view = page({ spaceId: 'demo', entityId: 'sm-2', releaseId: 'rel-m' })
     await flushPromises()
-    expect(view.get('[data-method-banner]').exists()).toBe(true)
+    expect(view.find('[data-method-banner]').exists()).toBe(true)
     expect(view.find('[data-method-notice]').exists()).toBe(false)
     expect(view.find('[data-method-family]').exists()).toBe(false)
     expect(view.find('[data-method-updated]').exists()).toBe(false)
@@ -145,8 +145,8 @@ describe('product page', () => {
     const related = view.get('[data-related-methods]')
     expect(related.text()).toContain('相关销售方法')
     const links = related.findAllComponents(RouterLinkStub)
-    expect(links.map(link => link.text())).toEqual(['需求分析三步法', '说明会邀约法'])
-    expect(links.map(link => link.props('to'))).toEqual(['sm-1', 'sm-3'].map(entityId => (
+    expect(links.map((link: VueWrapper<any>) => link.text())).toEqual(['需求分析三步法', '说明会邀约法'])
+    expect(links.map((link: VueWrapper<any>) => link.props('to'))).toEqual(['sm-1', 'sm-3'].map(entityId => (
       { name: 'enterpriseEntity', params: { spaceId: 'demo', entityId }, query: { release: 'rel-m' } })))
     expect(view.text()).not.toContain('问家庭')
     expect(view.find('[data-method-banner]').exists()).toBe(false)
