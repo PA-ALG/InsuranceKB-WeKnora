@@ -93,14 +93,17 @@ def judge(
     """The version judgement of one training material (§2.3–§2.7)."""
     commit = next((p.version.basis_commit for p in products if p.version is not None), None)
     text = _text(file_name, window)
-    named = _named_prefixes(brand_hits(file_name, window, products, policy), text)
+    hits = brand_hits(file_name, window, products, policy)
+    named = _named_prefixes(hits, text)
     signals = date_signals(file_name, head, window, policy)
     widest = {
         m for m in named.values() if not any(o != m and o.startswith(m) for o in named.values())
     }
     if len(widest) > 1:  # two families named apart, a shared short prefix or not (review R1)
         return Judgement("families", VersionBasis(signals=signals, metadata_commit=commit))
-    family = [p for p in products if p.product_id in named]
+    # One family: only brands whose core extends the written name or is extended by it; a core
+    # the written name contradicts (远山恒安 against 远山恒泰) never joins it (review R1).
+    family = [p for p in products if p.product_id in named and _related(hits[p.product_id], widest)]
     if not family:
         return Judgement("none", VersionBasis(signals=signals, metadata_commit=commit))
     named_editions = _material_editions(text, family, named, policy)
@@ -261,6 +264,10 @@ def _named_prefixes(hits: dict[str, str], text: str) -> dict[str, str]:
     return named
 
 
+def _related(core: str, widest: set[str]) -> bool:
+    return any(core.startswith(name) or name.startswith(core) for name in widest)
+
+
 def _material_editions(
     text: str,
     family: Sequence["RegisteredProduct"],
@@ -269,13 +276,9 @@ def _material_editions(
 ) -> set[str]:
     """The editions the material names explicitly — in brackets, or right after the brand —
     whether or not that edition is registered, plus registered editions it names (review R3)."""
-    found = {
-        match.group(1)
-        for match in re.finditer(policy.edition_pattern, text)
-        if not any(c.isdigit() for c in match.group(1))
-    }
-    for prefix in set(named.values()):
-        after = re.escape(prefix) + r"([^\d()\s]{1,4}?[版款])"
+    found = {match.group(1) for match in re.finditer(_bracketed(policy), text)}
+    for prefix in set(named.values()):  # the same edition word, right after the written brand
+        after = re.escape(prefix) + f"({policy.edition_word})"
         found |= {match.group(1) for match in re.finditer(after, text)}
     registered = {e for p in family for e in _editions(p, policy)}
     return found | {e for e in registered if _edition_core(e) in text}
@@ -313,11 +316,16 @@ def _type_conflict(
     return False
 
 
+def _bracketed(policy: "AttributionPolicy") -> str:
+    """An edition in brackets, as filed names print it: (悦享版), (尊享版25)."""
+    return rf"\(({policy.edition_word})(?:\d{{2}})?\)"
+
+
 def _editions(product: "RegisteredProduct", policy: "AttributionPolicy") -> set[str]:
     return {
         match.group(1).casefold()
         for name in product.names
-        for match in re.finditer(policy.edition_pattern, fold(name))
+        for match in re.finditer(_bracketed(policy), fold(name))
     }
 
 

@@ -29,11 +29,15 @@ from insurance_harness.identity.training_versions import versioned
 from insurance_harness.identity.version_basis import VersionBasis
 
 MAX_CHOICES = 50  # the platform's limit on options per confirmation item (S5b-3a)
-# Training materials by version (PV-3 Spec §3): these questions are judged again when answered.
-VERSION_REASONS = frozenset({"version_candidates", "no_date_signal", "version_role_unresolved"})
 _ONLY_IGNORED = frozenset(
-    {"anchor_conflict", "text_unavailable", "no_registered_version", "date_signals_conflict",
-     "multiple_families", "shared_clause_code"}
+    {
+        "anchor_conflict",
+        "text_unavailable",
+        "no_registered_version",
+        "date_signals_conflict",
+        "multiple_families",
+        "shared_clause_code",
+    }
 )
 OPTION_KEY = r"^[a-z0-9][a-z0-9:._-]{0,127}$"  # the platform's option key format (S5b-3a)
 
@@ -111,7 +115,9 @@ def _offered(pending: Attribution, registered: set[str], policy: AttributionPoli
         raise ConfirmationError("NOT_CONFIRMABLE")
     if pending.product_id not in registered:
         return []
-    if pending.reason == "version_role_unresolved":  # only the roles a training material may take
+    if pending.reason == "version_role_unresolved" or (
+        pending.reason == "role_unresolved" and pending.version_basis is not None
+    ):  # a training material decided by version takes only the roles one may take
         return [Choice(key=f"role:{r}", kind="role", value=r) for r in policy.brand_roles]
     if pending.reason == "role_unresolved":
         roles = load_material_roles().roles
@@ -170,17 +176,26 @@ def conclude(
         raise ConfirmationError("CHOICE_STALE") from None
     if not fits:
         raise ConfirmationError("CHOICE_STALE")
-    if pending.version_basis is not None and pending.reason in VERSION_REASONS:
-        by_person = pending.reason != "version_role_unresolved"
-        role_by = "person" if choice.kind == "role" else ("machine" if result.role else None)
-        basis = pending.version_basis.model_copy(
-            update={
-                "version_decided_by": "person" if by_person else "machine",
-                "role_decided_by": role_by,
-            }
-        )
-        return result.model_copy(update={"version_basis": basis})
+    if (basis := pending.version_basis) is not None:  # every follow-up keeps it (review R4)
+        return result.model_copy(update={"version_basis": _decided(basis, pending, choice, result)})
     return result
+
+
+def _decided(
+    basis: VersionBasis, pending: Attribution, choice: Choice, result: Attribution
+) -> VersionBasis:
+    """The question's evidence with who decided: choosing a version in the version question is
+    a person's version decision; a role answer is a person's role decision; a role the rules
+    recognised is the machine's; anything decided before stays as it was."""
+    version_by = basis.version_decided_by
+    if pending.reason in {"version_candidates", "no_date_signal"} and choice.kind == "product":
+        version_by = "person"
+    role_by = basis.role_decided_by
+    if choice.kind == "role":
+        role_by = "person"
+    elif role_by is None and result.role is not None:
+        role_by = "machine"
+    return basis.model_copy(update={"version_decided_by": version_by, "role_decided_by": role_by})
 
 
 def _evidence(basis: VersionBasis | None) -> VersionBasis | None:
@@ -212,8 +227,9 @@ def _still_asked(
         same = fresh.reason in {"version_candidates", "no_date_signal"} and (
             pending.product_id in fresh.candidates
         )
-    elif basis.version_decided_by == "machine":
-        same = (fresh.reason, fresh.product_id) == (pending.reason, pending.product_id)
+    elif basis.version_decided_by == "machine":  # still the one consistent version (review R4)
+        unique = fresh.version_basis is not None and fresh.version_basis.version_decided_by
+        same = unique == "machine" and fresh.product_id == pending.product_id
     else:  # the version question itself
         same = fresh.reason == pending.reason and choice.value in fresh.candidates
     if not same:

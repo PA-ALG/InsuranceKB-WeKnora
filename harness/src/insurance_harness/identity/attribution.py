@@ -129,7 +129,7 @@ class AttributionPolicy(_Frozen):
     training_signals: tuple[str, ...] = Field(min_length=1)
     plan_type_groups: tuple[PlanTypeGroup, ...]
     rider_words: tuple[str, ...]
-    edition_pattern: str = Field(min_length=1)
+    edition_word: str = Field(min_length=1)  # one edition, bracketed or right after the brand
     date_masks: tuple[str, ...]  # amounts and reference numbers, masked before dates are read
 
     @model_validator(mode="after")
@@ -216,19 +216,19 @@ class Attribution(_Frozen):
 
 def _check_versions(policy: AttributionPolicy) -> None:
     """The PV-3 data: date patterns with the groups their precision needs, a training role among
-    the brand roles, an edition pattern of one group, and an ordered year range."""
+    the brand roles, an edition word without groups, and an ordered year range."""
     groups = {"year": {"y"}, "month": {"y", "m"}, "day": {"y", "m", "d"}}
     try:
         compiled = [(spec, re.compile(spec.pattern)) for spec in policy.date_patterns]
-        edition = re.compile(policy.edition_pattern)
+        edition = re.compile(policy.edition_word)
         for mask in policy.date_masks:
             re.compile(mask)
     except re.error as error:
         raise ValueError("invalid version pattern") from error
     if any(set(regex.groupindex) != groups[spec.precision] for spec, regex in compiled):
         raise ValueError("a date pattern without the groups of its precision")
-    if edition.groups != 1 or policy.training_role not in policy.brand_roles:
-        raise ValueError("an edition pattern needs one group and the training role a brand role")
+    if edition.groups != 0 or policy.training_role not in policy.brand_roles:
+        raise ValueError("an edition word has no group and the training role is a brand role")
     if policy.date_years[0] > policy.date_years[1]:
         raise ValueError("an empty year range")
 
