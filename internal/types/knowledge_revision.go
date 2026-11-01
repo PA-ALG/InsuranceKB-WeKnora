@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -178,6 +179,42 @@ type KnowledgeRevisionSource struct {
 }
 
 func (KnowledgeRevisionSource) TableName() string { return "knowledge_revision_sources" }
+
+// RevisionSourceRecordOutcome is the result of recording a missing commit-time source row (S11g).
+type RevisionSourceRecordOutcome string
+
+// Outcomes of RecordMissingRevisionSource: an existing row is never modified.
+const (
+	RevisionSourceRecordPresent     RevisionSourceRecordOutcome = "present"
+	RevisionSourceRecordWouldRecord RevisionSourceRecordOutcome = "would_record"
+	RevisionSourceRecordRecorded    RevisionSourceRecordOutcome = "recorded"
+)
+
+const pdfMIME = "application/pdf"
+
+// officeSourceMIME is a fixed table, not the host MIME database: the stored resource MIME comes
+// from mime.TypeByExtension and is empty when the image ships no /etc/mime.types (S11g).
+var officeSourceMIME = map[string]string{
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+// RevisionSourceMIME decides whether a stored source resource records a commit-time source
+// revision and under which MIME: PDFs exactly as before (by MIME only), and the three OOXML
+// formats S11 captures when the resource MIME is empty or equals the format's canonical MIME.
+// Anything else records nothing, so the commit still succeeds without a source row.
+func RevisionSourceMIME(resourceMIME, originalName string) (string, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(resourceMIME))
+	if normalized == pdfMIME {
+		return pdfMIME, true
+	}
+	canonical, ok := officeSourceMIME[strings.ToLower(filepath.Ext(strings.TrimSpace(originalName)))]
+	if !ok || (normalized != "" && normalized != canonical) {
+		return "", false
+	}
+	return canonical, true
+}
 
 // ComputeKnowledgeRevisionSourceID freezes the server-owned source-row key.
 func ComputeKnowledgeRevisionSourceID(source KnowledgeRevisionSource) (string, error) {

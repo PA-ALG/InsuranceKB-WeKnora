@@ -379,50 +379,70 @@ func recordRevisionSourceLocked(
 	knowledge *types.Knowledge,
 	revision *types.KnowledgeRevision,
 ) error {
+	source, err := prepareRevisionSourceLocked(tx, knowledge, revision, true, revision.CompletedAt)
+	if err != nil || source == nil {
+		return err
+	}
+	if err := tx.Create(source).Error; err != nil {
+		return fmt.Errorf("%w: persist immutable source record: %v", ErrRevisionCommitFailed, err)
+	}
+	return nil
+}
+
+// prepareRevisionSourceLocked builds the released, unsealed source row of a committed attempt.
+// It returns nil for formats that record no source (S11g: PDF and the three OOXML formats do);
+// write=false never backfills the resource digest (dry run).
+func prepareRevisionSourceLocked(
+	tx *gorm.DB,
+	knowledge *types.Knowledge,
+	revision *types.KnowledgeRevision,
+	write bool,
+	now time.Time,
+) (*types.KnowledgeRevisionSource, error) {
 	handle, ok := types.ParseResourcePath(knowledge.FilePath)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	var resource types.StoredResource
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
 		"handle = ? AND tenant_id = ? AND state = ?",
 		handle, knowledge.TenantID, types.ResourceStateActive,
 	).First(&resource).Error; err != nil {
-		return fmt.Errorf("%w: source resource unavailable", ErrRevisionCommitFailed)
+		return nil, fmt.Errorf("%w: source resource unavailable", ErrRevisionCommitFailed)
 	}
-	if !strings.EqualFold(strings.TrimSpace(resource.MimeType), "application/pdf") {
-		return nil
+	mimeType, recorded := types.RevisionSourceMIME(resource.MimeType, resource.OriginalName)
+	if !recorded {
+		return nil, nil
 	}
 	if resource.Lifecycle != types.ResourceLifecyclePersistent || resource.Size <= 0 {
-		return fmt.Errorf("%w: source resource metadata is incomplete", ErrRevisionCommitFailed)
+		return nil, fmt.Errorf("%w: source resource metadata is incomplete", ErrRevisionCommitFailed)
 	}
 	var bindingCount int64
 	if err := tx.Model(&types.ResourceBinding{}).Where(
 		"resource_id = ? AND tenant_id = ? AND owner_type = ? AND owner_id = ? AND relation = ?",
 		resource.ID, knowledge.TenantID, "knowledge", knowledge.ID, "source_file",
 	).Count(&bindingCount).Error; err != nil || bindingCount != 1 {
-		return fmt.Errorf("%w: source resource binding is invalid", ErrRevisionCommitFailed)
+		return nil, fmt.Errorf("%w: source resource binding is invalid", ErrRevisionCommitFailed)
 	}
-	if resource.ContentHash == "" {
+	if resource.ContentHash == "" && write {
 		result := tx.Model(&types.StoredResource{}).Where(
 			"id = ? AND tenant_id = ? AND content_hash = '' AND state = ?",
 			resource.ID, knowledge.TenantID, types.ResourceStateActive,
 		).Update("content_hash", revision.FileSHA256)
 		if result.Error != nil || result.RowsAffected != 1 {
-			return fmt.Errorf("%w: source resource digest backfill conflict", ErrRevisionCommitFailed)
+			return nil, fmt.Errorf("%w: source resource digest backfill conflict", ErrRevisionCommitFailed)
 		}
 		resource.ContentHash = revision.FileSHA256
 	}
-	if resource.ContentHash != revision.FileSHA256 {
-		return fmt.Errorf("%w: source resource digest drift", ErrRevisionCommitFailed)
+	if resource.ContentHash != "" && resource.ContentHash != revision.FileSHA256 {
+		return nil, fmt.Errorf("%w: source resource digest drift", ErrRevisionCommitFailed)
 	}
-	now := revision.CompletedAt
 	source := &types.KnowledgeRevisionSource{
 		TenantID: knowledge.TenantID, KnowledgeID: knowledge.ID,
 		ParseAttempt: revision.ParseAttempt, ResourceID: resource.ID,
 		ResourceHandle: resource.Handle,
 		FileSHA256:     revision.FileSHA256, ObjectSHA256: revision.FileSHA256,
-		Size: resource.Size, MimeType: strings.ToLower(strings.TrimSpace(resource.MimeType)),
+		Size: resource.Size, MimeType: mimeType,
 		ManifestAlgorithm: revision.ManifestAlgorithm, ManifestDigest: revision.ManifestDigest,
 		ChunkCount: revision.ChunkCount, ImmutableLocator: types.BuildResourcePath(resource.Handle),
 		RetentionState: types.KnowledgeRevisionSourceReleased, ReleasedAt: &now,
@@ -430,13 +450,79 @@ func recordRevisionSourceLocked(
 	}
 	revisionSourceID, err := types.ComputeKnowledgeRevisionSourceID(*source)
 	if err != nil {
-		return fmt.Errorf("%w: compute immutable source id", ErrRevisionCommitFailed)
+		return nil, fmt.Errorf("%w: compute immutable source id", ErrRevisionCommitFailed)
 	}
 	source.RevisionSourceID = revisionSourceID
-	if err := tx.Create(source).Error; err != nil {
-		return fmt.Errorf("%w: persist immutable source record: %v", ErrRevisionCommitFailed, err)
+	return source, nil
+}
+
+// RecordMissingRevisionSource records the commit-time source row of an attempt committed before
+// its format recorded one (S11g). An existing row is returned untouched; dryRun writes nothing.
+// Any binding or format failure is ErrRevisionSourceUnavailable and writes nothing.
+func (r *knowledgeRepository) RecordMissingRevisionSource(
+	ctx context.Context,
+	tenantID uint64,
+	knowledgeID string,
+	parseAttempt int64,
+	dryRun bool,
+) (*types.KnowledgeRevisionSource, types.RevisionSourceRecordOutcome, error) {
+	if tenantID == 0 || knowledgeID == "" || parseAttempt <= 0 {
+		return nil, "", ErrRevisionSourceUnavailable
 	}
-	return nil
+	var result *types.KnowledgeRevisionSource
+	var outcome types.RevisionSourceRecordOutcome
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var knowledge types.Knowledge
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"tenant_id = ? AND id = ?", tenantID, knowledgeID,
+		).First(&knowledge).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrRevisionSourceUnavailable
+		}
+		if err != nil {
+			return err
+		}
+		if knowledge.ParseStatus != types.ParseStatusCompleted ||
+			knowledge.CurrentParseAttempt != parseAttempt || knowledge.FileSHA256 == "" {
+			return ErrRevisionSourceUnavailable
+		}
+		var revision types.KnowledgeRevision
+		err = tx.Where("knowledge_id = ? AND parse_attempt = ?", knowledgeID, parseAttempt).
+			First(&revision).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && revision.FileSHA256 != knowledge.FileSHA256) {
+			return ErrRevisionSourceUnavailable
+		}
+		if err != nil {
+			return err
+		}
+		var existing types.KnowledgeRevisionSource
+		err = tx.Where("tenant_id = ? AND knowledge_id = ? AND parse_attempt = ?",
+			tenantID, knowledgeID, parseAttempt).Take(&existing).Error
+		if err == nil {
+			result, outcome = &existing, types.RevisionSourceRecordPresent
+			return nil
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		source, err := prepareRevisionSourceLocked(tx, &knowledge, &revision, !dryRun, time.Now().UTC())
+		if err != nil || source == nil {
+			return ErrRevisionSourceUnavailable
+		}
+		if dryRun {
+			result, outcome = source, types.RevisionSourceRecordWouldRecord
+			return nil
+		}
+		if err := tx.Create(source).Error; err != nil {
+			return err
+		}
+		result, outcome = source, types.RevisionSourceRecordRecorded
+		return nil
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return result, outcome, nil
 }
 
 func (r *knowledgeRepository) GetRevisionState(
