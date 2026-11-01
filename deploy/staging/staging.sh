@@ -151,7 +151,10 @@ cmd_images() {
   [[ -n "$cfg" ]] || die "live app config mount not found"
   # I5: images built after I5 ship contracts/ (no mount); a pre-I5 live app mounts them.
   if [[ -n "$contracts" ]]; then
-    [[ "$contracts" != *[\"\\]* ]] || die "live contracts mount path has a quote or backslash"
+    # The path goes into a YAML double-quoted short-syntax entry: refuse what would change it there
+    # (line folding, escapes, Compose `$` interpolation, the `:` separator) instead of escaping.
+    [[ "$contracts" != *[[:cntrl:]\"\\\$:]* ]] \
+      || die "live contracts mount path has a control character, quote, backslash, \$ or :"
     printf 'services:\n  app:\n    volumes:\n      - "%s:/app/contracts:ro"\n' "$contracts" \
       >"$STAGING_HOME/contracts.compose.yaml"
   else

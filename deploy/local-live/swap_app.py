@@ -7,10 +7,9 @@ once (`-pre-s4`) and kept stopped; every swap (forward or back) is rebuilt from 
 ENTERPRISE_CONTRACTS_DIR, the citation signing key, ENTERPRISE_SPACES and the managed env keys
 below.
 
-Contracts (I5): the swap uses the image's own /app/contracts, checked first by a throwaway
-container (`test -f`; no network, env or mounts). A pre-I5 image without them needs
---legacy-contracts-dir (contracts/ exported from the build source the dry run names); for an image
-that ships them the flag is refused, as an outside dir would shadow them (the drift behind #522).
+Contracts (I5, app_contracts.py): the image's own /app/contracts, or for a pre-I5 image an explicit
+--legacy-contracts-dir. A dry run for an image without either still prints its summary (contracts
+"missing", build_source_head) and exits 3; without --dry-run that case is refused.
 
 Managed env keys are carried over from the CURRENT app container, so a later plain swap keeps
 them; `--set-env KEY=VALUE` adds one (`--replace-env` to change its value) and `--unset-env KEY`
@@ -34,6 +33,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -42,7 +42,21 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import ModuleType
 from typing import NamedTuple, NoReturn
+
+
+def sibling(name: str) -> ModuleType:
+    """Load a module next to this file by path: `python3 -I` keeps this directory off sys.path."""
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().with_name(name))
+    if spec is None or spec.loader is None:
+        raise ImportError(name)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+contracts = sibling("app_contracts.py")
 
 PREFIX = "upg-final-082-20260928-live"
 APP = f"{PREFIX}-app"
@@ -54,10 +68,6 @@ VOLUMES = (
     (f"{PREFIX}-c5", "/run/insurancekb/c5", False),
     (f"{PREFIX}-docreader-tmp", "/tmp/docreader", False),
 )
-CONTRACTS_DIR = "/app/contracts"
-# The schemas the platform reads at startup (releasestore.Production).
-CONTRACT_SCHEMAS = ("candidate_bundle.schema.json", "evidence.schema.json")
-SOURCE_HEAD_LABEL = "io.insurancekb.app.build-source-head"
 SIGNING_KEY = "E2E_CITATION_SIGNING_KEY"
 SPACES_KEY = "ENTERPRISE_SPACES"
 INTENT_RECORD = "swap_app.intent.json"
@@ -163,29 +173,6 @@ def private_files(private_dir: str) -> Path:
     if not ((private / "config.yaml").is_file() and (private / "secrets.env").is_file()):
         raise Refused("private dir must hold config.yaml and secrets.env; stop")
     return private
-
-
-def legacy_contracts(path: str | None) -> Path | None:
-    if path is None:
-        return None
-    directory = Path(path).resolve()
-    if ":" in str(directory):
-        raise Refused("--legacy-contracts-dir path contains ':', which docker -v rejects; stop")
-    if not all((directory / name).is_file() for name in CONTRACT_SCHEMAS):
-        raise Refused(f"--legacy-contracts-dir must hold {', '.join(CONTRACT_SCHEMAS)}; stop")
-    return directory
-
-
-def image_contracts(image: str) -> bool:
-    """Whether the image ships the schemas: `test -f` in a throwaway, isolated container."""
-    checks: list[str] = []
-    for name in CONTRACT_SCHEMAS:
-        checks += [*(["-a"] if checks else []), "-f", f"{CONTRACTS_DIR}/{name}"]
-    probe = ["run", "--rm", "--network", "none", "--pull", "never", "--entrypoint", "test", image]
-    result = subprocess.run(["docker", *probe, *checks], capture_output=True, text=True)
-    if result.returncode not in (0, 1):  # 1 is `test` saying no; anything else is docker failing
-        raise Refused("docker run (contracts probe) failed; stop")
-    return result.returncode == 0
 
 
 def private_value(private: Path, key: str) -> str:
@@ -332,15 +319,12 @@ def plan(opts: argparse.Namespace) -> Plan:
     record = read_record(private / INTENT_RECORD)
     spaces = read_spaces(opts.spaces)
     new = inspect(opts.image, "image")  # an unknown image stops here
-    legacy = legacy_contracts(opts.legacy_contracts_dir)
-    shipped = image_contracts(new["Id"])
-    if shipped and legacy is not None:
-        raise Refused("new image ships contracts; --legacy-contracts-dir would shadow them; stop")
-    if not shipped and legacy is None:
-        raise Refused(
-            "new image ships no contracts; pass --legacy-contracts-dir with contracts/ exported "
-            "from its build source; stop"
-        )
+    try:
+        source_contracts = contracts.settle(new, opts.legacy_contracts_dir)
+    except contracts.ContractsError as exc:
+        raise Refused(f"{exc}; stop") from None
+    if source_contracts.mode == "missing" and not opts.dry_run:
+        raise Refused(f"{contracts.MISSING}; stop")
 
     # Source of truth for runtime settings: the original container (renamed once).
     names = container_names()
@@ -386,7 +370,7 @@ def plan(opts: argparse.Namespace) -> Plan:
             raise Refused(f"current app sets {key} to another value; pass --replace-env; stop")
         managed[key] = value
 
-    runtime["ENTERPRISE_CONTRACTS_DIR"] = CONTRACTS_DIR
+    runtime["ENTERPRISE_CONTRACTS_DIR"] = contracts.CONTRACTS_DIR
     runtime[SIGNING_KEY] = private_value(private, SIGNING_KEY)
     if spaces is not None:
         runtime[SPACES_KEY] = spaces
@@ -410,8 +394,7 @@ def plan(opts: argparse.Namespace) -> Plan:
     for name, destination, writable in VOLUMES:
         args += ["-v", f"{name}:{destination}" + ("" if writable else ":ro")]
     args += ["-v", f"{private}/config.yaml:/app/config/config.yaml:ro"]
-    if legacy is not None:
-        args += ["-v", f"{legacy}:{CONTRACTS_DIR}:ro"]
+    args += source_contracts.mounts()
     for key in sorted(runtime):
         args += ["-e", key]
     args += [new["Id"], *command]
@@ -432,8 +415,8 @@ def plan(opts: argparse.Namespace) -> Plan:
         "backup": BACKUP,
         "current_image": current["Image"] if current else None,
         "new_image": new["Id"],
-        "build_source_head": (new["Config"].get("Labels") or {}).get(SOURCE_HEAD_LABEL),
-        "contracts": "image" if legacy is None else "legacy_dir",
+        "build_source_head": source_contracts.source_head,
+        "contracts": source_contracts.mode,
         "env_keys": sorted(runtime),
         "env_added": sorted(set(effective_env) - set(current_env)),
         "env_removed": sorted(set(current_env) - set(effective_env)),
@@ -484,6 +467,9 @@ def main(argv: list[str]) -> int:
     planned = plan(opts)
     if opts.dry_run:
         print(json.dumps({"dry_run": True, **planned.summary}, ensure_ascii=False))
+        if planned.summary["contracts"] == "missing":
+            print(f"{contracts.MISSING}; this image cannot be swapped in as is", file=sys.stderr)
+            return 3
         return 0
     swap(planned)
     created = inspect(APP)
