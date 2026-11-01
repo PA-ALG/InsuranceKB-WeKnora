@@ -30,13 +30,13 @@ from insurance_harness.contracts.knowledge import (
     Evidence,
     ExpertRevision,
     Locator,
-    NavigationProfile,
     PresentationProfile,
     QAItem,
     Relation,
     SchemaSnapshot,
     WikiPage,
 )
+from insurance_harness.contracts.navigation import NavigationProfile
 
 SCHEMA_URI = "https://json-schema.org/draft/2020-12/schema"
 CONTRACT_URI = "https://pa-alg.github.io/InsuranceKB-WeKnora/contracts/"

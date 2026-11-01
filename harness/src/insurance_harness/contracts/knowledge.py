@@ -331,8 +331,9 @@ class ProfileSection(ContractModel):
 class PresentationProfile(ContractModel):
     """A pack's display groups and field order, published with the release it renders.
 
-    Readers show an entity with the profile whose classification_labels meet the entity's,
-    so each field and section appears once and the labels say which entities it serves.
+    Readers show an entity with the first profile whose entity_types name its type; otherwise with
+    a profile without entity_types whose classification_labels meet the entity's (SK-3 §1), so each
+    field and section appears once and the labels or types say which entities it serves.
     """
 
     profile_id: NonBlank
@@ -340,8 +341,14 @@ class PresentationProfile(ContractModel):
     profile_sha256: Sha256
     schema_pack_id: NonBlank
     display_name: str | None = None  # S3e: the pack's display name
-    classification_labels: list[NonBlank] = Field(min_length=1)
+    classification_labels: list[NonBlank] = Field(default_factory=list)
     sections: list[ProfileSection] = Field(min_length=1)
+    # SK-3: the entity types the profile serves whatever their labels, and whether they are method
+    # knowledge (training material, not product facts) with the copy readers give it.
+    entity_types: list[NonBlank] | None = Field(default=None, min_length=1)
+    knowledge_class: Literal["method"] | None = None
+    reading_note: NonBlank | None = None
+    notices: dict[NonBlank, NonBlank] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def keys_are_unique(self) -> Self:
@@ -349,90 +356,23 @@ class PresentationProfile(ContractModel):
         fields = [field.field_key for section in self.sections for field in section.fields]
         if len(set(sections)) != len(sections) or len(set(fields)) != len(fields):
             raise ValueError("section and field keys must be unique within a profile")
+        if not self.classification_labels and not self.entity_types:
+            raise ValueError("a profile serves classification labels or entity types")
+        if self.knowledge_class is not None and not self.entity_types:
+            raise ValueError("a knowledge class is declared for entity types")
+        if self.knowledge_class is None and (self.reading_note is not None or self.notices):
+            raise ValueError("reading copy comes with a knowledge class")
         return self
 
-
-class NavigationGroup(ContractModel):
-    group_key: NonBlank
-    display_name: NonBlank
-    classification_labels: list[NonBlank] = Field(default_factory=list)
-
-
-class NavigationDomain(ContractModel):
-    domain_key: NonBlank
-    display_name: NonBlank
-    entity_types: list[NonBlank] = Field(min_length=1)
-    groups: list[NavigationGroup] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def group_keys_are_unique(self) -> Self:
-        keys = [group.group_key for group in self.groups]
-        if len(set(keys)) != len(keys):
-            raise ValueError("group keys must be unique within a domain")
-        return self
-
-
-def question_term_text(term: str) -> str:
-    """A question term exactly as the platform's Go normalizeQuestionTerm compares it (QA3
-    Spec §2): NFKC, lower case, without whitespace or punctuation; symbols stay. A term must
-    keep at least two characters."""
-    folded = unicodedata.normalize("NFKC", term).lower()
-    return "".join(
-        ch
-        for ch in folded
-        if not _platform_space(ch) and not unicodedata.category(ch).startswith("P")
-    )
-
-
-def _platform_space(ch: str) -> bool:
-    # Go unicode.IsSpace, plus the BOM its normalize also drops. str.isspace differs from it only
-    # by the information separators U+001C-U+001F, which Go keeps (checked over every code point).
-    return (ch.isspace() and not "\x1c" <= ch <= "\x1f") or ch == "\ufeff"
-
-
-class NavigationProfile(ContractModel):
-    """How readers organise a release's entries (S3e): domains by entity type, then groups by
-    classification label. Versioned data published with the release, replaced whole each time.
-    """
-
-    navigation_id: NonBlank
-    navigation_version: NonBlank
-    # S3f-2: the Space's display name and the fields of its product overview, in column order.
-    display_name: NonBlank | None = None
-    overview_fields: list[NonBlank] = Field(default_factory=list)
-    domains: list[NavigationDomain] = Field(min_length=1)
-    # QA3: per field key, groups of 1-3 terms; a question asks a field when it contains every
-    # term of one group. Absent in navigations published before QA3.
-    question_terms: dict[NonBlank, list[list[NonBlank]]] | None = None
-    # PV-4b: per question intent, term groups shaped like question_terms. The platform narrows
-    # product versions by intent from these alone (Spec PV-4b §4). Absent before PV-4b.
-    question_intents: dict[Literal["sales", "service"], list[list[NonBlank]]] | None = None
-
-    @model_validator(mode="after")
-    def keys_are_unique(self) -> Self:
-        keys = [domain.domain_key for domain in self.domains]
-        if len(set(keys)) != len(keys):
-            raise ValueError("domain keys must be unique")
-        if len(set(self.overview_fields)) != len(self.overview_fields):
-            raise ValueError("overview fields must be unique")
-        intents = (self.question_intents or {}).values()
-        for groups in [*(self.question_terms or {}).values(), *intents]:
-            _check_term_groups(groups)
-        return self
-
-
-def _check_term_groups(groups: list[list[str]]) -> None:
-    # A group matches when every term occurs, so its order carries nothing: compare sets.
-    seen: set[frozenset[str]] = set()
-    for group in groups:
-        texts = frozenset(question_term_text(term) for term in group)
-        if not 1 <= len(group) <= 3 or any(len(text) < 2 for text in texts):
-            raise ValueError("a question-term group has 1 to 3 terms of 2+ characters")
-        if len(texts) != len(group):
-            raise ValueError("a question-term group repeats a term")
-        if texts in seen:
-            raise ValueError("the term groups of one key must be distinct")
-        seen.add(texts)
+    @model_serializer(mode="wrap")
+    def omit_absent_type_data(self, handler: SerializerFunctionWrapHandler) -> Any:
+        # Absent SK-3 keys are not serialized, so every existing profile keeps its digest.
+        data = handler(self)
+        if isinstance(data, dict):
+            for key in ("entity_types", "knowledge_class", "reading_note", "notices"):
+                if not data.get(key):
+                    data.pop(key, None)
+        return data
 
 
 class ConceptStatement(ContractModel):

@@ -80,6 +80,10 @@ func (s *Service) Edit(ctx context.Context, p release.Principal, role, spaceID s
 	if err := json.Unmarshal(base.Payload, &payload); err != nil {
 		return Result{}, failure(ErrorInvalid, "the claim payload is not an object")
 	}
+	subject, _ := payload["subject_ref"].(string)
+	if release.MethodEntityTypes(active.Members)[release.EntityTypes(active.Members)[subject]] {
+		return Result{}, failure(ErrorMethodKnowledge, "method knowledge is corrected through its source material")
+	}
 	before := Value{State: stringField(payload, "state"), Value: payload["value"]}
 	if before.State == after.State && fmt.Sprint(before.Value) == fmt.Sprint(after.Value) {
 		return Result{}, failure(ErrorInvalid, "the edit changes nothing")

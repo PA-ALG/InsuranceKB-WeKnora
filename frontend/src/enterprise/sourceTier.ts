@@ -1,4 +1,4 @@
-export type SourceTier = 'raw_text' | 'release' | 'wiki_page'
+export type SourceTier = 'raw_text' | 'release' | 'wiki_page' | 'method'
 
 function referenceMetadata(reference: unknown): Record<string, unknown> | null {
   if (!reference || typeof reference !== 'object') return null
@@ -10,7 +10,10 @@ function referenceMetadata(reference: unknown): Record<string, unknown> | null {
 
 /** Only the platform's reference metadata can identify a reviewed source. */
 export function sourceTier(reference: unknown): SourceTier | null {
-  const tier = referenceMetadata(reference)?.source_tier
+  const metadata = referenceMetadata(reference)
+  const tier = metadata?.source_tier
+  // SK-3: a release reference of method knowledge is training material, not a reviewed fact.
+  if (tier === 'release' && metadata?.knowledge_class === 'method') return 'method'
   return tier === 'raw_text' || tier === 'release' || tier === 'wiki_page' ? tier : null
 }
 
@@ -18,6 +21,7 @@ export function sourceTierLabel(tier: SourceTier | null | undefined, t: (key: st
   if (tier === 'raw_text') return t('chat.sourceTierRawText')
   if (tier === 'release') return t('chat.sourceTierRelease')
   if (tier === 'wiki_page') return t('chat.sourceTierWikiPage')
+  if (tier === 'method') return t('chat.sourceTierMethod')
   return ''
 }
 

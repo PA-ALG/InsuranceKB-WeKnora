@@ -28,6 +28,7 @@ export default {
     "sourceTierRawText": "原文检索（未经编译审核）",
     "sourceTierRelease": "已发布知识（审核过）",
     "sourceTierWikiPage": "模型整理（未逐条审核）",
+    "sourceTierMethod": "销售方法（培训材料，非产品事实）",
     "releaseCitationUnavailable": "此引用缺少准确出处，无法打开。",
     "releaseCitationDenied": "此渠道无法打开出处，请使用已登录的网页会话。",
     "knowledgeFindEntity": "查找已发布产品",
@@ -257,6 +258,23 @@ export default {
       "collapseEntry": "收起{name}的字段",
       "noFields": "暂无字段",
       "noConcepts": "该版本中暂无跨条目概念"
+    },
+    "method": {
+      "banner": "销售方法（培训材料，非产品事实）",
+      "notices": {
+        "product_info": "含产品信息：以条款与已发布知识为准"
+      },
+      "labels": "适用范围",
+      "family": "系列：{name}",
+      "familyProducts": "该系列产品：",
+      "source": "原文",
+      "sourceOf": "打开第 {n} 项的原文",
+      "materials": "来源材料：",
+      "material": "{document}（入库 {date}）",
+      "materialsLoading": "正在读取来源材料…",
+      "materialsFailed": "来源材料暂不可读",
+      "updated": "更新于 {date}",
+      "related": "相关销售方法"
     },
     "version": {
       "title": "版本信息",

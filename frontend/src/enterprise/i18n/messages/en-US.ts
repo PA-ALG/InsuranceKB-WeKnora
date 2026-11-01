@@ -14,6 +14,7 @@ export default {
     "sourceTierRawText": "Original text search (not compiled or reviewed)",
     "sourceTierRelease": "Published knowledge (reviewed)",
     "sourceTierWikiPage": "Model-compiled (not reviewed item by item)",
+    "sourceTierMethod": "Sales method (training material, not a product fact)",
     "releaseCitationUnavailable": "The exact source for this reference is unavailable.",
     "releaseCitationDenied": "Open this source in a signed-in web session.",
     "knowledgeFindEntity": "Find published products",
@@ -257,6 +258,23 @@ export default {
       "collapseEntry": "Collapse fields for {name}",
       "noFields": "No fields yet",
       "noConcepts": "No shared concepts in this release"
+    },
+    "method": {
+      "banner": "Sales method (training material, not a product fact)",
+      "notices": {
+        "product_info": "Contains product information: the policy terms and published knowledge prevail"
+      },
+      "labels": "Applies to",
+      "family": "Series: {name}",
+      "familyProducts": "Products of the series:",
+      "source": "Source",
+      "sourceOf": "Open the source of item {n}",
+      "materials": "Source materials:",
+      "material": "{document} (added {date})",
+      "materialsLoading": "Reading source materials…",
+      "materialsFailed": "Source materials cannot be read now",
+      "updated": "Updated {date}",
+      "related": "Related sales methods"
     },
     "version": {
       "title": "Version",

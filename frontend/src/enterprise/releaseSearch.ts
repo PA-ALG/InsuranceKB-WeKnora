@@ -1,6 +1,6 @@
 import type { Release, ReleaseMember } from './enterpriseApi'
 import { navigationTree } from './navigationView'
-import { entitySummaries } from './releaseView'
+import { entitySummaries, entityTypes, profileMemberFor } from './releaseView'
 
 export interface FieldHit {
   entityId: string; name: string; slug: string; fieldKey: string; fieldTitle: string
@@ -75,7 +75,7 @@ export function searchFields(release: Release, query: string, limit = 50): { hit
     .filter(group => group.key !== '__other__').flatMap(group => group.entries))
   const groupedIds = new Set(grouped.map(entity => entity.entityId))
   const ordered = [...grouped, ...entitySummaries(release).filter(entity => !groupedIds.has(entity.entityId))]
-  const profiles = release.members.filter(member => member.kind === 'presentation_profile')
+  const types = entityTypes(release)
   const claims = new Map<string, ReleaseMember[]>()
   for (const member of release.members) {
     if (member.kind !== 'claim' || member.payload?.state !== 'present') continue
@@ -85,9 +85,8 @@ export function searchFields(release: Release, query: string, limit = 50): { hit
   }
   let total = 0
   for (const entity of ordered) {
-    const profile = profiles.find(member => Array.isArray(member.payload?.classification_labels)
-      && member.payload.classification_labels.some(label => entity.labels.includes(label)))
-    const fields = records(profile?.payload?.sections).flatMap(section => records(section.fields))
+    const profile = profileMemberFor(release, types.get(entity.entityId) ?? '', entity.labels)
+    const fields = records(profile?.sections).flatMap(section => records(section.fields))
     const titles = new Map<string, string>(), order = new Map<string, number>()
     for (const field of fields) {
       const key = text(field.field_key)

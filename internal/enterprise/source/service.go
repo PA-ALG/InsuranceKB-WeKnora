@@ -128,7 +128,7 @@ func (s *Service) load(ctx context.Context, scope Scope, knowledgeID string, att
 		set: &PageSet{
 			KnowledgeID: a.KnowledgeID, ParseAttempt: a.ParseAttempt, Document: a.FileName,
 			DocumentSHA256: a.FileSHA256, ParserIdentitySHA256: a.ParserIdentitySHA256,
-			NativeSHA256: digest(a.NativeJSON), Pages: pages,
+			NativeSHA256: digest(a.NativeJSON), Pages: pages, RevisedAt: a.RevisedAt,
 		},
 		native: native.Pages,
 	}, nil
@@ -153,7 +153,7 @@ func officePages(a *Artifact) (*verified, error) {
 		set: &PageSet{
 			KnowledgeID: a.KnowledgeID, ParseAttempt: a.ParseAttempt, Document: a.FileName,
 			DocumentSHA256: a.FileSHA256, ParserIdentitySHA256: a.ParserIdentitySHA256,
-			NativeSHA256: digest(a.NativeJSON), Pages: pages,
+			NativeSHA256: digest(a.NativeJSON), Pages: pages, RevisedAt: a.RevisedAt,
 		},
 		office: true,
 	}, nil
