@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from insurance_harness.compilers.methods.admission import Candidate, CandidateFile, CopyEntry
-from insurance_harness.compilers.methods.copies import CopyBook, MethodCopy
+from insurance_harness.compilers.methods.copies import CopyBook, MethodCopy, check_discovery_kb
 from insurance_harness.compilers.wiki_pages.members import NativePage
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.ingest.method_registry import block_order
@@ -82,6 +82,7 @@ def method_candidates(
     pages: Sequence[NativePage],
     reader: PageReader,
 ) -> CandidateRun:
+    check_discovery_kb(registry, book)
     digests = {source.knowledge_id: source.sha256 for source in listing.completed}
     usable: dict[str, MethodCopy] = {
         copy.copy_knowledge_id: copy for copy in book.copies if copy.copy_knowledge_id in digests

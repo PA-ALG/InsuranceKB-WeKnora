@@ -121,6 +121,15 @@ def save_copies(book: CopyBook, path: Path) -> None:
         raise
 
 
+def check_discovery_kb(registry: ProductRegistry, book: CopyBook) -> None:
+    """The isolation every entry that reads the discovery base checks before it reads (Spec §2,
+    #518 R2): the mapping is this Space's, and its base is never the RAW base."""
+    if book.discovery_kb_id == registry.raw_kb_id:
+        raise CopiesError("DISCOVERY_KB_INVALID")
+    if book.space_id != registry.space_id:
+        raise CopiesError("COPIES_MISMATCH")
+
+
 class CopyPlatform(Protocol):
     """`upload` returns only a knowledge item of `kb_id` holding exactly the given bytes."""
 
@@ -143,10 +152,7 @@ def sync_copies(
     registry: ProductRegistry, book: CopyBook, platform: CopyPlatform, *, live: bool
 ) -> CopySync:
     """The discovery base brought in line with the active records (Spec §3); a plan unless live."""
-    if book.discovery_kb_id == registry.raw_kb_id:
-        raise CopiesError("DISCOVERY_KB_INVALID")
-    if book.space_id != registry.space_id:
-        raise CopiesError("COPIES_MISMATCH")
+    check_discovery_kb(registry, book)
     listing = platform.listing(book.discovery_kb_id)
     listed = {source.knowledge_id for source in listing.completed}
     listed |= {source.knowledge_id for source in listing.unfinished}

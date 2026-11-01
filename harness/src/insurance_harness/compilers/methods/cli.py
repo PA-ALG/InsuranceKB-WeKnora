@@ -30,6 +30,7 @@ from insurance_harness.compilers.methods.candidates import method_candidates
 from insurance_harness.compilers.methods.compile import MethodRun, compile_methods
 from insurance_harness.compilers.methods.copies import (
     CopiesError,
+    check_discovery_kb,
     load_copies,
     save_copies,
     sync_copies,
@@ -164,6 +165,7 @@ def _copies(args: argparse.Namespace, base_url: str, api_key: str) -> dict[str, 
 def _candidates(args: argparse.Namespace, base_url: str, api_key: str) -> dict[str, Any]:
     registry = load_registry(args.registry)
     book = load_copies(args.copies, registry.space_id, args.discovery_kb)
+    check_discovery_kb(registry, book)  # before anything is read from it (#518 R2)
     listing = MaterialPlatform(base_url, api_key).listing(book.discovery_kb_id)
     pages = NativeWikiReader(base_url, api_key).pages(book.discovery_kb_id)
     run = method_candidates(registry, book, listing, pages, reader_from_env())
