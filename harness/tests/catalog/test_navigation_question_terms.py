@@ -157,7 +157,8 @@ def test_the_loader_refuses_terms_for_a_field_the_catalog_does_not_have() -> Non
 
 def test_the_shipped_navigation_carries_a_versioned_vocabulary() -> None:
     navigation = load_navigation()
-    assert navigation.navigation_version == "2026-10-28.1"
+    # The vocabulary arrived in 2026-10-28.1; later versions (PV-4b: 2026-11-01.1) keep it.
+    assert navigation.navigation_version >= "2026-10-28.1"
     terms = navigation.question_terms or {}
     assert len(terms) >= 40, "at least the commonly asked fields of the Spec's draft"
     # q05: the question names neither 产品利率 nor 保额增长规则; one group of the rate must match.
