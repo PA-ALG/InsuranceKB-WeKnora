@@ -66,10 +66,14 @@ def _folded(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKC", text) if not c.isspace())
 
 
-def role_of(document: str, head: str) -> str | None:
-    """The one role both of whose signals match while no other role shows any, else None."""
+def role_of(document: str, head: str, more: str = "") -> str | None:
+    """The one role both of whose signals match while no other role shows any, else None.
+
+    `more` is opening text read in full besides the head's first characters, such as a title line
+    printed further down (S5b-7): it can only add signals, so a conflict stays a conflict.
+    """
     name = _folded(PurePosixPath(document).stem)
-    opening = _folded(head)[:HEAD_CHARS]
+    opening = _folded(head)[:HEAD_CHARS] + _folded(more)
     both, any_signal = [], []
     for role in load_material_roles().roles:
         by_name = any(_folded(k) in name for k in role.name_keywords)

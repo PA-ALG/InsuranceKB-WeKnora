@@ -37,6 +37,7 @@ from insurance_harness.identity.attribution import (
     AttributionPolicy,
     Upload,
     attribute,
+    load_attribution_policy,
 )
 from insurance_harness.ingest.confirmations import ConfirmationsError, sync
 from insurance_harness.ingest.publication import PublicationError, run_publication
@@ -48,6 +49,8 @@ from insurance_harness.ingest.raw_sources import (
 )
 from insurance_harness.ingest.registry import (
     FINAL,
+    WAITING,
+    PendingEntry,
     ProductRegistry,
     RegistryError,
     SeedProduct,
@@ -95,13 +98,17 @@ class UploadRun(BaseModel):
     report: UploadReport
 
 
-def _candidates(registry: ProductRegistry, sources: Sequence[RawSource]) -> list[RawSource]:
-    """New materials, plus quarantined ones.
+def _candidates(
+    registry: ProductRegistry, sources: Sequence[RawSource], policy_ref: str
+) -> list[RawSource]:
+    """New materials, plus quarantined ones, plus questions asked under an older policy.
 
-    Never one a person has to decide (by knowledge id, whatever its parse attempt), one already
-    registered or replaced by a new version, or one with a final decision on record. A quarantined
-    material whose person decision is being carried out (it has a settlement) is not judged again:
-    judging would replace its pending entry and lose the settlement (S11a Spec §2.3).
+    Never one a person has to decide under the current policy (by knowledge id, whatever its parse
+    attempt), one already registered or replaced by a new version, or one with a final decision on
+    record. A material whose person decision is being carried out (it has a settlement) is not
+    judged again: judging would replace its pending entry and lose the settlement (S11a Spec §2.3).
+    A question asked under an older policy is judged again (S5b-7 Spec §2.4): a better policy may
+    settle it, and a question it still raises is left as asked.
     """
     settled = {
         m.knowledge_id for p in registry.products.values() for m in (*p.materials, *p.retired)
@@ -109,7 +116,8 @@ def _candidates(registry: ProductRegistry, sources: Sequence[RawSource]) -> list
     settled |= {
         p.knowledge_id
         for p in registry.pending
-        if p.attribution.outcome == "NEEDS_CONFIRM" or p.settlement is not None
+        if p.settlement is not None
+        or (p.attribution.outcome == "NEEDS_CONFIRM" and p.attribution.policy_ref == policy_ref)
     }
     settled |= {d.knowledge_id for d in registry.decisions if d.attribution.outcome in FINAL}
     return sorted(
@@ -139,6 +147,17 @@ def _changes(
     return changed, sorted(owned - set(listed))
 
 
+def _same_question(before: PendingEntry | None, source: RawSource, after: Attribution) -> bool:
+    """The same material revision and the same conclusion under another policy version: the
+    question asked stays (S5b-7 Spec §2.4). A new revision is recorded as before."""
+    return (
+        before is not None
+        and (before.parse_attempt, before.sha256) == (source.parse_attempt, source.sha256)
+        and before.attribution.model_dump(exclude={"policy_ref"})
+        == after.model_dump(exclude={"policy_ref"})
+    )
+
+
 def attribute_uploads(
     registry: ProductRegistry,
     sources: Sequence[RawSource],
@@ -151,9 +170,12 @@ def attribute_uploads(
     `unfinished` is passed through to the report: the listed materials that cannot be judged yet.
     """
     current = registry.model_copy(deep=True)
+    policy = policy or load_attribution_policy()
+    asked = {p.knowledge_id for p in current.pending if p.attribution.outcome == "NEEDS_CONFIRM"}
+    previous = {p.knowledge_id: p for p in current.pending}
     heads: dict[str, str] = {}
     unreadable: list[UnreadableMaterial] = []
-    for source in _candidates(current, sources):
+    for source in _candidates(current, sources, policy.policy_ref):
         try:
             heads[source.knowledge_id] = head_of(pages, current.space_id, source)
         except SourcePagesError as error:
@@ -161,11 +183,14 @@ def attribute_uploads(
                 knowledge_id=source.knowledge_id, file_name=source.file_name, code=error.code,
                 reason=error.reason, page=error.page,
             ))
-    remaining = [s for s in _candidates(current, sources) if s.knowledge_id in heads]
+    remaining = [
+        s for s in _candidates(current, sources, policy.policy_ref) if s.knowledge_id in heads
+    ]
     counts: Counter[str] = Counter()
     affected: set[str] = set()
     while remaining:
         deferred: list[tuple[RawSource, Attribution]] = []
+        held: list[RawSource] = []  # asked under an older policy and still a question
         changed = False
         for source in remaining:
             upload = Upload(
@@ -175,6 +200,9 @@ def attribute_uploads(
                 head=heads[source.knowledge_id],
             )
             attribution = attribute(upload, current.registered(), policy)
+            if source.knowledge_id in asked and attribution.outcome in WAITING:
+                held.append(source)  # the person's question stays as it was asked
+                continue
             if attribution.outcome == "QUARANTINE":
                 deferred.append((source, attribution))  # its terms may arrive in this run
                 continue
@@ -185,9 +213,10 @@ def attribute_uploads(
         if not changed:
             for source, attribution in deferred:
                 counts[attribution.outcome] += 1
-                record(current, source, attribution)
+                if not _same_question(previous.get(source.knowledge_id), source, attribution):
+                    record(current, source, attribution)
             break
-        remaining = [source for source, _ in deferred]
+        remaining = [*(source for source, _ in deferred), *held]
     revision_changes, not_listed = _changes(current, sources)
     report = UploadReport(
         counts=dict(sorted(counts.items())),
