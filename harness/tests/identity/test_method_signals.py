@@ -25,7 +25,12 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.identity.confirmation import choices
 from insurance_harness.identity.material_roles import load_material_roles, role_of, role_signals
-from insurance_harness.identity.method_signals import BLOCK_SCHEME, detect, machine_scope
+from insurance_harness.identity.method_signals import (
+    BLOCK_SCHEME,
+    MethodHits,
+    detect,
+    machine_scope,
+)
 from tests.ingest.method_helpers import METHOD_SLIDES, PLAIN_SLIDES, deck_pages
 
 SHA = "d" * 64
@@ -125,7 +130,7 @@ def test_plain_pdf_pages_are_split_into_segments_too() -> None:
 # 3. The machine decides the category only when it is unambiguous (Spec §3.2) -------------------
 
 
-def _hits(*slides: tuple[str, ...]) -> object:
+def _hits(*slides: tuple[str, ...]) -> MethodHits:
     hits = detect(deck_pages("x.pptx", SHA, (("销售方法讲解步骤",), *slides)))
     assert hits is not None
     return hits

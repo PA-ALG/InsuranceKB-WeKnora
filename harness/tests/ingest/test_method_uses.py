@@ -8,6 +8,8 @@ again every run, no product question); with a unique version both uses are recor
 with their source revision. v1 registries refuse all of it; the product side never changes.
 """
 
+from collections.abc import Mapping, Sequence
+
 import pytest
 from pydantic import ValidationError
 
@@ -16,6 +18,7 @@ from insurance_harness.ingest.detach import detach
 from insurance_harness.ingest.method_use_model import MethodUse
 from insurance_harness.ingest.raw_sources import UnfinishedSource
 from insurance_harness.ingest.registry import (
+    ConfirmationRef,
     DecisionEntry,
     ProductRegistry,
     RegistryError,
@@ -28,6 +31,7 @@ from tests.ingest.method_helpers import (
     PLAIN_SLIDES,
     DeckPages,
     deck_pages,
+    held,
     nursing_entry,
     source,
     v1,
@@ -36,12 +40,12 @@ from tests.ingest.method_helpers import (
 
 DECK = "护理险销售方法课程.pptx"
 BRAND_DECK = "智盈倍护销售方法课程.pptx"
-BRAND_SLIDES = (("智盈倍护销售方法课程", "2024年5月"), *METHOD_SLIDES[1:])
+BRAND_SLIDES = (("智盈倍护护理险销售方法课程", "2024年5月"), *METHOD_SLIDES[1:])
 
 
 def judged(
     current: ProductRegistry,
-    decks: dict[str, tuple[str, tuple[tuple[str, ...], ...], str]],
+    decks: Mapping[str, tuple[str, Sequence[Sequence[str]], str]],
     unfinished: list[UnfinishedSource] | None = None,
 ) -> ProductRegistry:
     """One `run` over the listed decks: knowledge id -> (file name, slides, sha256)."""
@@ -102,9 +106,10 @@ def test_a_unique_version_attaches_and_the_method_use_is_recorded_beside_it() ->
 
 
 def test_a_version_question_waits_and_the_method_use_is_recorded_meanwhile() -> None:
+    other_terms = held().model_copy(update={"knowledge_id": "k-terms-2636", "sha256": "7" * 64})
     current = v2(**{
         "2635": nursing_entry(),
-        "2636": nursing_entry("2636-1", "2024-04-23", "2024-09-01"),
+        "2636": nursing_entry("2636-1", "2024-04-23", "2024-09-01", [other_terms]),
     })
     after = judged(current, {"k-deck": (BRAND_DECK, BRAND_SLIDES, "d" * 64)})
     [pending] = after.pending
@@ -159,6 +164,9 @@ def test_an_ignored_material_loses_its_method_use() -> None:
             sha256="d" * 64,
             attribution=Attribution(
                 outcome="IGNORED", reason="confirmed_ignore", policy_ref="attribution-policy@x"
+            ),
+            confirmation=ConfirmationRef(
+                item_id="i-1", answer_id="a-1", option_key="ignore", answerer="user:alice"
             ),
         )
     )
