@@ -33,8 +33,10 @@ func methodProfileMember(t *testing.T) map[string]any {
 	t.Helper()
 	return vm(t, "presentation_profile", "presentation/sales_method", map[string]any{
 		"profile_id": "sales_method", "entity_types": []any{"sales_method"}, "knowledge_class": "method",
-		"sections": []any{map[string]any{"section_key": "method", "display_name": "销售方法",
-			"fields": []any{map[string]any{"field_key": "method_steps", "short_title": "步骤"}}}},
+		"sections": []any{map[string]any{
+			"section_key": "method", "display_name": "销售方法",
+			"fields": []any{map[string]any{"field_key": "method_steps", "short_title": "步骤"}},
+		}},
 	})
 }
 
@@ -44,7 +46,9 @@ func methodEntityMember(t *testing.T, id string) map[string]any {
 }
 
 // listMember is a present claim of subject/field with the given value and evidence.
-func listMember(t *testing.T, subject, field string, value any, extra map[string]any, evidence ...map[string]any) map[string]any {
+func listMember(
+	t *testing.T, subject, field string, value any, extra map[string]any, evidence ...map[string]any,
+) map[string]any {
 	t.Helper()
 	items := make([]any, 0, len(evidence))
 	refs := map[string]bool{}
@@ -143,7 +147,8 @@ func TestMethodListsMustCiteEachItemAtItsPosition(t *testing.T) {
 
 func TestAMethodProfileInTheActiveReleaseStillHoldsLaterClaims(t *testing.T) {
 	_, s := methodPlatform(t)
-	base, err := activation(t, s, vbundle(t, "compile", nil, nil, methodProfileMember(t), methodEntityMember(t, "sm-1")))
+	base, err := activation(t, s, vbundle(t, "compile", nil, nil,
+		methodProfileMember(t), methodEntityMember(t, "sm-1")))
 	require.NoError(t, err)
 	_, err = activation(t, s, vbundle(t, "compile", &base, nil,
 		listMember(t, "sm-1", "method_steps", []any{"问家庭", "讲保障"}, nil, evidenceObject(refOne, 3, 0, 3, "问家庭"))))

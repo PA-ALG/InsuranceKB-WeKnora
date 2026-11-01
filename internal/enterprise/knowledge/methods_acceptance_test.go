@@ -33,13 +33,16 @@ var (
 )
 
 func at(ref, quote string, page int) map[string]any {
-	return map[string]any{"quote": quote, "source_ref": ref, "locator": map[string]any{"kind": "PDF_TEXT_SPAN", "page": page}}
+	return map[string]any{
+		"quote": quote, "source_ref": ref, "locator": map[string]any{"kind": "PDF_TEXT_SPAN", "page": page},
+	}
 }
 
 func methodProfile() release.Member {
 	return member("presentation_profile", "presentation/sales_method", map[string]any{
 		"profile_id": "sales_method", "display_name": "销售方法", "entity_types": []string{"sales_method"},
-		"knowledge_class": "method", "reading_note": methodNote, "notices": map[string]string{"product_info": productInfo},
+		"knowledge_class": "method", "reading_note": methodNote,
+		"notices": map[string]string{"product_info": productInfo},
 		"sections": []map[string]any{{"section_key": "method", "display_name": "销售方法", "fields": []map[string]any{
 			{"field_key": "method_summary", "short_title": "方法摘要"},
 			{"field_key": "method_steps", "short_title": "步骤"},
@@ -61,8 +64,9 @@ func methodEntity(id string, labels []string, notice string, names ...string) re
 
 func productWithFamily(id, name, family string) release.Member {
 	return member("entity", "entity/"+id, map[string]any{
-		"entity_id": id, "entity_type": "product", "names": []string{name}, "classification_labels": []string{"medical"},
-		"product_family": map[string]any{"key": family, "display_name": "甲系列"},
+		"entity_id": id, "entity_type": "product", "names": []string{name},
+		"classification_labels": []string{"medical"},
+		"product_family":        map[string]any{"key": family, "display_name": "甲系列"},
 	})
 }
 
@@ -71,16 +75,26 @@ func productWithFamily(id, name, family string) release.Member {
 func methodMembers() []release.Member {
 	return []release.Member{
 		member("navigation", "navigation/enterprise", map[string]any{
-			"navigation_id": "enterprise", "navigation_version": "v2", "overview_fields": []string{"cooling_off_period"},
+			"navigation_id": "enterprise", "navigation_version": "v2",
+			"overview_fields":  []string{"cooling_off_period"},
 			"question_intents": map[string]any{"method": [][]string{{"怎么讲"}}, "sales": [][]string{{"推荐"}}},
 			"domains": []map[string]any{
-				{"domain_key": "product", "display_name": "产品", "entity_types": []string{"product"},
-					"groups": []map[string]any{{"group_key": "medical", "display_name": "医疗", "classification_labels": []string{"medical"}}}},
-				{"domain_key": "sales_method", "display_name": "销售方法", "entity_types": []string{"sales_method"},
+				{
+					"domain_key": "product", "display_name": "产品", "entity_types": []string{"product"},
+					"groups": []map[string]any{{
+						"group_key": "medical", "display_name": "医疗", "classification_labels": []string{"medical"},
+					}},
+				},
+				{
+					"domain_key": "sales_method", "display_name": "销售方法", "entity_types": []string{"sales_method"},
 					"groups": []map[string]any{
 						{"group_key": "medical", "display_name": "医疗", "classification_labels": []string{"medical"}},
-						{"group_key": "general", "display_name": "通用", "classification_labels": []string{"scope:general"}},
-					}},
+						{
+							"group_key": "general", "display_name": "通用",
+							"classification_labels": []string{"scope:general"},
+						},
+					},
+				},
 			},
 		}),
 		profile("medical", [2]string{"cooling_off_period", "犹豫期"}, [2]string{"method_steps", "产品步骤"}),
@@ -210,15 +224,18 @@ func TestProductOnlyPathsNeverTakeAMethod(t *testing.T) {
 func TestToolsDescribeMethodsWithTheirNoteAndMarkTheirRows(t *testing.T) {
 	s := methodService()
 	bound := map[string]string{space: pinned}
-	result, err := tool(t, s, "knowledge_find_entity", bound).Execute(toolContext(), json.RawMessage(`{"query":"需求分析三步法"}`))
+	result, err := tool(t, s, "knowledge_find_entity", bound).Execute(
+		toolContext(), json.RawMessage(`{"query":"需求分析三步法"}`))
 	require.NoError(t, err)
 	require.Contains(t, result.Output, "编号：sm-1；名称：需求分析三步法；标签：medical、family:fam；"+methodNote)
 
-	result, err = tool(t, s, "knowledge_find_entity", bound).Execute(toolContext(), json.RawMessage(`{"query":"甲医疗保险"}`))
+	result, err = tool(t, s, "knowledge_find_entity", bound).Execute(
+		toolContext(), json.RawMessage(`{"query":"甲医疗保险"}`))
 	require.NoError(t, err)
 	require.Contains(t, result.Output, "产品编号：M1；名称：甲医疗保险；系列：甲系列", "a product's line is unchanged")
 
-	result, err = tool(t, s, "knowledge_get_fields", bound).Execute(toolContext(), json.RawMessage(`{"entity_id":"sm-1"}`))
+	result, err = tool(t, s, "knowledge_get_fields", bound).Execute(
+		toolContext(), json.RawMessage(`{"entity_id":"sm-1"}`))
 	require.NoError(t, err)
 	rows := result.Data["results"].([]map[string]interface{})
 	require.Len(t, rows, 2, "the unknown key_phrases has no evidence and stays a note")

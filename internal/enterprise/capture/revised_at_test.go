@@ -28,7 +28,8 @@ func TestASourceArtifactCarriesItsRevisionTime(t *testing.T) {
 		},
 	}
 	scope := types.WikiReleaseScope{TenantID: id.TenantID, SpaceID: "space-1", RawKBID: id.RawKBID, WikiKBID: "wiki-1"}
-	artifact, err := capture.ReadSourceArtifact(context.Background(), capture.NewStore(seeded(t, in, sealed), testKeys()),
+	store := capture.NewStore(seeded(t, in, sealed), testKeys())
+	artifact, err := capture.ReadSourceArtifact(context.Background(), store,
 		repo, scope, id.KnowledgeID, id.ParseAttempt)
 	require.NoError(t, err)
 	require.True(t, completed.Equal(artifact.RevisedAt), "%v", artifact.RevisedAt)

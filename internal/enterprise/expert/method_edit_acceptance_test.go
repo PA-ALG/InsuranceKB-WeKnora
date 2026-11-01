@@ -38,8 +38,10 @@ func withMethod(t *testing.T, f fixture) release.Release {
 		"members": []any{
 			kindMember(t, "presentation_profile", "presentation/sales_method", map[string]any{
 				"profile_id": "sales_method", "entity_types": []any{"sales_method"}, "knowledge_class": "method",
-				"sections": []any{map[string]any{"section_key": "method", "display_name": "销售方法",
-					"fields": []any{map[string]any{"field_key": "method_summary", "short_title": "方法摘要"}}}},
+				"sections": []any{map[string]any{
+					"section_key": "method", "display_name": "销售方法",
+					"fields": []any{map[string]any{"field_key": "method_summary", "short_title": "方法摘要"}},
+				}},
 			}),
 			kindMember(t, "entity", "entity/M", map[string]any{
 				"entity_id": "M", "entity_type": "sales_method", "names": []any{"需求分析三步法"},

@@ -23,7 +23,9 @@ const readingNote = "销售方法（培训材料，非产品事实）：只用�
 
 type methodReader struct{ publishedReader }
 
-func (r *methodReader) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, releaseID string) (release.Release, error) {
+func (r *methodReader) ReleaseByID(
+	ctx context.Context, tenantID uint64, spaceID, releaseID string,
+) (release.Release, error) {
 	base, err := r.publishedReader.ReleaseByID(ctx, tenantID, spaceID, releaseID)
 	if err != nil {
 		return base, err
@@ -32,7 +34,9 @@ func (r *methodReader) ReleaseByID(ctx context.Context, tenantID uint64, spaceID
 		publishedMember("navigation", "navigation/enterprise", map[string]any{
 			"navigation_id": "enterprise", "navigation_version": "v2",
 			"question_intents": map[string]any{"method": [][]string{{"怎么讲"}}},
-			"domains":          []map[string]any{{"domain_key": "product", "display_name": "产品", "entity_types": []string{"product"}}},
+			"domains": []map[string]any{{
+				"domain_key": "product", "display_name": "产品", "entity_types": []string{"product"},
+			}},
 		}),
 		publishedMember("presentation_profile", "presentation/sales_method", map[string]any{
 			"profile_id": "sales_method", "entity_types": []string{"sales_method"}, "knowledge_class": "method",
@@ -47,8 +51,10 @@ func (r *methodReader) ReleaseByID(ctx context.Context, tenantID uint64, spaceID
 		publishedMember("claim", "sm-1/method_summary", map[string]any{
 			"subject_ref": "sm-1", "predicate": "method_summary", "state": "present", "value": "先问需求再讲产品",
 			"origin": "SOURCE_SUPPORTED", "review": map[string]any{"mode": "human"},
-			"evidence": []map[string]any{{"quote": "先问需求", "locator": map[string]any{"kind": "PDF_TEXT_SPAN", "page": 2},
-				"source_ref": "source:v1:km1:1:abc"}},
+			"evidence": []map[string]any{{
+				"quote": "先问需求", "locator": map[string]any{"kind": "PDF_TEXT_SPAN", "page": 2},
+				"source_ref": "source:v1:km1:1:abc",
+			}},
 		}),
 	)
 	return base, nil
