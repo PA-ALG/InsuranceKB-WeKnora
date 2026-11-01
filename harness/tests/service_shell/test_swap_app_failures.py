@@ -144,3 +144,104 @@ def test_private_dir_with_a_colon_is_refused(world: World) -> None:
     world.private = moved
     refused_before_any_write(world.with_current())
     assert not record_path(world).exists()
+
+
+# R3.1–R3.3: the intent record is written safely, parsed strictly and bound to its environment.
+def own_record(world: World, managed: dict[str, str]) -> dict[str, object]:
+    s = world.swap
+    return {
+        "version": 1,
+        "context": world.state["context"],
+        "container": s.APP,
+        "source_id": world.state["containers"][s.BACKUP]["Id"],
+        "current_id": None,
+        "managed": managed,
+        "spaces": True,
+    }
+
+
+def private_bytes(world: World) -> dict[str, bytes]:
+    return {name: (world.private / name).read_bytes() for name in ("secrets.env", "config.yaml")}
+
+
+def test_planted_temp_link_leaves_private_files_intact(world: World) -> None:
+    before = private_bytes(world)
+    planted = world.private / (world.swap.INTENT_RECORD + ".tmp")
+    planted.symlink_to(world.private / "secrets.env")
+    summary(world.with_current(**{KEY: TYPES}).run())
+    assert private_bytes(world) == before and planted.is_symlink()
+    assert record_path(world).is_file() and not record_path(world).is_symlink()
+    assert json.loads(record_path(world).read_text())["managed"] == {KEY: TYPES}
+
+
+@pytest.mark.parametrize("kind", ["link", "link-to-valid-record", "directory"])
+def test_record_path_that_is_not_a_regular_file_is_refused(world: World, kind: str) -> None:
+    before = private_bytes(world)
+    if kind == "link":
+        record_path(world).symlink_to(world.private / "secrets.env")
+    elif kind == "link-to-valid-record":
+        elsewhere = world.root / "elsewhere.json"
+        elsewhere.write_text(json.dumps(own_record(world, {KEY: TYPES})))
+        record_path(world).symlink_to(elsewhere)
+    else:
+        record_path(world).mkdir()
+    assert "intent_record_invalid" in refused_before_any_write(world.with_current())
+    assert private_bytes(world) == before
+
+
+@pytest.mark.parametrize("where", ["top", "nested"])
+def test_duplicate_record_members_are_refused(world: World, where: str) -> None:
+    text = json.dumps(own_record(world, {KEY: TYPES}))
+    if where == "top":
+        text = text[:-1] + ', "managed": {}}'
+    else:
+        text = text.replace(f'"{KEY}": "{TYPES}"', f'"{KEY}": "{TYPES}", "{KEY}": "rider"')
+    record_path(world).write_text(text)
+    assert "intent_record_invalid" in refused_before_any_write(world)
+    assert record_path(world).read_text() == text
+
+
+def test_own_empty_record_recovers_an_explicit_removal(world: World) -> None:
+    record_path(world).write_text(json.dumps(own_record(world, {})))
+    out = summary(world.run())
+    assert KEY not in world.app_env() and out["managed"] == {}
+
+
+def test_record_carries_its_identity(world: World) -> None:
+    summary(world.with_current(**{KEY: TYPES}).run())
+    record = json.loads(record_path(world).read_text())
+    assert record == own_record(world, {KEY: TYPES}) | {"current_id": "1" * 64}
+
+
+def test_record_copied_from_another_environment_is_not_inherited(tmp_path: Path) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    a = World(tmp_path / "a").with_current(**{KEY: TYPES})
+    a.state["fail"] = ["create"]
+    assert a.run().returncode != 0 and a.swap.APP not in a.state["containers"]
+    b = World(tmp_path / "b")
+    b.state["containers"][b.swap.BACKUP]["Id"] = "9" * 64
+    copied = record_path(a).read_text()
+    record_path(b).write_text(copied)
+    assert "intent_record_mismatch" in refused_before_any_write(b)
+    assert record_path(b).read_text() == copied
+    summary(b.run("--unset-env", KEY))
+    assert KEY not in b.app_env()
+    assert json.loads(record_path(b).read_text())["source_id"] == "9" * 64
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("context", "other-context"), ("container", "other-app"), ("source_id", "9" * 64)],
+)
+@pytest.mark.parametrize("current", [False, True])
+def test_record_bound_elsewhere_needs_every_key_explicitly(
+    world: World, field: str, value: str, current: bool
+) -> None:
+    record = own_record(world, {KEY: TYPES}) | {field: value}
+    record_path(world).write_text(json.dumps(record))
+    if current:
+        world.with_current(**{KEY: TYPES})
+    assert "intent_record_mismatch" in refused_before_any_write(world)
+    summary(world.run("--set-env", f"{KEY}={TYPES}"))
+    assert world.app_env()[KEY] == TYPES

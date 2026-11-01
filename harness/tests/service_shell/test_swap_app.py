@@ -42,6 +42,8 @@ def save():
 if argv and argv[0] in state.get("fail", []):
     fail()
 match argv:
+    case ["context", "show"]:
+        print(state["context"])
     case ["ps", "-a", "--format", _]:
         for name in state["containers"]:
             print(json.dumps({"Names": name}))
@@ -148,6 +150,7 @@ class World:
             "containers": {s.BACKUP: original},
             "images": {i["Id"]: i for i in (original_image, current_image, new_image)},
             "fail": [],
+            "context": "fake-context",
         }
 
     def with_current(self, **env: str) -> World:
@@ -203,7 +206,7 @@ class World:
         texts += [
             p.read_text(errors="replace")
             for p in self.root.rglob("*")
-            if p.is_file() and p not in allowed
+            if p.is_file() and not p.is_symlink() and p not in allowed
         ]
         for sentinel in SENTINELS:
             assert all(sentinel not in text for text in texts), sentinel
