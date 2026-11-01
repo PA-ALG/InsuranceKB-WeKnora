@@ -56,7 +56,11 @@ def page(document: str, text: str) -> PageText:
 
 
 def test_restricted_roles_list_header_roles_first() -> None:
-    assert load_trust_policy().restricted_roles() == ("rate_table", "sales_training")
+    assert load_trust_policy().restricted_roles() == (  # SK-1 appended sales_method
+        "rate_table",
+        "sales_training",
+        "sales_method",
+    )
 
 
 def test_a_product_with_a_sales_material_compiles_from_its_revisions(

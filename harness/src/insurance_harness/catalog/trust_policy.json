@@ -1,5 +1,5 @@
 {
- "version": "2026-10-31.1",
+ "version": "2026-11-01.1",
  "header_rules": [{"role": "rate_table", "fields": ["premium_payment_term"]}],
  "scoped_rules": [
   {
@@ -9,6 +9,16 @@
     "four_step_sales_script",
     "objection_handling_scripts",
     "product_faq"
+   ]
+  },
+  {
+   "role": "sales_method",
+   "fields": [
+    "method_summary",
+    "method_steps",
+    "key_phrases",
+    "applicable_scenario",
+    "cautions"
    ]
   }
  ]

@@ -32,11 +32,23 @@ class MaterialRoleError(ValueError):
 
 
 class MaterialRole(BaseModel):
+    """A role; one not `recognized` (SK-1: `sales_method`) is only ever recorded, never inferred,
+    and has no keywords."""
+
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     role: str = Field(pattern=r"^[a-z][a-z_]*$")
     evidence: bool
-    name_keywords: tuple[str, ...] = Field(min_length=1)
-    head_keywords: tuple[str, ...] = Field(min_length=1)
+    name_keywords: tuple[str, ...] = ()
+    head_keywords: tuple[str, ...] = ()
+    recognized: bool = True
+
+    @model_validator(mode="after")
+    def _keywords(self) -> "MaterialRole":
+        if self.recognized != bool(self.name_keywords and self.head_keywords) or (
+            not self.recognized and (self.name_keywords or self.head_keywords)
+        ):
+            raise ValueError("a recognised role has both keyword lists, another has none")
+        return self
 
 
 class MaterialRoles(BaseModel):
@@ -62,6 +74,11 @@ def load_material_roles() -> MaterialRoles:
         raise MaterialRoleError("MATERIAL_ROLES_INVALID") from error
 
 
+def recognized_roles() -> tuple[MaterialRole, ...]:
+    """The roles inferred from a material's name and opening; the others are only recorded."""
+    return tuple(role for role in load_material_roles().roles if role.recognized)
+
+
 def _folded(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKC", text) if not c.isspace())
 
@@ -75,7 +92,7 @@ def role_of(document: str, head: str, more: str = "") -> str | None:
     name = _folded(PurePosixPath(document).stem)
     opening = _folded(head)[:HEAD_CHARS] + _folded(more)
     both, any_signal = [], []
-    for role in load_material_roles().roles:
+    for role in recognized_roles():
         by_name = any(_folded(k) in name for k in role.name_keywords)
         by_head = any(_folded(k) in opening for k in role.head_keywords)
         if by_name and by_head:
@@ -93,7 +110,7 @@ def role_signals(document: str, head: str, more: str = "") -> set[str]:
     opening = _folded(head)[:HEAD_CHARS] + _folded(more)
     return {
         role.role
-        for role in load_material_roles().roles
+        for role in recognized_roles()
         if any(_folded(k) in name for k in role.name_keywords)
         or any(_folded(k) in opening for k in role.head_keywords)
     }

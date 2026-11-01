@@ -58,14 +58,14 @@ SOURCES = {"保险条款.pdf": SourceRevision("k-1", 1), "产品培训.pdf": Sou
 
 def test_sales_training_is_a_non_evidence_role_of_the_shipped_catalogue() -> None:
     roles = load_material_roles()
-    assert roles.version == "2026-10-31.1"
+    assert roles.version == "2026-11-01.1"  # SK-1 added the unrecognised sales_method role
     assert {r.role: r.evidence for r in roles.roles}["sales_training"] is False
 
 
 def test_the_scoped_rule_names_exactly_the_four_sales_fields() -> None:
     policy = load_trust_policy()
-    assert policy.version == "2026-10-31.1"
-    assert policy.scoped_roles() == frozenset({"sales_training"})
+    assert policy.version == "2026-11-01.1"  # SK-1 added the sales_method scoped rule
+    assert policy.scoped_roles() == frozenset({"sales_training", "sales_method"})
     assert policy.restricted_fields("sales_training") == SALES_FIELDS
     assert policy.header_fields("sales_training") == frozenset()
     assert policy.header_roles() == frozenset({"rate_table"})

@@ -42,7 +42,7 @@ TERMS = "terms"  # the material role that prints the clause filing code and may 
 _SHA256 = r"^[0-9a-f]{64}$"
 
 # REPLACE and IGNORED only follow a person's choice (S5b-3c-1), DETACHED only `uploads detach`
-# (PV-3 §4); attribute() never returns them.
+# (PV-3 §4), METHOD_MATERIAL only a run's method step (SK-1 §3.3); attribute() never returns them.
 Outcome = Literal[
     "DUPLICATE",
     "SUPPLEMENT",
@@ -53,6 +53,7 @@ Outcome = Literal[
     "REPLACE",
     "IGNORED",
     "DETACHED",
+    "METHOD_MATERIAL",
 ]
 
 

@@ -14,13 +14,10 @@ from collections.abc import Callable, Iterable
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from insurance_harness.bundle.client import (
-    MAX_CONFIRMATION_BYTES,
-    MAX_CONFIRMATIONS,
     ConfirmationInput,
     ConfirmationItem,
     PlatformClient,
     PlatformError,
-    confirmation_body,
 )
 from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.identity.attribution import Attribution, Upload
@@ -36,6 +33,7 @@ from insurance_harness.ingest.confirmation_questions import (
     SUBJECT_PREFIX,
     ConfirmationsError,
     ConfirmationWording,
+    confirmation_batches,
     load_wording,
     question_of,
 )
@@ -61,7 +59,6 @@ __all__ = [
     "question_of",
     "sync",
 ]
-_ENVELOPE = len(b'{"items": []}')
 
 
 class WithdrawnAnswer(BaseModel):
@@ -133,21 +130,6 @@ def _applies(registry: ProductRegistry, conclusion: Attribution) -> bool:
     return set(conclusion.replaces) <= current
 
 
-def _batches(questions: list[ConfirmationInput]) -> list[list[ConfirmationInput]]:
-    """Batches the platform accepts: at most 200 items and 512 KiB of body (review R8)."""
-    batches: list[list[ConfirmationInput]] = []
-    batch: list[ConfirmationInput] = []
-    size = _ENVELOPE
-    for question in questions:
-        item = len(confirmation_body([question])) - _ENVELOPE  # its exact part of the body
-        if batch and (len(batch) == MAX_CONFIRMATIONS or size + item + 2 > MAX_CONFIRMATION_BYTES):
-            batches.append(batch)
-            batch, size = [], _ENVELOPE
-        batch.append(question)
-        size += item + 2
-    return [*batches, batch] if batch else batches
-
-
 class _Sync:
     """One run's state: the registry so far, the platform, and what the report will say."""
 
@@ -177,8 +159,10 @@ class _Sync:
     # The registry ---------------------------------------------------------------------------
 
     def waiting(self) -> list[PendingEntry]:
-        """Materials waiting for a person: NEEDS_CONFIRM, and quarantined ones (S11a Spec §2.1)."""
-        return sorted(self.current.pending, key=lambda p: p.knowledge_id)
+        """Materials waiting for a person: NEEDS_CONFIRM, and quarantined ones (S11a Spec §2.1);
+        a method material is asked for its scope only, by the method questions (SK-1 §3.3)."""
+        kept = (p for p in self.current.pending if p.attribution.outcome != "METHOD_MATERIAL")
+        return sorted(kept, key=lambda p: p.knowledge_id)
 
     def mark(self, entry: PendingEntry, settlement: Settlement | None) -> PendingEntry:
         """Save the entry with this settlement (or without one) in place of the current one."""
@@ -405,7 +389,7 @@ class _Sync:
             found: list[ConfirmationItem | None] = [existing.get(content_of(q)) for q in rest]
         else:
             found = []
-            for batch in _batches(rest):
+            for batch in confirmation_batches(rest):
                 found.extend(self.client.submit_confirmations(self.space, batch))
         sent = iter(found)
         return [item if item is not None else next(sent) for item in kept]

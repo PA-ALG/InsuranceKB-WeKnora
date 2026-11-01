@@ -10,7 +10,7 @@ from tests.identity.test_attribution import registered, upload
 from tests.ingest.upload_helpers import Pages, entry, raw, registry
 from tests.ingest.version_helpers import POLICY, rich_v1
 
-NEW = "attribution-policy@2026-11-01.6"  # PV-3 (and its review) bumped it on top of PV-1
+NEW = "attribution-policy@2026-11-01.7"  # PV-3, then SK-1, bumped it on top of PV-1
 
 
 def test_the_policy_version_names_the_new_version_rule() -> None:
