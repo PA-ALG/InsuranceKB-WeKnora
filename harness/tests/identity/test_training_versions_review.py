@@ -108,3 +108,35 @@ def test_the_training_fallback_keeps_a_conflict_a_title_line_shows() -> None:
     v1 = attribute(upload, [unversioned(ZYBH_2024), unversioned(ZYBH_2026)])
     assert v1.role is None and v2.role is None
     assert v2.outcome != "SUPPLEMENT"
+
+
+# Review round 2 -------------------------------------------------------------------------------
+
+HENGTAI_2026 = version("8401", "平安远山恒泰终身寿险", WHOLE_LIFE, "2026-01-01")
+HENGAN_2024 = version(
+    "8402", "平安远山恒安终身寿险", WHOLE_LIFE, "2024-01-01", "2025-01-01", status="discontinued"
+)
+MINGYUE = version("8501", "平安远山恒泰（明月版）终身寿险", WHOLE_LIFE, "2024-01-01")
+
+
+def test_a_written_family_never_takes_a_prefix_neighbours_version() -> None:
+    registry = [HENGTAI_2026, HENGAN_2024]
+    dated = attribute(deck("远山恒泰培训.pptx", "远山恒泰培训\n2024年5月"), registry)
+    assert dated.outcome != "SUPPLEMENT" and dated.product_id != "8402"
+    assert "8402" not in verdicts(dated)
+    undated = attribute(deck("远山恒泰培训.pptx", "远山恒泰培训"), registry)
+    assert options(undated, registry) == ["8401", None]
+
+
+def test_an_explicit_edition_long_or_short_bare_or_bracketed_never_takes_another() -> None:
+    for written in (
+        "远山恒泰星空荣耀升级版培训",
+        "远山恒泰蓝星版培训",
+        "远山恒泰（星空荣耀升级版）培训",
+        "远山恒泰（蓝星版）培训",
+    ):
+        result = attribute(deck(written + ".pptx", written + "\n2024年5月"), [MINGYUE])
+        assert result.outcome != "SUPPLEMENT", written
+        assert verdicts(result) == {"8501": "type_conflict"}, written
+    same = attribute(deck("远山恒泰明月版培训.pptx", "远山恒泰明月版培训\n2024年5月"), [MINGYUE])
+    assert (same.outcome, same.product_id) == ("SUPPLEMENT", "8501")

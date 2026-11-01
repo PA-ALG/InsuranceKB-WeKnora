@@ -138,3 +138,66 @@ def test_recording_detached_into_a_v1_registry_is_refused() -> None:
         record(legacy, source, DETACHED)
     assert refused.value.code == "RECORD_INVALID"
     assert legacy.decisions == []
+
+
+# Review round 2: follow-up questions after a version decision keep the evidence -----------------
+
+
+NO_ROLE = deck("智盈倍护_20240527.pptx", "智盈倍护\n2024年5月")
+UNDATED_ROLE = deck("御享金越.pptx", "御享金越\n2023年11月")
+
+
+def test_a_machine_version_then_role_then_same_role_supplement_applies() -> None:
+    registry_ = [ZYBH_2024.model_copy(update={"materials": (HELD,)}), ZYBH_2026]
+    first = attribute(NO_ROLE, registry_)
+    assert first.reason == "version_role_unresolved"
+    second = conclude(first, key(first, registry_, "role", "sales_training"), NO_ROLE, registry_)
+    assert (second.reason, second.product_id) == ("same_role_differs", "2635")
+    assert second.version_basis is not None
+    assert (second.version_basis.version_decided_by, second.version_basis.role_decided_by) == (
+        "machine",
+        "person",
+    )
+    final = conclude(second, key(second, registry_, "supplement"), NO_ROLE, registry_)
+    assert final.outcome == "SUPPLEMENT"
+    assert final.version_basis == second.version_basis
+
+
+def test_a_person_version_then_role_keeps_the_evidence_and_both_deciders() -> None:
+    registry_ = [YXJY_PLAIN, YXJY_PAR]
+    first = attribute(UNDATED_ROLE, registry_)
+    assert first.reason == "version_candidates"
+    second = conclude(first, key(first, registry_, "product", "1734"), UNDATED_ROLE, registry_)
+    assert (second.reason, second.role) == ("role_unresolved", None)
+    assert [c.value for c in choices(second, registry_)] == ["sales_training", None]
+    final = conclude(
+        second, key(second, registry_, "role", "sales_training"), UNDATED_ROLE, registry_
+    )
+    assert (final.outcome, final.product_id, final.role) == ("SUPPLEMENT", "1734", "sales_training")
+    assert final.version_basis is not None
+    assert (final.version_basis.version_decided_by, final.version_basis.role_decided_by) == (
+        "person",
+        "person",
+    )
+
+
+def test_a_person_version_then_role_then_same_role_supplement_applies() -> None:
+    registry_ = [YXJY_PLAIN, YXJY_PAR.model_copy(update={"materials": (HELD,)})]
+    first = attribute(UNDATED_ROLE, registry_)
+    second = conclude(first, key(first, registry_, "product", "1734"), UNDATED_ROLE, registry_)
+    third = conclude(
+        second, key(second, registry_, "role", "sales_training"), UNDATED_ROLE, registry_
+    )
+    assert third.reason == "same_role_differs" and third.version_basis is not None
+    final = conclude(third, key(third, registry_, "supplement"), UNDATED_ROLE, registry_)
+    assert final.outcome == "SUPPLEMENT" and final.version_basis == third.version_basis
+
+
+def test_a_follow_up_is_still_stale_when_the_evidence_really_changes() -> None:
+    registry_ = [ZYBH_2024.model_copy(update={"materials": (HELD,)}), ZYBH_2026]
+    first = attribute(NO_ROLE, registry_)
+    second = conclude(first, key(first, registry_, "role", "sales_training"), NO_ROLE, registry_)
+    twin = ZYBH_2024.model_copy(update={"product_id": "2636", "version_key": "2636-1"})
+    with pytest.raises(ConfirmationError) as stale:
+        conclude(second, key(second, registry_, "supplement"), NO_ROLE, [*registry_, twin])
+    assert stale.value.code == "CHOICE_STALE"
