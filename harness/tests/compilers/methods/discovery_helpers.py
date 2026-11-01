@@ -52,6 +52,7 @@ class FakePlatform:
         self.fail_upload: set[str] = set()  # file names whose upload fails
         self.download_error: dict[str, str] = {}  # RAW knowledge id -> error code
         self.duplicate_of: dict[str, str] = {}  # digest -> the copy id a 409 names
+        self.unverified: set[str] = set()  # file names whose 409 names no copy of these bytes
         self.serial = 0
 
     def listing(self, kb_id: str) -> RawListing:
@@ -78,6 +79,8 @@ class FakePlatform:
         self.calls.append(("upload", file_name))
         if file_name in self.fail_upload:
             raise PlatformCallError("UPLOAD_FAILED")
+        if file_name in self.unverified:
+            raise PlatformCallError("DUPLICATE_UNVERIFIED")
         sha = digest(data)
         if sha in self.duplicate_of:
             return self.duplicate_of[sha], False

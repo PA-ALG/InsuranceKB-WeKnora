@@ -95,6 +95,18 @@ def test_a_duplicate_answer_from_the_platform_is_adopted() -> None:
     assert mapped(world, "k-deck-a", "copy-parsing") in result.book.copies
 
 
+def test_a_duplicate_answer_naming_no_copy_of_these_bytes_is_never_recorded() -> None:
+    world = DiscoveryWorld()
+    platform = FakePlatform(world)
+    platform.unverified.add("需求销售方法.pptx")
+    result = sync_copies(world.registry, empty_book(SPACE, DISCOVERY_KB), platform, live=True)
+    assert result.report["counts"] == {"DUPLICATE_UNVERIFIED": 1, "copied": 1}
+    assert [copy.knowledge_id for copy in result.book.copies] == ["k-deck-c"]
+    platform.unverified.clear()  # the next run reconciles: the listing, then an upload
+    again = sync_copies(world.registry, result.book, platform, live=True)
+    assert again.report["counts"] == {"copied": 1, "kept": 1}
+
+
 def test_records_with_the_same_bytes_share_no_copy() -> None:
     world = DiscoveryWorld()
     world.add_file("k-deck-b", "需求销售方法副本.pptx", DECK_A, data=world.files["k-deck-a"])

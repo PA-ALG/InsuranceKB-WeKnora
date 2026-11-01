@@ -3,6 +3,7 @@
 All requests go to a mock transport; nothing leaves the test process.
 """
 
+import hashlib
 import json
 from collections.abc import Callable
 
@@ -14,6 +15,13 @@ from insurance_harness.compilers.wiki_pages.native import NativeWikiReader
 
 BASE = "https://platform.invalid"
 Handler = Callable[[httpx.Request], httpx.Response]
+SHA = hashlib.sha256(b"bytes").hexdigest()
+
+
+def knowledge(copy_id: str, kb_id: str = "kb-methods", sha: str | None = SHA) -> dict[str, str]:
+    """The Knowledge the upload handler returns (id, knowledge base, file digest)."""
+    item = {"id": copy_id, "knowledge_base_id": kb_id}
+    return {**item, "file_sha256": sha} if sha is not None else item
 
 
 def platform(handler: Handler, max_bytes: int = 1024) -> MaterialPlatform:
@@ -54,7 +62,7 @@ def test_an_upload_posts_the_file_and_returns_the_new_copy() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return httpx.Response(200, json={"success": True, "data": {"id": "copy-1"}})
+        return httpx.Response(200, json={"success": True, "data": knowledge("copy-1")})
 
     assert platform(handler).upload("kb-methods", "需求销售方法.pptx", b"bytes") == ("copy-1", True)
     (request,) = seen
@@ -68,7 +76,7 @@ def test_an_upload_posts_the_file_and_returns_the_new_copy() -> None:
 
 def test_a_duplicate_upload_names_the_existing_copy() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        body = {"success": False, "code": "duplicate_file", "data": {"id": "copy-0"}}
+        body = {"success": False, "code": "duplicate_file", "data": knowledge("copy-0")}
         return httpx.Response(409, json=body)
 
     assert platform(handler).upload("kb-methods", "a.pptx", b"bytes") == ("copy-0", False)
@@ -86,6 +94,39 @@ def test_a_duplicate_upload_names_the_existing_copy() -> None:
 def test_an_upload_that_fails_is_refused(response: httpx.Response) -> None:
     with pytest.raises(PlatformCallError) as raised:
         platform(lambda _: response).upload("kb-methods", "a.pptx", b"bytes")
+    assert raised.value.code == "UPLOAD_FAILED"
+
+
+@pytest.mark.parametrize(
+    "existing",
+    [
+        knowledge("copy-0", sha="f" * 64),  # other bytes
+        knowledge("copy-0", kb_id="raw-1"),  # another knowledge base
+        {"id": "copy-0"},  # the id alone
+        knowledge("copy-0", sha=None),
+    ],
+)
+def test_a_duplicate_that_is_not_these_bytes_in_this_base_is_not_taken(
+    existing: dict[str, str],
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = {"success": False, "code": "duplicate_file", "data": existing}
+        return httpx.Response(409, json=body)
+
+    with pytest.raises(PlatformCallError) as raised:
+        platform(handler).upload("kb-methods", "a.pptx", b"bytes")
+    assert raised.value.code == "DUPLICATE_UNVERIFIED"
+
+
+@pytest.mark.parametrize(
+    "created", [knowledge("copy-1", sha="f" * 64), knowledge("copy-1", kb_id="raw-1"), {"id": "c"}]
+)
+def test_a_new_copy_that_is_not_these_bytes_in_this_base_fails(created: dict[str, str]) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"success": True, "data": created})
+
+    with pytest.raises(PlatformCallError) as raised:
+        platform(handler).upload("kb-methods", "a.pptx", b"bytes")
     assert raised.value.code == "UPLOAD_FAILED"
 
 
