@@ -87,8 +87,11 @@
 - **Entity 单独变化**：同步只改了销售期或分组时，同一路径只发布变化的 Entity 成员，不需要 Claim 变化。
 - **不改变的语义**：同一版本内的权威替代、材料撤回、专家锁优先级仍由事实链路按 `decision.py` 判定；跨版本是“并存”；
   全过程只推进同一个 Space Head。
-- **纪律**：首次全量重发布（所有 Claim 补 `product_version_ref`，成员 digest 全变）单独开 Issue，执行前后核对 Active epoch 与
-  成员数，不与编译轮次重叠；之后的元数据发布同样不与编译轮次重叠。
+- **纪律**：首次全量重发布（所有产品事实 Claim 补 `product_version_ref`，这些成员的 digest 全变）单独开 Issue，执行前后核对
+  Active epoch 与成员数，不与编译轮次重叠；之后的元数据发布同样不与编译轮次重叠。
+- **适用范围（SK-0 接口修订，2026-11-01）**：本节“Claim 补 `product_version_ref` = `subject_ref`”只适用于 **subject 为 `product`
+  实体的 Claim**。非版本知识（SK-0 的 `sales_method` 实体及其 Claim，`product_version_ref` 为空）不属于允许改动的字段范围：
+  `identity_refresh` 从不为它们补版本引用，也不改动它们；它们按“保留成员的完整投影”校验，任何改动整包拒绝。
 
 ## 3. 主数据同步规则（PV-2，R5）
 
