@@ -1,6 +1,6 @@
 # SK-2b 方法发现编排、候选生成、撤下与失效接线
 
-> 状态：Spec r1（2026-11-01，Claude）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §3.4、§4.1、§4.3 (b)(d)、§5.1；
+> 状态：Spec r2（2026-11-01，Claude；r2 实现时补命令参数与输出文件名）。设计依据：[SK-0](SK-0-销售方法与通用知识.md) §3.4、§4.1、§4.3 (b)(d)、§5.1；
 > [SK-2](SK-2-方法登记准入与编译.md)（SK-2a：登记表方法段、准入、编译，PR #516，本片依赖它）。跟踪 Issue #507。
 > 实现 Claude，审核 Codex。真实调用 0；不部署；不改 Go、前端与合同 schema。
 >
@@ -36,8 +36,8 @@
 
 ## 3. `methods copies`
 
-`--registry`（只读）、`--copies FILE`（不存在时视为空映射）、`--discovery-kb`、`--run-root`、`--live`。默认只出计划，
-不写平台、不写映射；`--live` 才执行。
+`--registry`（只读）、`--copies FILE`（不存在时视为空映射；旁边的锁文件同时只许一个命令）、`--discovery-kb`、`--run-root`
+（写 `copy_report.json`）、`--live`。默认只出计划，不写平台、不写映射；`--live` 才执行。
 
 1. 读发现库清单（与 RAW 清单同一读取：整份、按创建时间、总数一致）。
 2. 已有映射：原始三元组不再是 `active` 记录 → 计划**删除**该复制件并去掉映射（`stale`）；复制件不在清单中
@@ -57,7 +57,7 @@
 
 ## 4. `methods candidates`（只读）
 
-`--registry`、`--copies`、`--out FILE`。读取：发现库清单；原生 Wiki 页面及其所引 chunk（S6c 的读取，chunk 另带其
+`--registry`、`--copies`、`--discovery-kb`（须与映射文件一致）、`--out FILE`（原子写出）。读取：发现库清单；原生 Wiki 页面及其所引 chunk（S6c 的读取，chunk 另带其
 `knowledge_id`）；原始材料的固定修订页面（`reader_from_env`，与 SK-2a 编译同一读取）。
 
 - `copies`：映射中复制件在清单里**已完成解析**的条目，`copy_sha256` 取清单值。
