@@ -26,7 +26,7 @@ export interface Citation {
   member: string
   evidence_index: number
   origin: string
-  source: { knowledge_id: string; parse_attempt: number; document: string; file_sha256: string }
+  source: { knowledge_id: string; parse_attempt: number; document: string; file_sha256: string; revised_at?: string }
   // Office pages have no geometry: only `number` (S11d).
   page: { number: number; width_points?: string; height_points?: string }
   start: number

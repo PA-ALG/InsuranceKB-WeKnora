@@ -1,0 +1,27 @@
+/* SK-3: the sales-method page and a product's related methods. */
+.ek-method__banner,
+.ek-method__notice {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--td-warning-color-1, #fff8e6);
+  color: var(--td-text-color-primary, #1f2329);
+}
+.ek-method__notice { background: var(--td-gray-color-1, #f3f3f3); }
+.ek-method__labels ul,
+.ek-related-methods ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.ek-method__product + .ek-method__product::before { content: "、"; }
+.ek-method__items { margin: 0; padding-left: 1.5em; }
+.ek-method__items li { margin: 4px 0; }
+.ek-method__items li > span { margin-right: 8px; }
+.ek-method__text { margin: 0 0 4px; white-space: pre-wrap; }
+.ek-method__sources { display: flex; gap: 6px; margin: 0; }
+.ek-method__material + .ek-method__material::before { content: "；"; }
+.ek-method__footer { margin-top: 16px; }

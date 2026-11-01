@@ -1,6 +1,6 @@
 import type { Release } from './enterpriseApi'
 import { navigationTree } from './navigationView'
-import { entitySummaries, entityView, type FieldView } from './releaseView'
+import { entitySummaries, entityTypes, entityView, profileMemberFor, type FieldView } from './releaseView'
 
 export interface FieldChange {
   entityId: string; name: string; fieldKey: string; fieldTitle: string; slug: string
@@ -30,15 +30,14 @@ export function orderedEntityIds(release: Release): string[] {
 
 function fields(release: Release) {
   const projected = new Map<string, { entityId: string; name: string; fieldKey: string; field: FieldView; digest: string }>()
-  const profiles = release.members.filter(member => member.kind === 'presentation_profile')
+  const types = entityTypes(release)
   for (const entityId of orderedEntityIds(release)) {
     const view = entityView(release, entityId)
     if (!view) continue
     const rendered = new Map([...view.sections.flatMap(section => section.fields), ...view.other, ...view.generated]
       .map(field => [field.slug, field]))
-    const profile = profiles.find(member => Array.isArray(member.payload?.classification_labels)
-      && member.payload.classification_labels.some(label => view.labels.includes(label)))
-    const keys = records(profile?.payload?.sections).flatMap(section => records(section.fields)).map(field => text(field.field_key))
+    const profile = profileMemberFor(release, types.get(entityId) ?? '', view.labels)
+    const keys = records(profile?.sections).flatMap(section => records(section.fields)).map(field => text(field.field_key))
     const order = new Map([...new Set(keys)].map((key, index) => [key, index]))
     const claims = release.members.filter(member => member.kind === 'claim' && member.payload?.subject_ref === entityId)
     claims.sort((a, b) => (order.get(text(a.payload.predicate)) ?? order.size) - (order.get(text(b.payload.predicate)) ?? order.size))

@@ -28,6 +28,7 @@ export default {
     "sourceTierRawText": "원문 검색 (편집 및 검토되지 않음)",
     "sourceTierRelease": "게시된 지식 (검토 완료)",
     "sourceTierWikiPage": "모델 정리 (개별 미검토)",
+    "sourceTierMethod": "판매 방법(교육 자료, 상품 사실 아님)",
     "releaseCitationUnavailable": "이 참조의 정확한 출처를 열 수 없습니다.",
     "releaseCitationDenied": "로그인한 웹 세션에서 출처를 여세요.",
     "knowledgeFindEntity": "게시된 상품 찾기",
@@ -257,6 +258,23 @@ export default {
       "collapseEntry": "{name} 필드 접기",
       "noFields": "필드가 없습니다",
       "noConcepts": "이 릴리스에 공통 개념이 없습니다"
+    },
+    "method": {
+      "banner": "판매 방법(교육 자료, 상품 사실 아님)",
+      "notices": {
+        "product_info": "상품 정보 포함: 약관과 게시된 지식이 우선합니다"
+      },
+      "labels": "적용 범위",
+      "family": "시리즈: {name}",
+      "familyProducts": "시리즈 상품:",
+      "source": "원문",
+      "sourceOf": "{n}번 항목의 원문 열기",
+      "materials": "출처 자료:",
+      "material": "{document} ({date} 등록)",
+      "materialsLoading": "출처 자료를 읽는 중…",
+      "materialsFailed": "출처 자료를 읽을 수 없습니다",
+      "updated": "{date} 업데이트",
+      "related": "관련 판매 방법"
     },
     "version": {
       "title": "버전 정보",
