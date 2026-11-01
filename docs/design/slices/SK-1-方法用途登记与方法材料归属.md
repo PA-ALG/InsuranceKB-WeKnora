@@ -170,7 +170,8 @@
 `identity/material_roles.py`、`catalog/trust_policy.json`、`identity/attribution.py`（结论类型）、`identity/attribution_policy.json`
 （版本）、`identity/confirmation.py`（角色选项只列可识别角色）、`ingest/confirmation_questions.py`（措辞覆盖可识别角色）、
 `ingest/confirmations.py`（产品题不含 `METHOD_MATERIAL`）、`ingest/registry.py`、`ingest/product_versions.py`、
-`ingest/raw_sources.py`（整份页面读取）、`ingest/uploads.py`（含 `relabel` 命令）、`ingest/detach.py`。测试为新增文件；受保护测试只改版本号（单独披露提交）。
+`ingest/raw_sources.py`（整份页面读取）、`ingest/uploads.py`（含 `relabel` 命令）、`ingest/detach.py`。合并 S5b-9 后 `uploads.py`
+超过 500 行，登记表锁原样移到新文件 `ingest/registry_lock.py`，已挂材料补检测的读页移进 `MethodStep`（都不改行为）。测试为新增文件；受保护测试只改版本号（单独披露提交）。
 
 ## 7. 验收（RED，合成材料）
 
