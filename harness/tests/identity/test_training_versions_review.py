@@ -203,3 +203,64 @@ def test_a_version_of_no_named_edition_is_never_a_candidate() -> None:
             assert (result.outcome, result.reason) == ("NEEDS_CONFIRM", "version_candidates")
             assert options(result, registry) == [edition.product_id, None], written
             assert verdicts(result)[plain.product_id] == "type_conflict", written
+
+
+# Review round 4: the brand ends at the longest written core of ALL the family's registered names --
+
+
+def aliased(
+    product_id: str, names: tuple[str, str], pack: str, start: str
+) -> list[RegisteredProduct]:
+    """One entry carrying a long name and a shorter approved alias, in both name orders."""
+    entry = version(product_id, names[0], pack, start)
+    return [entry.model_copy(update={"names": order}) for order in (names, names[::-1])]
+
+
+ALIASED = (
+    (
+        aliased(
+            "8801",
+            ("平安星海安康长期（明朗版）医疗保险", "平安星海安康（明朗版）医疗保险"),
+            MEDICAL,
+            "2024-01-01",
+        ),
+        ("星海安康长期明朗版培训", "星海安康长期（明朗版）培训"),
+        "星海安康长期晨曦版培训",
+        version("8802", "平安星海安康医疗保险", MEDICAL, "2024-01-01"),
+    ),
+    (
+        aliased(
+            "8901",
+            ("平安远山恒泰长青（明月版）终身寿险", "平安远山恒泰（明月版）终身寿险"),
+            WHOLE_LIFE,
+            "2024-01-01",
+        ),
+        ("远山恒泰长青明月版培训", "远山恒泰长青（明月版）培训"),
+        "远山恒泰长青蓝星版培训",
+        version("8902", "平安远山恒泰终身寿险", WHOLE_LIFE, "2024-01-01"),
+    ),
+)
+
+
+def test_a_shorter_alias_of_the_same_entry_never_reads_its_longer_core_as_an_edition() -> None:
+    for entries, right, _, neighbour in ALIASED:
+        for entry in entries:
+            for written in right:
+                for registry in [[entry], *both_orders(entry, neighbour)]:
+                    result = attribute(deck(written + ".pptx", written + "\n2024年5月"), registry)
+                    assert (result.outcome, result.product_id) == (
+                        "SUPPLEMENT",
+                        entry.product_id,
+                    ), (
+                        written,
+                        entry.names,
+                    )
+
+
+def test_an_aliased_entry_still_rejects_another_edition() -> None:
+    for entries, _, wrong, neighbour in ALIASED:
+        for entry in entries:
+            for registry in [[entry], *both_orders(entry, neighbour)]:
+                result = attribute(deck(wrong + ".pptx", wrong + "\n2024年5月"), registry)
+                assert result.outcome != "SUPPLEMENT", (wrong, entry.names)
+                assert verdicts(result).get(entry.product_id) == "type_conflict", wrong
