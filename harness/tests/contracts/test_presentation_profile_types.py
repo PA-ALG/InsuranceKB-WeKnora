@@ -27,9 +27,11 @@ def profile(**changes: Any) -> dict[str, Any]:
         "schema_pack_id": "pack",
         "classification_labels": ["critical"],
         "sections": [
-            {"section_key": "s", "display_name": "合同", "fields": [
-                {"field_key": "cooling_off_period", "short_title": "犹豫期"}
-            ]}
+            {
+                "section_key": "s",
+                "display_name": "合同",
+                "fields": [{"field_key": "cooling_off_period", "short_title": "犹豫期"}],
+            }
         ],
     }
     data.update(changes)
@@ -83,5 +85,6 @@ def test_malformed_type_profiles_are_rejected(changes: dict[str, Any]) -> None:
 def test_the_exported_schema_declares_the_type_keys(tmp_path: Path) -> None:
     export(tmp_path)
     schema = json.loads((tmp_path / "presentation_profile.schema.json").read_text(encoding="utf-8"))
-    assert {"entity_types", "knowledge_class", "reading_note", "notices"} <= set(schema["properties"])
+    keys = {"entity_types", "knowledge_class", "reading_note", "notices"}
+    assert keys <= set(schema["properties"])
     assert "classification_labels" not in schema["required"]

@@ -62,9 +62,8 @@ def profile_payload(release_or_bundle: object) -> dict[str, object] | None:
 
 def test_a_compile_carries_the_profile_until_the_active_release_holds_it() -> None:
     world = World()
-    first = compiled(
-        world, [candidate(METHOD_A, world.raw_a, world.hits("k-deck-a"))], FakeModel({METHOD_A: full_answer})
-    )
+    deck = candidate(METHOD_A, world.raw_a, world.hits("k-deck-a"))
+    first = compiled(world, [deck], FakeModel({METHOD_A: full_answer}))
     assert first.bundle is not None
     payload = profile_payload(first.bundle)
     assert payload == method_profile(load_method_cards()).model_dump(mode="json")
@@ -84,9 +83,8 @@ def test_a_compile_carries_the_profile_until_the_active_release_holds_it() -> No
     )
     assert second.bundle is not None and profile_payload(second.bundle) is None
 
-    stripped = Release(
-        id=active.id, epoch=active.epoch, members=[m for m in active.members if m.logical_slug != SLUG]
-    )
+    kept = [m for m in active.members if m.logical_slug != SLUG]
+    stripped = Release(id=active.id, epoch=active.epoch, members=kept)
     third = compiled(
         world,
         [candidate(METHOD_C, world.raw_c, world.hits("k-deck-c"))],

@@ -32,7 +32,7 @@ def test_the_method_domain_reuses_the_insurance_groups_then_the_taxonomy() -> No
         for key in ("plan_types", "life_stages", "sales_stages")
         for entry in taxonomy[key]
     ]
-    assert groups[len(insurance):] == [("通用", [general["label"]]), *rest]
+    assert groups[len(insurance) :] == [("通用", [general["label"]]), *rest]
     assert len({g.group_key for g in method.groups}) == len(method.groups)
 
 
