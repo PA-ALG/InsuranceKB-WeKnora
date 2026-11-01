@@ -140,3 +140,50 @@ def test_an_explicit_edition_long_or_short_bare_or_bracketed_never_takes_another
         assert verdicts(result) == {"8501": "type_conflict"}, written
     same = attribute(deck("远山恒泰明月版培训.pptx", "远山恒泰明月版培训\n2024年5月"), [MINGYUE])
     assert (same.outcome, same.product_id) == ("SUPPLEMENT", "8501")
+
+
+# Review round 3: an edition is read only right after the written brand -------------------------
+
+MEDICAL = "schemapack_medical_insurance"
+P_MINGYUE = version("8601", "平安远山恒泰（明月版）终身寿险", WHOLE_LIFE, "2024-01-01")
+Q_HENGAN = version("8602", "平安远山恒安终身寿险", WHOLE_LIFE, "2026-01-01")
+XH_MINGLANG = version("8701", "平安星海安康（明朗版）长期医疗保险", MEDICAL, "2025-01-01")
+XH_PLAIN = version("8702", "平安星海安康医疗保险", MEDICAL, "2025-01-01")
+
+
+def both_orders(*products: RegisteredProduct) -> list[list[RegisteredProduct]]:
+    return [list(products), list(reversed(products))]
+
+
+def test_a_neighbours_shorter_core_never_reads_the_brand_tail_as_an_edition() -> None:
+    for written in ("远山恒泰蓝星版培训", "远山恒泰（蓝星版）培训"):
+        for registry in [[P_MINGYUE], *both_orders(P_MINGYUE, Q_HENGAN)]:
+            result = attribute(deck(written + ".pptx", written + "\n2024年5月"), registry)
+            assert result.outcome != "SUPPLEMENT", (written, registry)
+            assert verdicts(result).get("8601") == "type_conflict", written
+
+
+def test_a_longer_core_of_the_same_family_bounds_the_edition() -> None:
+    for written in ("星海安康长期晨曦版培训", "星海安康长期（晨曦版）培训"):
+        for registry in [[XH_MINGLANG], *both_orders(XH_MINGLANG, XH_PLAIN)]:
+            result = attribute(deck(written + ".pptx", written + "\n2025年10月"), registry)
+            assert result.outcome != "SUPPLEMENT", (written, registry)
+            assert verdicts(result).get("8701") == "type_conflict", written
+
+
+def test_the_right_edition_still_attaches_with_or_without_neighbours() -> None:
+    for written in ("远山恒泰明月版培训", "远山恒泰（明月版）培训"):
+        for registry in [[P_MINGYUE], *both_orders(P_MINGYUE, Q_HENGAN)]:
+            result = attribute(deck(written + ".pptx", written + "\n2024年5月"), registry)
+            assert (result.outcome, result.product_id) == ("SUPPLEMENT", "8601"), written
+    for written in ("星海安康长期明朗版培训", "星海安康长期（明朗版）培训"):
+        for registry in [[XH_MINGLANG], *both_orders(XH_MINGLANG, XH_PLAIN)]:
+            result = attribute(deck(written + ".pptx", written + "\n2025年10月"), registry)
+            assert (result.outcome, result.product_id) == ("SUPPLEMENT", "8701"), written
+
+
+def test_two_named_editions_never_attach_automatically() -> None:
+    written = "远山恒泰明月版与远山恒泰蓝星版对比培训"
+    result = attribute(deck(written + ".pptx", written + "\n2024年5月"), [P_MINGYUE, Q_HENGAN])
+    assert (result.outcome, result.reason) == ("NEEDS_CONFIRM", "version_candidates")
+    assert options(result, [P_MINGYUE, Q_HENGAN]) == ["8601", None]
