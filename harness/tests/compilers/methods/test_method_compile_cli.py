@@ -100,7 +100,7 @@ def test_the_command_writes_the_plan_and_report_before_the_registry(
 ) -> None:
     world = World()
     setup = Setup(tmp_path, monkeypatch, world, deck_a(world), {METHOD_A: full_answer})
-    real = cli.save_registry
+    real = save_registry
     seen: list[bool] = []
 
     def checked(registry: ProductRegistry, path: Path) -> None:

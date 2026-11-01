@@ -90,7 +90,7 @@ class World:
         self.raw_a = source("k-deck-a", "需求销售方法.pptx", SHA_A)
         self.raw_c = source("k-deck-c", "转保沟通.pptx", SHA_C)
         self.raw_p = source("k-pdf-a", "销售方法手册.pdf", SHA_B)
-        self.decks: dict[str, list[PageText]] = {
+        self.decks: dict[str, Sequence[PageText]] = {
             "k-deck-a": list(deck_pages(self.raw_a.file_name, SHA_A, DECK_A)),
             "k-deck-c": list(deck_pages(self.raw_c.file_name, SHA_C, DECK_C)),
             "k-pdf-a": pdf_pages(self.raw_p.file_name, SHA_B, PDF_A),
@@ -214,7 +214,7 @@ class FakeModel:
 
 def paragraph_ref(payload: Mapping[str, Any], needle: str, material: str = "M1") -> str:
     """The paragraph ID (`M<n>P<page>S<n>`) of the one paragraph of `material` holding `needle`."""
-    found = [
+    found: list[str] = [
         ref
         for ref, text in (line.split(" ", 1) for line in payload["paragraphs"].splitlines())
         if ref.startswith(material + "P") and needle in text
