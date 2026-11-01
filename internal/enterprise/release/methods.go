@@ -52,6 +52,7 @@ func EntityTypes(members []Member) map[string]string {
 type methodClaim struct {
 	Subject    string `json:"subject_ref"`
 	State      string `json:"state"`
+	Origin     string `json:"origin"`
 	Value      any    `json:"value"`
 	ExpertLock bool   `json:"expert_lock"`
 	Evidence   []struct {
@@ -61,10 +62,12 @@ type methodClaim struct {
 	} `json:"evidence"`
 }
 
-// checkMethodClaims holds the candidate's method claims to their convention (SK-3 Spec §4.1): a
-// list value gives every item as a non-blank string with one evidence object at its position, and
-// method knowledge rests on source passages only. Method types come from the Active and the target
-// release, so dropping the profile in the same candidate does not lift the rule.
+// checkMethodClaims holds the candidate's method claims to their rule (SK-3 Spec §4.1): method
+// knowledge rests on source passages only (no expert evidence or lock), and a present claim is
+// SOURCE_SUPPORTED with a non-blank text and at least one evidence object, or a non-empty list of
+// non-blank texts with one evidence object at each item's position. Without a source a method
+// claim can only be unknown (SK-0 §2.1). Method types come from the Active and the target release,
+// so dropping the profile in the same candidate does not lift the rule.
 func checkMethodClaims(active, target []Member, b Bundle) error {
 	methods := MethodEntityTypes(active, target)
 	if len(methods) == 0 {
@@ -90,18 +93,38 @@ func checkMethodClaims(active, target []Member, b Bundle) error {
 				return invalid("method knowledge rests on source passages only: " + m.LogicalSlug)
 			}
 		}
-		items, list := claim.Value.([]any)
-		if claim.State != "present" || !list {
+		if claim.State == "unknown" {
 			continue
 		}
-		if len(items) != len(claim.Evidence) {
-			return invalid("method list items and evidence differ: " + m.LogicalSlug)
-		}
-		for _, item := range items {
-			if text, ok := item.(string); !ok || strings.TrimSpace(text) == "" {
-				return invalid("method list items must be non-blank text: " + m.LogicalSlug)
-			}
+		if err := sourcedValue(claim); err != "" {
+			return invalid(err + ": " + m.LogicalSlug)
 		}
 	}
 	return nil
+}
+
+// sourcedValue is why a stated method claim is not sourced item by item, or "".
+func sourcedValue(claim methodClaim) string {
+	if claim.Origin != "SOURCE_SUPPORTED" {
+		return "method knowledge is SOURCE_SUPPORTED or unknown"
+	}
+	if text, ok := claim.Value.(string); ok {
+		if strings.TrimSpace(text) == "" || len(claim.Evidence) == 0 {
+			return "a method text needs its source passages"
+		}
+		return ""
+	}
+	items, ok := claim.Value.([]any)
+	if !ok || len(items) == 0 {
+		return "a method value is a text or a non-empty list"
+	}
+	if len(items) != len(claim.Evidence) {
+		return "method list items and evidence differ"
+	}
+	for _, item := range items {
+		if text, ok := item.(string); !ok || strings.TrimSpace(text) == "" {
+			return "method list items must be non-blank text"
+		}
+	}
+	return ""
 }
