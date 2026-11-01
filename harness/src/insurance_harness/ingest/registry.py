@@ -169,7 +169,8 @@ class ProductRegistry(_Strict):
         concluded = [p.settlement.conclusion for p in self.pending if p.settlement]
         decided = [p.attribution for p in self.pending] + [d.attribution for d in self.decisions]
         keys = [a.version_key for a in (*decided, *concluded) if a is not None]
-        evidence = any(a is not None and a.version_basis for a in (*decided, *concluded))
+        found = [a for a in (*decided, *concluded) if a is not None]
+        evidence = any(a.version_basis or a.shared_versions for a in found)
         check_versions(self.contract, self.metadata_basis, versions, keys, evidence)
         recorded = [m for p in self.products.values() for m in (*p.materials, *p.retired)]
         ids = [m.knowledge_id for m in recorded] + [p.knowledge_id for p in self.pending]

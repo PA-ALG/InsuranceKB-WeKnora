@@ -113,7 +113,11 @@ def v1_excluded() -> IncEx:
     """The v2 fields a v1 registry file never contains (PV-1 Spec §2.3), so code without them can
     still read it: an entry's version, the basis, and an attribution's version key (only ever set
     with a v2 registry's catalog)."""
-    key: dict[str, IncEx | bool] = {"version_key": True, "version_basis": True}  # PV-1, PV-3
+    key: dict[str, IncEx | bool] = {  # PV-1, PV-3
+        "version_key": True,
+        "version_basis": True,
+        "shared_versions": True,
+    }
     conclusion: dict[str, IncEx | bool] = {"conclusion": key}
     pending: dict[str, IncEx | bool] = {"attribution": key, "settlement": conclusion}
     decision: dict[str, IncEx | bool] = {"attribution": key}

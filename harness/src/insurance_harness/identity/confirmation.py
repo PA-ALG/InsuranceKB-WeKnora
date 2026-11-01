@@ -33,7 +33,7 @@ MAX_CHOICES = 50  # the platform's limit on options per confirmation item (S5b-3
 VERSION_REASONS = frozenset({"version_candidates", "no_date_signal", "version_role_unresolved"})
 _ONLY_IGNORED = frozenset(
     {"anchor_conflict", "text_unavailable", "no_registered_version", "date_signals_conflict",
-     "multiple_families"}
+     "multiple_families", "shared_clause_code"}
 )
 OPTION_KEY = r"^[a-z0-9][a-z0-9:._-]{0,127}$"  # the platform's option key format (S5b-3a)
 

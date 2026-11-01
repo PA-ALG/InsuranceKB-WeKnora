@@ -209,6 +209,7 @@ class Attribution(_Frozen):
     candidates: tuple[str, ...] = ()  # for NEW_VERSION: the registered entry of the same name
     version_key: str | None = None  # of the entry CREATE or NEW_VERSION adds, if catalogued
     version_basis: VersionBasis | None = None  # a training material's version evidence (PV-3)
+    shared_versions: tuple[str, ...] = ()  # the filed versions a quarantined shared code names
     policy_ref: str
 
 
@@ -327,9 +328,11 @@ def attribute(
     key, by_key = None, False
     if catalog is not None and code is not None:
         found = match_version(code, products, catalog, policy.clause_code_pattern)
-        if found.kind in {"conflict", "shared"}:
-            reason = "shared_clause_code" if found.kind == "shared" else "anchor_conflict"
-            return decided("QUARANTINE", reason, **anchors)
+        if found.kind == "shared":  # appendix A §1.3 row 3: named, never merged or created
+            shared = catalog.keys_for(code)
+            return decided("QUARANTINE", "shared_clause_code", shared_versions=shared, **anchors)
+        if found.kind == "conflict":
+            return decided("QUARANTINE", "anchor_conflict", **anchors)
         key, by_key = found.version_key, found.by_key
         if found.kind == "registered":
             by_code = [p for p in products if p.product_id == found.product_id]

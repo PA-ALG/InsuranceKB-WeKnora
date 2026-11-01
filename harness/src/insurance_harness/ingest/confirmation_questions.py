@@ -46,6 +46,7 @@ _QUARANTINED = {
     "no_registered_version",
     "date_signals_conflict",
     "multiple_families",
+    "shared_clause_code",  # PV-1 row 3; asked so that pushing it never fails (PV-3)
 }
 _UNREADABLE = "text_unavailable"
 _KINDS = {"product", "pack", "role", "replace", "supplement", "ignore"}
@@ -177,6 +178,7 @@ def question_of(
         "name": attribution.display_name or "",
         "code": attribution.clause_code or "",
         "evidence": _evidence(attribution.version_basis, registry, wording),
+        "versions": "、".join(attribution.shared_versions),
     }
     unreadable = attribution.reason == _UNREADABLE
     excerpt = excerpt_of(head, wording.excerpt_chars)
