@@ -17,8 +17,9 @@
 
 ### 2.1 版本目录（`ingest/version_catalog.py`，新）
 
-从固定提交的平安产品仓库检出读出 `在售/*/product_meta.json` 与 `停售/*/product_meta.json`（只读、限大小、不可信输入），
-每个文件夹一条 `VersionRecord`：
+从固定提交的平安产品仓库读出 `在售/*/product_meta.json` 与 `停售/*/product_meta.json`：**从该提交的对象库读取**
+（`git ls-tree` + `git cat-file --batch`，禁止懒取网络），不读工作区，未跟踪、被忽略或改动过的文件进不来；只收常规文件，
+符号链接或更深的路径整体拒绝；限大小；重复 JSON 键拒绝（不可信输入；审核 R2）。每个文件夹一条 `VersionRecord`：
 
 | 字段 | 来源 | 规则 |
 |---|---|---|
@@ -30,15 +31,15 @@
 | `source_status` | `planSalesStatus` | 在售 → `on_sale`，停售 → `discontinued`，其他 → 空 |
 | `channel` / `plan_type` | `planSalesChannel` / `planPlanType` | 原文 |
 
-检出提交必须等于命令给出的 `--manifest-commit`（`git rev-parse HEAD`，40 位）。目录落盘为登记表同目录的
+`--manifest-commit` 必须是该仓库中存在的提交（40 位）。目录落盘为登记表同目录的
 `<登记表名>.catalog-<sha256 前 12 位>.json`（合同 `product-catalog.v1`，内容寻址，写后不改、不删）；登记表
-`metadata_basis` 记仓库名、提交、目录文件名与其 sha256、同步时间。`uploads run` 读 v2 登记表时按 `metadata_basis` 读回目录并
-核对 sha256，不符或缺失即 `CATALOG_INVALID` 失败关闭；v1 登记表不读目录，归属沿用现有规则。
+`metadata_basis` 记仓库名、提交、目录文件名与其 sha256、同步时间。`uploads run` 读 v2 登记表时按 `metadata_basis` 读回目录，
+核对 sha256 以及目录自身的仓库、提交与依据一致，不符或缺失即 `CATALOG_INVALID` 失败关闭；v1 登记表不读目录，归属沿用现有规则。
 
 ### 2.2 条款号规范化
 
-NFKC、去空白，`[` / `]` 改为 `〔` / `〕`，再按归属策略 `clause_code_pattern` 全匹配（与正文抽出的编号同一形式）。登记表
-`clause_codes` 比较前做同样规范化；**登记表里的值不改写**（正文确认的值）。
+一种比较形式（`identity.versions.normal_clause_code`）：NFKC、去空白，`[` / `]` 改为 `〔` / `〕`。归属的编号命中、新版本判定、
+版本匹配与迁移都用它（审核 R1）；目录与迁移另要求按归属策略 `clause_code_pattern` 全匹配。**登记表里的值不改写**（正文确认的值）。
 
 ### 2.3 登记表 v2（`ingest/registry.py`、`ingest/product_versions.py`，新）
 
@@ -48,7 +49,8 @@ NFKC、去空白，`[` / `]` 改为 `〔` / `〕`，再按归属策略 `clause_c
   `version_key`、`plan_code`、`version_no`、`sale_start`、`sale_end`、`source_status`、`channel`、`plan_type`、`year_tag`、
   `family{key, display_name}`、`predecessor`、`version_ambiguous`（布尔）。
 - `ProductRegistry.metadata_basis: MetadataBasis | None`：v1 必须为空，v2 必须有。
-- 校验：非空 `version_key` 在登记表内唯一；`sale_start < sale_end`（都有时）；`predecessor` 指向另一个已登记条目。
+- 校验：非空 `version_key` 在登记表内唯一；`sale_start < sale_end`（都有时）；`predecessor` 指向另一个已登记条目；
+  v1 登记表的待处理、结算结论与决定中不得有非空 `version_key`（载入与 record 都失败关闭，不在保存时丢弃；审核 R5）。
 - `family`：由归属策略的品牌规则（S11c 品牌核心：去前缀、去括号限定、去最长险种后缀）从规范名称派生；`year_tag`：名称中
   `product_year_patterns` 唯一命中的年份。两者都是派生数据，只用于分组与候选（PV-3/PV-4），从不作归属锚点。
 - 唯一前驱（附录 A §1.4）：同 `plan_code`、`p.sale_end == v.sale_start`、满足这两条的条目恰好一个；否则为空。每次新增条目、
@@ -69,6 +71,8 @@ NFKC、去空白，`[` / `]` 改为 `〔` / `〕`，再按归属策略 `clause_c
 | 4 | `n(C) ≤ 1`，编号命中多个条目 | `QUARANTINE / anchor_conflict`（现有规则） |
 | 5 | `n(C) ≤ 1`，编号命中恰好一个 `Y` | 认定为 `Y`；`Y.version_key` 非空且 `K` 已知而不等 → `anchor_conflict` |
 | 6 | `n(C) ≤ 1`，编号没有命中 | 现有规则（标题、新建、品牌候选）；新建条目带 `K` |
+
+归属策略版本升为 `2026-11-01.2`（S5b-1 §2.1：规则变化必须升版；审核 R6），之前的决定保留各自的 `policy_ref`。
 
 **新版本**（修订 S5b-1）：条款有自有编号、名称命中已登记产品 `P`、编号不在 `P` 中 → `NEW_VERSION / new_clause_code`，但
 `product_id` 是**新条目**（与 `CREATE` 同规则：`sc-` + 自有编号摘要），`display_name` 与 `schema_pack_id` 取 `P`，
@@ -92,15 +96,17 @@ python -m insurance_harness.ingest.uploads migrate-registry --registry PATH \
    或条目的多个编号指向不同版本 → `version_ambiguous`，字段空；两个条目落到同一 `version_key` → 拒绝（`MIGRATION_VERSION_DUPLICATE`，
    不写任何文件）。名称与目录不一致只报告，不改 `names`。`retired` 非空的条目在报告中列出，格式继续支持。刷新时只重算版本
    字段，其他内容必须逐项不变。新内容与当前相同 → no-op。`--dry-run` 到此为止，只出报告。
-4. 写备份 `<登记表名>.backup-<UTC 时间>-<操作编号>.json`（独占创建，永不覆盖、命令从不删除）并 fsync；写目录文件（内容寻址，
-   已存在则核对 sha256）；写同目录临时文件并 fsync。
+4. 写备份 `<登记表名>.backup-<UTC 时间>-<操作编号>.json`（独占创建，永不覆盖、命令从不删除）；写目录文件（内容寻址，
+   已存在则核对 sha256）；写同目录临时文件。备份、临时文件与日志都**完整写入（短写续写）、fsync、读回核摘要**，普通失败删除
+   自己创建的半成品（审核 R4）。
 5. **替换前**独占写操作日志并 fsync：操作编号、类型、旧/预期新完整内容 sha256、备份文件名与 sha256、临时文件名、清单提交、
    开始时间。然后原子替换（提交点）并 fsync 目录。替换前的普通异常：删临时文件、日志按“未执行”关闭、保留备份；进程被中断
    （非 `Exception`）时日志保持未关闭，留给恢复。替换后读回：摘要等于预期新摘要、v2 合法、（首次迁移）v1 投影与备份逐项
    相等 → 追加迁移记录到 `<登记表名>.migrations.jsonl`（fsync）并删除日志；读回失败时日志保持未关闭（已提交但未确认）。
-6. 恢复（同一把锁下，只依据日志摘要）：目标 = 预期新 → 补做第 5 步读回校验、记“已提交”、关闭，不重做；目标 = 旧且备份摘要
-   相符 → 记“未执行”、删日志记下的临时文件、关闭，再从第 2 步开始；其他 → `MIGRATION_RECOVERY_UNSAFE`，不写任何文件。
-   刷新的 v1 投影前后相同，判定从不使用投影。
+6. 恢复（同一把锁下，只依据日志摘要）：日志是严格记录，畸形或文件名不是本登记表的兄弟文件 → `MIGRATION_JOURNAL_INVALID`；
+   **任何分支先核备份摘要**，缺失或不符 → `MIGRATION_RECOVERY_UNSAFE`（审核 R3）；目标 = 预期新 → 补做第 5 步读回校验（含备份）、
+   记“已提交”、关闭，不重做；目标 = 旧 → 记“未执行”、删日志记下的临时文件、关闭，再从第 2 步开始；其他 →
+   `MIGRATION_RECOVERY_UNSAFE`。失败都不写任何文件。刷新的 v1 投影前后相同，判定从不使用投影。
 
 报告（JSON，不含材料正文与路径）：每个条目 `matched / unmatched / ambiguous`、版本键、前驱、名称差异、`retired` 非空的条目、
 no-op / 已恢复 / 已提交。
