@@ -75,6 +75,7 @@ def _write_synthetic_contract(repo_root: Path) -> tuple[Path, Path]:
         "THIRD_PARTY_NOTICES.md": "fixture notices\n",
         "licenses/sources/modules.tsv": "fixture/module v1.0.0 " + "a" * 64 + "\n",
         "config/app.yml": "mode: test\n",
+        "contracts/candidate_bundle.schema.json": "{}\n",
         "scripts/docker-entrypoint.sh": "#!/bin/sh\n",
         "migrations/000001.sql": "select 1;\n",
         "dataset/samples/sample.txt": "sample\n",

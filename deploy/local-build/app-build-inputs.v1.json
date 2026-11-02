@@ -19,6 +19,7 @@
     "cmd/server/signals_unix.go",
     "cmd/download/duckdb/duckdb.go",
     "config",
+    "contracts",
     "dataset/samples",
     "deploy/upstream/adoption_target.go",
     "deploy/upstream/weknora-adoption-target.json",

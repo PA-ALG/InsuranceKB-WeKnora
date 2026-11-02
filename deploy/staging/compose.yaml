@@ -51,7 +51,7 @@ services:
       - c5:/run/insurancekb/c5:ro
       - docreader-tmp:/tmp/docreader:ro
       - ${STAGING_CONFIG_YAML:?}:/app/config/config.yaml:ro
-      - ${STAGING_CONTRACTS_DIR:?}:/app/contracts:ro
+      # contracts/ ships in the image (I5); staging.sh adds a mount only for a pre-I5 live app.
     networks: [internal, egress]
     depends_on:
       pg:

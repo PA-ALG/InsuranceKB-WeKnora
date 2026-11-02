@@ -58,8 +58,10 @@ services:
       - docreader-tmp:/tmp/docreader:ro
       # The image's config.yaml plus the artifact signing ring (rehearsal finding F3).
       - ${REHEARSAL_HOME:?}/config.yaml:/app/config/config.yaml:ro
-      # The App image ships config/ but not contracts/ (releasestore ENTERPRISE_CONTRACTS_DIR), so an
-      # install mounts contracts/ from the same commit as the images — rehearsal finding F1.
+      # The pinned (pre-I5) App image ships config/ but not contracts/ (releasestore
+      # ENTERPRISE_CONTRACTS_DIR), so an install mounts contracts/ from the same commit as the
+      # images — rehearsal finding F1. Images built after I5 ship contracts/: drop this mount in
+      # the change that moves images.lock to such an image.
       - ${REHEARSAL_CONTRACTS_DIR:?}:/app/contracts:ro
     networks: [internal, egress]
     depends_on:
