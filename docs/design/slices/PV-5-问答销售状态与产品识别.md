@@ -1,6 +1,6 @@
 # PV-5 问答中的销售状态、登记标识识别与同一产品线的跨年版本
 
-> 状态：Spec r2（2026-11-01，Claude；r1 写 RED 时把年份标记条件写全：旧版带年份时新版须带更晚的年份；r2 实现时补：每轮每个 Space 只读一次发布版本（状态行与字段合读、点名产品与销售比较范围合读），名称片段全为数字时不点名）。设计依据：[PV-0](PV-0-产品版本与生命周期.md) §3、[附录 A](PV-0-附录A-身份发布同步与迁移.md)
+> 状态：Spec r3（2026-11-01，Claude；r1 写 RED 时把年份标记条件写全：旧版带年份时新版须带更晚的年份；r2 实现时补：状态行与字段合读、点名产品与销售比较范围合读，名称片段全为数字时不点名；r3 按 #530 审核：读取口径改为“接口内合读、全部固定在本轮 Release”（Owner 裁定不加回合级缓存），销售状态标记的引用一律不作普通出处，同编码前驱计入产品线一对二判定）。设计依据：[PV-0](PV-0-产品版本与生命周期.md) §3、[附录 A](PV-0-附录A-身份发布同步与迁移.md)
 > §1.4；[PV-4b](PV-4b-读取侧.md) §2、§4；[SK-3](SK-3-销售方法阅读与问答.md) §6（方法知识不进产品问答）。跟踪 Issue #501。
 > 实现 Claude，审核 Codex。真实调用 0（问答回归在部署后线上做，§7）。
 
@@ -44,8 +44,9 @@
 ### 1.2 快问快答（`internal/enterprise/chatsource`）
 
 - `publishedHits` 对每个 Wiki Space 先放状态行，再放字段命中；两者合计仍受 `maxPublishedHits`（12）约束。状态行与字段由
-  `Service.QuestionReferences` 一次读取同一发布版本得到（平台读取没有缓存，每轮每个 Space 仍只读一次，既有“每轮读一次”
-  的验收不变）。
+  `Service.QuestionReferences` 在同一次读取中得到（接口内合读，字段注入不比今天多读）。平台读取没有回合级缓存：快问快答的
+  字段注入与按产品检索的各阶段仍各自读取，但全部固定在本轮 pinned Release，不读当前 Head。回合级读取预算另议（Owner
+  2026-11-01 裁定：本片不加缓存；多次读取的是数据库，不是模型调用）。
 - 状态命中：`ID = release:<release>:<Slug>`，`KnowledgeTitle = Title`，`Content = Text`，元数据
   `{source_tier: release, space_id, release_id, logical_slug: <Slug>, knowledge_class: sale_status}`，**没有
   `evidence_index`**（销售期来自登记表固定的产品仓库提交，不是材料原文，不能伪造出处）。元数据由 `knowledge.StatusMetadata`
@@ -63,6 +64,8 @@
   `id = release:<release_id>:<logical_slug>`。`releaseCitationTarget` 对它仍返回 `null`（没有可打开的原文）。
 - `releaseCitationPreview`：同一 chunk 的匹配全部是同一状态引用时返回其标题与内容（不报错）；状态引用与其他引用混在
   同一 chunk 上仍按现有规则报错。
+- 带 `knowledge_class = sale_status` 的引用**一律不作普通出处**：`releaseCitationTarget` 对它返回 `null`，元组不合法（如多了
+  `evidence_index`）时预览报错、引用处显示“无法打开”，不挂出处面板；不能被重新解释成该实体成员的证据。普通字段与方法来源不变。
 - `ReleaseCitation.vue`：状态引用显示一句说明 `chat.releaseStatusNote`（“销售状态由本版本的产品登记数据计算，没有原文出处。”），
   不显示“无法打开”的告警，也不打开出处面板。
 
@@ -81,7 +84,7 @@
   引用它的每款产品状态都是 `discontinued` 或 `not_yet_on_sale`。被任一在售/状态未知产品引用的材料、未归属的材料都不在
   其中。其余情况返回空。规则与已发布字段的 `forSale` 一致（PV-4b §4.2）；点名的产品一律不删。
 - `namedScope` 改用 `Service.QuestionRawScope`：一次读取同时得到点名产品（即 `QuestionProducts`）与这份集合
-  （`productScope.offSale`，按 `materialKey`），不为销售比较多读发布版本。
+  （`productScope.offSale`，按 `materialKey`）：每个阶段的读取次数与今天相同，不为销售比较另加读取。
   `RetrievalScope` 在 `CHUNK_MERGE` 与 `FILTER_TOP_K` 去掉这些材料的片段（同时处理原生阶段的回退列表：重排列表为空时的
   检索列表；合并与重排都为空时的检索列表），检索阶段不改目标。读取失败时记一条不含问题文本的告警并保持原检索（与产品识别
   失败的处理相同）。
@@ -113,7 +116,8 @@
   规则是现有的年份数据，不按产品编号特判。
 - 候选 `p`：与 `v` 同产品线名；`p.sale_end` 与 `v.sale_start` 都已知，且 `p.sale_end ≤ v.sale_start`（**先停售、后开售，
   销售期不重叠**）；`p` 有年份标记时，`v` 必须有更晚的年份标记（不让无年份的名称接替带年份的版本）。候选中取 `sale_end` 最晚者，最晚者不唯一则不连。
-- 一个 `p` 若成为两个 `v` 的产品线前驱，两条都不连（失败关闭）。
+- 一个 `p` 若成为两个 `v` 的产品线前驱，两条都不连（失败关闭）。已由同编码规则接替的 `p` 也计入：同编码前驱与产品线前驱
+  指向同一 `p` 时，产品线这条不连，同编码那条保留（同编码优先，不形成分叉）。
 - 同时在售或销售期重叠的同线产品（线上 1806 与 1816(2026)）**不连**：它们并存，不是接替。
 
 `registry._link` 与迁移（`plan_migration`，含 `--refresh`）传入每个条目首个名称的产品线名。链仍只表达“谁接替谁”，不撤回
