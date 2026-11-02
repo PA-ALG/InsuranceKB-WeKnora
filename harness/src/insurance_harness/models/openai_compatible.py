@@ -29,7 +29,8 @@ from .ledger import CallLedger, CallRecord, Outcome
 @dataclass
 class _Response:
     outcome: Outcome = "http_error"
-    content: str | None = None
+    content: str | None = None  # the answer of an "ok" response
+    text: str | None = None  # the answer text the response carried, a cut-off one too
     finish_reason: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -84,12 +85,37 @@ def _parse_response(response: httpx.Response) -> _Response:
     content = message.get("content")
     if content is not None and not isinstance(content, str):
         return parsed
+    parsed.text = content or None
     # Blueprint §7.1 rejects every non-stop finish, not only length exhaustion.
     if finish != "stop" or content is None or not content.strip():
         parsed.outcome = "truncated"
     else:
         parsed.outcome, parsed.content = "ok", content
     return parsed
+
+
+def request_body(config: StageModelConfig, *, system: str, user: str) -> bytes:
+    """The exact chat request body the client sends for this stage and these messages."""
+    payload: dict[str, object] = {
+        "model": config.model,
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "max_tokens": config.max_tokens, "temperature": config.temperature,
+    }
+    if config.thinking is not None:
+        thinking: dict[str, str] = {"type": config.thinking}
+        if config.reasoning_effort is not None:
+            thinking["reasoning_effort"] = config.reasoning_effort
+        payload["thinking"] = thinking
+    if config.response_format is not None:
+        payload["response_format"] = {"type": config.response_format}
+    return json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")
+
+
+def request_sha256(config: StageModelConfig, *, system: str, user: str) -> str:
+    """The request digest the ledger records for this request, computed without sending it."""
+    return hashlib.sha256(request_body(config, system=system, user=user)).hexdigest()
 
 
 def _retry_delay(header: str | None, attempt: int) -> float:
@@ -104,14 +130,19 @@ def _retry_delay(header: str | None, attempt: int) -> float:
 
 
 class OpenAICompatibleCompletion:
-    """The transport performs no automatic retries; this adapter owns all attempts."""
+    """The transport performs no automatic retries; this adapter owns all attempts.
+
+    `keep`, when given, receives every answer text a response carries (a cut-off one too) before
+    the call returns or raises, after its attempt record has been appended: a caller keeping raw
+    output in its private run root sees what a truncation discarded. Errors never carry it.
+    """
 
     def __init__(
         self, config: StageModelConfig, *, environ: Mapping[str, str] | None = None,
         ledger: CallLedger | None = None, transport: httpx.BaseTransport | None = None,
-        sleep: Callable[[float], None] = time.sleep,
+        sleep: Callable[[float], None] = time.sleep, keep: Callable[[str], None] | None = None,
     ) -> None:
-        self._config = config
+        self._config, self._keep = config, keep
         key = (os.environ if environ is None else environ).get(config.api_key_env, "")
         if not key.strip() or not key.isascii() or any(char.isspace() for char in key):
             raise self._error(ModelConfigError, "config_error")
@@ -145,6 +176,10 @@ class OpenAICompatibleCompletion:
             latency_ms=latency_ms, prompt_tokens=result.prompt_tokens,
             completion_tokens=result.completion_tokens, reasoning_tokens=result.reasoning_tokens,
             finish_reason=result.finish_reason, served_model=result.served_model,
+            response_sha256=(
+                hashlib.sha256(result.content.encode("utf-8")).hexdigest()
+                if result.outcome == "ok" and result.content is not None else None
+            ),
         )
         self._ledger.append(record)
         return record
@@ -184,21 +219,7 @@ class OpenAICompatibleCompletion:
 
     def complete(self, *, system: str, user: str) -> str:
         config = self._config
-        payload: dict[str, object] = {
-            "model": config.model,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "max_tokens": config.max_tokens, "temperature": config.temperature,
-        }
-        if config.thinking is not None:
-            thinking: dict[str, str] = {"type": config.thinking}
-            if config.reasoning_effort is not None:
-                thinking["reasoning_effort"] = config.reasoning_effort
-            payload["thinking"] = thinking
-        if config.response_format is not None:
-            payload["response_format"] = {"type": config.response_format}
-        body = json.dumps(
-            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False,
-        ).encode("utf-8")
+        body = request_body(config, system=system, user=user)
         digest = hashlib.sha256(body).hexdigest()
         if config.max_input_chars is not None and len(system) + len(user) > config.max_input_chars:
             self._record(digest, 1, _Response(outcome="input_too_large"))
@@ -210,6 +231,8 @@ class OpenAICompatibleCompletion:
                 self._record(digest, attempt, _Response(outcome="budget_exceeded"))
                 raise self._error(ModelBudgetExceeded, "budget_exceeded")
             result, status, delay = self._send(body, digest, attempt)
+            if result.text is not None and self._keep is not None:
+                self._keep(result.text)
             if result.outcome == "ok":
                 assert result.content is not None
                 return result.content
