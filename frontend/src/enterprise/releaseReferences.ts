@@ -29,6 +29,9 @@ export function isReleaseReference(reference: Reference): boolean {
 export function releaseCitationTarget(reference: Reference): ReleaseCitationTarget | null {
   const metadata = reference.metadata
   if (!isPinnedTier(metadata?.source_tier)) return null
+  // A sale status (PV-5) has no evidence; one that arrives with an evidence index is malformed and
+  // must never open as the entity's evidence (#530 R1).
+  if (metadata.knowledge_class === 'sale_status') return null
   const spaceId = text(metadata.space_id), releaseId = text(metadata.release_id), member = text(metadata.logical_slug)
   const raw = metadata.evidence_index
   const evidence = typeof raw === 'number' ? raw : typeof raw === 'string' && /^(0|[1-9]\d*)$/.test(raw) ? Number(raw) : NaN
@@ -39,10 +42,28 @@ export function releaseCitationTarget(reference: Reference): ReleaseCitationTarg
   return { spaceId, releaseId, member, evidence }
 }
 
+/**
+ * A sale status line (PV-5) is a release member with no evidence to open: the platform computes it
+ * from the product's registered sale period. Only its exact tuple identifies it.
+ */
+export function releaseStatusReference(reference: Reference): boolean {
+  const metadata = reference.metadata
+  if (metadata?.source_tier !== 'release' || metadata.knowledge_class !== 'sale_status') return false
+  const spaceId = text(metadata.space_id), releaseId = text(metadata.release_id), member = text(metadata.logical_slug)
+  return !!spaceId && !!releaseId && releaseId.toLowerCase() !== 'active' && member.startsWith('entity/')
+    && metadata.evidence_index === undefined && identity(reference) === `release:${releaseId}:${member}`
+}
+
+const statusKey = (reference: Reference) =>
+  JSON.stringify([reference.metadata?.space_id, reference.metadata?.release_id, reference.metadata?.logical_slug])
+
 export function releaseCitationPreview(chunkId: string, references: readonly Reference[] | null | undefined, failure: string) {
   const matches = (references || []).filter(reference => identity(reference) === chunkId
     || reference.chunk_ids?.includes(chunkId) || reference.chunkIds?.includes(chunkId))
   if (!chunkId.startsWith('release:') && !matches.some(isReleaseReference)) return null
+  if (matches.length && matches.every(releaseStatusReference) && new Set(matches.map(statusKey)).size === 1) {
+    return { title: matches[0]!.knowledge_title || matches[0]!.title || '', content: matches[0]!.content || '' }
+  }
   const targets = matches.map(releaseCitationTarget)
   if (!matches.length || targets.some(target => !target)
     || new Set(targets.map(target => JSON.stringify(target))).size !== 1) {

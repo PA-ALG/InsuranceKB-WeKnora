@@ -78,6 +78,19 @@ func FieldMetadata(space, id string, field Field) map[string]string {
 	return metadata
 }
 
+// classSaleStatus marks a sale status line among release references (PV-5 §1.2).
+const classSaleStatus = "sale_status"
+
+// StatusMetadata identifies a sale status line as a reference of the pinned release. It has no
+// evidence index: the status comes from the product's registered lifecycle, which no material
+// passage supports, so a viewer opens no source for it.
+func StatusMetadata(space, id string, line StatusLine) map[string]string {
+	return map[string]string{
+		"source_tier": "release", "space_id": space, "release_id": id,
+		"logical_slug": line.Slug, "knowledge_class": classSaleStatus,
+	}
+}
+
 func fieldToolResult(space, id string, fields []Field, notes []string, total int) *types.ToolResult {
 	rows := make([]map[string]interface{}, 0, len(fields))
 	notes = append([]string(nil), notes...)

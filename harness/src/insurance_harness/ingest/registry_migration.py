@@ -36,6 +36,7 @@ from insurance_harness.ingest.migration_journal import (
 from insurance_harness.ingest.product_versions import (
     MetadataBasis,
     ProductVersion,
+    line_of,
     predecessors,
     same_name,
     version_of,
@@ -111,7 +112,8 @@ def plan_migration(
     taken = [v.version_key for v in versions.values() if v.version_key]
     if len(set(taken)) != len(taken):
         raise MigrationError("MIGRATION_VERSION_DUPLICATE")
-    linked = predecessors(versions)
+    lines = {pid: line_of(product.names[0], policy) for pid, product in registry.products.items()}
+    linked = predecessors(versions, lines)
     planned = registry.model_copy(deep=True)
     for product_id, product in planned.products.items():
         update = {"predecessor": linked[product_id]}

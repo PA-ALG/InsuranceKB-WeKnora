@@ -126,7 +126,19 @@ func (index *releaseIndex) entityLine(entity Entity) string {
 		return index.methodLine(index.entities[index.entityByID[entity.EntityID]])
 	}
 	line := "产品编号：" + entity.EntityID + "；名称：" + entity.Name
-	if entity.Lifecycle != nil {
+	if parts := index.versionParts(entity, false); parts != "" {
+		line += "；" + parts
+	}
+	return line
+}
+
+// versionParts is the version description shared by tool lines and sale status lines (PV-5 §1.1).
+// Without a lifecycle the status is left out, unless stated is set: a sales answer must learn that
+// a product's status is unknown rather than read nothing.
+func (index *releaseIndex) versionParts(entity Entity, stated bool) string {
+	parts := []string{}
+	switch {
+	case entity.Lifecycle != nil:
 		word, basis := saleText(entity)
 		if entity.Status == SaleUnknown {
 			word = "未知"
@@ -134,13 +146,15 @@ func (index *releaseIndex) entityLine(entity Entity) string {
 		if basis != "" {
 			word += "（" + basis + "）"
 		}
-		line += "；销售状态：" + word
+		parts = append(parts, "销售状态："+word)
 		if period := periodText(entity.Lifecycle); period != "" {
-			line += "；销售期：" + period
+			parts = append(parts, "销售期："+period)
 		}
+	case stated:
+		parts = append(parts, "销售状态：未知")
 	}
 	if entity.Family != nil {
-		line += "；系列：" + entity.Family.DisplayName
+		parts = append(parts, "系列："+entity.Family.DisplayName)
 	}
 	for _, link := range []struct {
 		title string
@@ -153,9 +167,9 @@ func (index *releaseIndex) entityLine(entity Entity) string {
 		for _, id := range link.ids {
 			named = append(named, id+"（"+index.entities[index.entityByID[id]].Name+"）")
 		}
-		line += "；" + link.title + "：" + strings.Join(named, "、")
+		parts = append(parts, link.title+"："+strings.Join(named, "、"))
 	}
-	return line
+	return strings.Join(parts, "；")
 }
 
 type relationPayload struct {
