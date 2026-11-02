@@ -791,6 +791,7 @@ func (s *sessionService) KnowledgeQAByEvent(ctx context.Context,
 		err := s.eventManager.Trigger(stageCtx, eventType, chatManage)
 		restoreRetrieval()
 		restoreAnalysis()
+		chatsource.AnswerIntent(ctx, eventType, chatManage)
 		if understandProgress != nil && eventType == types.QUERY_UNDERSTAND {
 			chatpipeline.EndQueryUnderstandProgress(stageCtx, chatManage, understandProgress, understandStart, err)
 			understandProgress = nil
