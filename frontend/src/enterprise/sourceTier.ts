@@ -1,4 +1,4 @@
-export type SourceTier = 'raw_text' | 'release' | 'wiki_page' | 'method'
+export type SourceTier = 'raw_text' | 'release' | 'wiki_page' | 'method' | 'sale_status'
 
 function referenceMetadata(reference: unknown): Record<string, unknown> | null {
   if (!reference || typeof reference !== 'object') return null
@@ -14,6 +14,8 @@ export function sourceTier(reference: unknown): SourceTier | null {
   const tier = metadata?.source_tier
   // SK-3: a release reference of method knowledge is training material, not a reviewed fact.
   if (tier === 'release' && metadata?.knowledge_class === 'method') return 'method'
+  // PV-5: a sale status is computed from the product's registered sale period, not quoted from a material.
+  if (tier === 'release' && metadata?.knowledge_class === 'sale_status') return 'sale_status'
   return tier === 'raw_text' || tier === 'release' || tier === 'wiki_page' ? tier : null
 }
 
@@ -22,6 +24,7 @@ export function sourceTierLabel(tier: SourceTier | null | undefined, t: (key: st
   if (tier === 'release') return t('chat.sourceTierRelease')
   if (tier === 'wiki_page') return t('chat.sourceTierWikiPage')
   if (tier === 'method') return t('chat.sourceTierMethod')
+  if (tier === 'sale_status') return t('chat.sourceTierSaleStatus')
   return ''
 }
 

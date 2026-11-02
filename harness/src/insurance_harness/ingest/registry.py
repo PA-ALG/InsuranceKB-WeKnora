@@ -33,6 +33,7 @@ from insurance_harness.identity.attribution import (
     Attribution,
     RegisteredMaterial,
     RegisteredProduct,
+    load_attribution_policy,
 )
 from insurance_harness.identity.material_roles import load_material_roles, role_of
 from insurance_harness.ingest.method_registry import MethodEntry, check_methods
@@ -42,6 +43,7 @@ from insurance_harness.ingest.product_versions import (
     ProductVersion,
     check_versions,
     entry_version,
+    line_of,
     registered_version,
     relinked,
     v1_excluded,
@@ -425,8 +427,10 @@ def _apply(
 
 
 def _link(registry: ProductRegistry) -> None:
-    """Recompute every entry's unique predecessor (PV-0 appendix A §1.4)."""
-    linked = relinked({k: p.version for k, p in registry.products.items()})
+    """Recompute every entry's unique predecessor (PV-0 appendix A §1.4, PV-5 §4.1)."""
+    policy = load_attribution_policy()
+    lines = {k: line_of(p.names[0], policy) for k, p in registry.products.items()}
+    linked = relinked({k: p.version for k, p in registry.products.items()}, lines)
     for product_id, version in linked.items():
         registry.products[product_id].version = version
 

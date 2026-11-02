@@ -67,10 +67,15 @@ func AnswerPassage(ctx context.Context, result *types.SearchResult, content stri
 	case "release":
 		// Method knowledge is not a reviewed product fact; its text opens with its profile's
 		// reading note instead (SK-3 §6.3).
-		if result.Metadata["knowledge_class"] == "method" {
+		switch result.Metadata["knowledge_class"] {
+		case "method":
 			return content
+		case "sale_status":
+			// Computed from the product's registered sale period, not quoted from a material (PV-5 §1.2).
+			tier = "销售状态（已发布版本的产品登记数据）"
+		default:
+			tier = "已发布知识（审核过）"
 		}
-		tier = "已发布知识（审核过）"
 	case "raw_text":
 		tier = rawTier(ctx, result)
 	case "wiki_page":

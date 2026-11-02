@@ -33,7 +33,9 @@ func (index *releaseIndex) findEntities(ctx context.Context, query string, limit
 	matches := []match{}
 	pairs := bigrams(query)
 	for _, entity := range index.entities {
-		candidate := match{entity: entity.Entity, direct: query == normalize(entity.EntityID)}
+		candidate := match{
+			entity: entity.Entity, direct: query == normalize(entity.EntityID) || contains(entity.identifiers, query),
+		}
 		for _, name := range entity.Names {
 			name = normalize(name)
 			if name == "" {

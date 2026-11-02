@@ -6,6 +6,7 @@ brand rules, for grouping and candidates only — never an attribution anchor. T
 not stored: readers derive it from the period and the source status (PV-0 appendix A §3.2).
 """
 
+import re
 from collections.abc import Iterable, Mapping
 from datetime import date
 
@@ -149,9 +150,30 @@ def registered_version(
     )
 
 
-def predecessors(versions: Mapping[str, ProductVersion | None]) -> dict[str, str | None]:
+_EMPTY_QUALIFIER = re.compile(r"\(\s*\)")
+
+
+def line_of(name: str, policy: AttributionPolicy) -> str:
+    """A name's product line (PV-5 Spec §4.1): the name without the digits of its year marks, as
+    the attribution policy's year patterns find them, and without brackets left empty by that. The
+    year versions of one line, such as 智盈倍护 and 智盈倍护（2026）, share it."""
+    folded = fold(name)
+    drop: set[int] = set()
+    for pattern in policy.product_year_patterns:
+        for match in re.finditer(pattern, folded):
+            drop.update(i for i in range(match.start(), match.end()) if folded[i].isdigit())
+    kept = "".join(c for i, c in enumerate(folded) if i not in drop)
+    return _EMPTY_QUALIFIER.sub("", kept).casefold()
+
+
+def predecessors(
+    versions: Mapping[str, ProductVersion | None], lines: Mapping[str, str]
+) -> dict[str, str | None]:
     """The unique predecessor of each entry (appendix A §1.4): same plan code, its sale ending the
-    day this one starts, and exactly one such entry. Never inferred from names or date order."""
+    day this one starts, and exactly one such entry. Failing that, the year version of the same
+    product line that stopped selling last before this one began (PV-5 Spec §4.1); versions sold
+    side by side never succeed each other, and an ambiguous line links nothing: a version that
+    already has a successor, by either rule, gets no second one by its line."""
     linked: dict[str, str | None] = {}
     for product_id, version in versions.items():
         found = [
@@ -166,12 +188,50 @@ def predecessors(versions: Mapping[str, ProductVersion | None]) -> dict[str, str
             and other.sale_end == version.sale_start
         ]
         linked[product_id] = found[0] if len(found) == 1 else None
+    by_line = {
+        pid: _line_predecessor(pid, versions, lines) for pid in versions if linked[pid] is None
+    }
+    # A predecessor the plan-code rule already gave a successor counts too: a line never forks.
+    claimed = [older for older in [*linked.values(), *by_line.values()] if older is not None]
+    for product_id, older in by_line.items():
+        if older is not None and claimed.count(older) == 1:
+            linked[product_id] = older  # one predecessor for two successors links neither
     return linked
 
 
-def relinked(versions: Mapping[str, ProductVersion | None]) -> dict[str, ProductVersion | None]:
+def _line_predecessor(
+    product_id: str, versions: Mapping[str, ProductVersion | None], lines: Mapping[str, str]
+) -> str | None:
+    version, line = versions[product_id], lines.get(product_id)
+    if version is None or version.sale_start is None or not line:
+        return None
+    start = version.sale_start
+    found: dict[str, str] = {}
+    for other_id, other in versions.items():
+        if (
+            other_id == product_id
+            or other is None
+            or lines.get(other_id) != line
+            or other.sale_end is None
+            or other.sale_end > start
+        ):
+            continue
+        tagged, newer = other.year_tag, version.year_tag
+        if tagged is not None and (newer is None or newer <= tagged):
+            continue  # an untagged or older-tagged name does not succeed a tagged version
+        found[other_id] = other.sale_end
+    if not found:
+        return None
+    last = max(found.values())
+    latest = [other_id for other_id, end in found.items() if end == last]
+    return latest[0] if len(latest) == 1 else None
+
+
+def relinked(
+    versions: Mapping[str, ProductVersion | None], lines: Mapping[str, str]
+) -> dict[str, ProductVersion | None]:
     """The versions with every predecessor recomputed (an entry without a version stays so)."""
-    linked = predecessors(versions)
+    linked = predecessors(versions, lines)
     return {
         pid: v.model_copy(update={"predecessor": linked[pid]}) if v is not None else None
         for pid, v in versions.items()

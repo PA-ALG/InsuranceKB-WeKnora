@@ -18,25 +18,16 @@ type NamedProduct struct {
 }
 
 // QuestionProducts returns the products the question names, in navigation order. Only a pinned
-// release is read, using the same recognition and read scope as QuestionFields.
+// release is read, using the same recognition, version selection and read scope as
+// QuestionFields, so raw retrieval follows the versions the published fields answer for.
 func (s *Service) QuestionProducts(
 	ctx context.Context, tenantID uint64, spaceID, releaseID, question string,
 ) ([]NamedProduct, error) {
-	index, err := s.read(ctx, tenantID, spaceID, releaseID)
+	scope, err := s.QuestionRawScope(ctx, tenantID, spaceID, releaseID, question)
 	if err != nil {
 		return nil, err
 	}
-	products := index.questionProducts(question)
-	out := make([]NamedProduct, 0, len(products))
-	for _, product := range products {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		out = append(out, NamedProduct{
-			EntityID: product.EntityID, Name: product.Name, Materials: index.productMaterials(product.EntityID),
-		})
-	}
-	return out, ctx.Err()
+	return scope.Products, nil
 }
 
 // ForeignMaterials returns the knowledge IDs the pinned release attributes to some product but to
@@ -152,6 +143,7 @@ func (match *productMatch) addDirect(name string) {
 // Only fragment matches are excluded by profile titles; explicit names remain usable even
 // when they contain a field title.
 func (index *releaseIndex) questionProducts(question string) []indexedEntity {
+	codes := normalize(question) // identifiers keep their joiners, as in 2635-1
 	question = normalizeProductText(question)
 	if question == "" {
 		return nil
@@ -172,7 +164,8 @@ func (index *releaseIndex) questionProducts(question string) []indexedEntity {
 	for i, entity := range entities {
 		match := &matches[i]
 		id := normalizeProductText(entity.EntityID)
-		match.id = utf8.RuneCountInString(id) >= 2 && strings.Contains(question, id)
+		match.id = utf8.RuneCountInString(id) >= 2 && strings.Contains(question, id) ||
+			namesIdentifier(codes, entity.identifiers)
 		for _, name := range match.names {
 			if name != "" && strings.Contains(question, name) {
 				match.addDirect(name)
@@ -267,8 +260,10 @@ func productFragment(
 					continue
 				}
 				// Shorter prefixes of this fragment occur wherever it occurs, so only the
-				// longest question match at this start decides.
-				if titledFragment(fragment, titles) {
+				// longest question match at this start decides. Digits alone name nothing: in a
+				// question they are dates or amounts, as 2025 against a name's (2026), and codes are
+				// named by identifiers (PV-5 §3).
+				if titledFragment(fragment, titles) || digitsOnly(fragment) {
 					break
 				}
 				carriers := 0
@@ -289,6 +284,15 @@ func productFragment(
 		}
 	}
 	return false, shared
+}
+
+func digitsOnly(fragment string) bool {
+	for _, r := range fragment {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func titledFragment(fragment string, titles []string) bool {
@@ -341,6 +345,27 @@ func dominatedProduct(product int, matches []productMatch) bool {
 					}
 				}
 			}
+		}
+	}
+	return false
+}
+
+// namesIdentifier reports whether the question carries one of the values as a whole token
+// (PV-5 §3): not inside a longer number or code, so 2635 is named by 产品代码2635 but not by
+// 26351 or 2635-0001.
+func namesIdentifier(question string, values []string) bool {
+	for _, value := range values {
+		for offset := 0; offset < len(question); {
+			found := strings.Index(question[offset:], value)
+			if found < 0 {
+				break
+			}
+			start := offset + found
+			if wholeToken(question, start, start+len(value)) {
+				return true
+			}
+			_, size := utf8.DecodeRuneInString(question[start:])
+			offset = start + size
 		}
 	}
 	return false

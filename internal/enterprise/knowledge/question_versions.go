@@ -34,25 +34,53 @@ func (index *releaseIndex) questionIntent(termQuestion string) string {
 	return matched
 }
 
+// questionScope is a question's intent and the products it names. A service question's named
+// versions are narrowed to those sold on its purchase date (PV-4b §4.2, PV-5 §4.2). Published
+// fields and raw retrieval read the same scope.
+func (index *releaseIndex) questionScope(question string) (intent string, products []indexedEntity) {
+	question = normalize(question)
+	products = index.questionProducts(question)
+	intent = index.questionIntent(normalizeQuestionTerm(question))
+	if intent == intentService {
+		products = index.heldVersions(products, question)
+	}
+	return intent, products
+}
+
+// notOnSale holds for a version known to be discontinued or not yet on sale on the read's day.
+func notOnSale(entity indexedEntity) bool {
+	return entity.Status == SaleDiscontinued || entity.Status == SaleNotYet
+}
+
 // forSale narrows a sales comparison over every product to versions that may be on sale on the
 // read's day. Unknown status stays, labelled, so that an unmatched product does not vanish.
 func forSale(entities []indexedEntity) []indexedEntity {
 	out := make([]indexedEntity, 0, len(entities))
 	for _, entity := range entities {
-		if entity.Status != SaleDiscontinued && entity.Status != SaleNotYet {
+		if !notOnSale(entity) {
 			out = append(out, entity)
 		}
 	}
 	return out
 }
 
-// heldVersions keeps, among the named versions of one product, those sold within the purchase
-// date the question gives (Spec §4.2). Versions of one product share their name or are linked by
-// supersedes. When none of them was sold then, all stay: their labels let the model ask.
-func heldVersions(products []indexedEntity, question string) []indexedEntity {
+// heldVersions keeps, among the versions of one product, those sold within the purchase date the
+// question gives (Spec §4.2). Versions of one product share their name or are linked by supersedes;
+// the candidates are the named versions and every version linked to one of them (PV-5 §4.2), as a
+// question names a product line by one year's name. When none of a group was sold then, only its
+// named versions stay: their labels let the model ask.
+func (index *releaseIndex) heldVersions(named []indexedEntity, question string) []indexedEntity {
 	first, last, ok := purchaseSpan(question)
-	if !ok || len(products) < 2 {
-		return products
+	if !ok {
+		return named
+	}
+	products := index.withLinkedVersions(named)
+	if len(products) < 2 {
+		return named
+	}
+	asked := map[string]bool{}
+	for _, product := range named {
+		asked[product.EntityID] = true
 	}
 	parent := make([]int, len(products))
 	root := func(i int) int {
@@ -77,8 +105,36 @@ func heldVersions(products []indexedEntity, question string) []indexedEntity {
 	}
 	out := make([]indexedEntity, 0, len(products))
 	for i, product := range products {
-		if !sold[root(i)] || !soldOutside(product.Lifecycle, first, last) {
+		if sold[root(i)] && !soldOutside(product.Lifecycle, first, last) || !sold[root(i)] && asked[product.EntityID] {
 			out = append(out, product)
+		}
+	}
+	return out
+}
+
+// withLinkedVersions adds to the named versions every product version the release links to one of
+// them by supersedes, in either direction and transitively, in navigation order.
+func (index *releaseIndex) withLinkedVersions(named []indexedEntity) []indexedEntity {
+	reached := map[string]bool{}
+	queue := []string{}
+	for _, product := range named {
+		reached[product.EntityID] = true
+		queue = append(queue, product.EntityID)
+	}
+	for len(queue) > 0 {
+		entity := index.entities[index.entityByID[queue[0]]].Entity
+		queue = queue[1:]
+		for _, id := range append(append([]string{}, entity.Predecessors...), entity.Successors...) {
+			if !reached[id] {
+				reached[id] = true
+				queue = append(queue, id)
+			}
+		}
+	}
+	out := []indexedEntity{}
+	for _, entity := range index.productEntities() {
+		if reached[entity.EntityID] {
+			out = append(out, entity)
 		}
 	}
 	return out

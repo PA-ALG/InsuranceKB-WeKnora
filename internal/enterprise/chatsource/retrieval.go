@@ -41,6 +41,7 @@ func RetrievalScope(ctx context.Context, resolver *Resolver, event types.EventTy
 		return noop
 	}
 	if !scope.recognized {
+		scope.dropOffSale(ctx, event, cm)
 		return noop
 	}
 	products := scope.products
@@ -128,6 +129,9 @@ type productScope struct {
 	named      map[string]bool    // materialKey of every named product's fixed material, uncapped (QA2c)
 	foreign    map[string]bool    // materialKey of materials owned only by products not named
 	closed     bool               // attribution unreadable: no fill at all (QA2b §2a.3)
+	// offSale is, for a sales question naming no product, the materialKey of materials cited only by
+	// products not on sale (PV-5 §2.2); a question naming products leaves it empty.
+	offSale map[string]bool
 }
 
 type namedSpace struct {
@@ -145,7 +149,7 @@ func namedScope(
 	if strings.TrimSpace(question) == "" {
 		question = cm.Query
 	}
-	scope := productScope{named: map[string]bool{}, foreign: map[string]bool{}}
+	scope := productScope{named: map[string]bool{}, foreign: map[string]bool{}, offSale: map[string]bool{}}
 	var spaces []namedSpace
 	seen := map[string]bool{}
 	// Target order defines the order of Spaces; QuestionProducts keeps each release's
@@ -159,12 +163,15 @@ func namedScope(
 			continue
 		}
 		seen[space] = true
-		products, err := resolver.published.QuestionProducts(ctx, v.tenant, space, v.turn.Releases[space], question)
+		read, err := resolver.published.QuestionRawScope(ctx, v.tenant, space, v.turn.Releases[space], question)
 		if err != nil {
 			return productScope{}, err
 		}
+		for id := range read.OffSale {
+			scope.offSale[materialKey(target.KnowledgeBaseID, id)] = true
+		}
 		entry := namedSpace{space: space, kbID: target.KnowledgeBaseID}
-		for _, product := range products {
+		for _, product := range read.Products {
 			scope.recognized = true
 			entry.named = append(entry.named, product.EntityID)
 			ids := []string{}
@@ -199,6 +206,40 @@ func namedScope(
 		}
 	}
 	return scope, nil
+}
+
+// dropOffSale removes the passages of materials only products not on sale cite, from the lists the
+// stage reads, including the native fallbacks to the search list: before the merge so that they
+// cannot displace a passage that stays, and again before the top-k cut.
+func (s productScope) dropOffSale(ctx context.Context, event types.EventType, cm *types.ChatManage) {
+	if len(s.offSale) == 0 {
+		return
+	}
+	keep := func(rows []*types.SearchResult) []*types.SearchResult {
+		out := make([]*types.SearchResult, 0, len(rows))
+		for _, row := range rows {
+			if row != nil && !s.offSale[materialKey(row.KnowledgeBaseID, row.KnowledgeID)] {
+				out = append(out, row)
+			}
+		}
+		return out
+	}
+	before := len(cm.SearchResult) + len(cm.RerankResult) + len(cm.MergeResult)
+	switch event {
+	case types.CHUNK_MERGE:
+		cm.RerankResult = keep(cm.RerankResult)
+		if len(cm.RerankResult) == 0 {
+			cm.SearchResult = keep(cm.SearchResult)
+		}
+	case types.FILTER_TOP_K:
+		cm.MergeResult, cm.RerankResult = keep(cm.MergeResult), keep(cm.RerankResult)
+		if len(cm.MergeResult) == 0 && len(cm.RerankResult) == 0 {
+			cm.SearchResult = keep(cm.SearchResult)
+		}
+	}
+	if excluded := before - len(cm.SearchResult) - len(cm.RerankResult) - len(cm.MergeResult); excluded > 0 {
+		logger.Infof(ctx, "enterprise sales comparison excluded %d passages of products not on sale", excluded)
+	}
 }
 
 func materialKey(kbID, knowledgeID string) string { return kbID + "\x00" + knowledgeID }

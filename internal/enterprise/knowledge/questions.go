@@ -24,6 +24,26 @@ func (s *Service) QuestionFields(
 	if err != nil {
 		return nil, err
 	}
+	return index.questionFields(ctx, question, limit)
+}
+
+// QuestionReferences reads the release once for what a quick answer puts ahead of retrieval: a
+// sales question's status lines (QuestionStatuses) and the published fields (QuestionFields).
+func (s *Service) QuestionReferences(
+	ctx context.Context, tenantID uint64, spaceID, releaseID, question string, limit int,
+) ([]StatusLine, []Field, error) {
+	index, err := s.read(ctx, tenantID, spaceID, releaseID)
+	if err != nil {
+		return nil, nil, err
+	}
+	fields, err := index.questionFields(ctx, question, limit)
+	if err != nil {
+		return nil, nil, err
+	}
+	return index.statusLines(question), fields, nil
+}
+
+func (index *releaseIndex) questionFields(ctx context.Context, question string, limit int) ([]Field, error) {
 	question = normalize(question)
 	if question == "" {
 		return []Field{}, nil
@@ -32,12 +52,8 @@ func (s *Service) QuestionFields(
 		limit = defaultQuestionLimit
 	}
 	entities := index.productEntities()
-	products := index.questionProducts(question)
+	intent, products := index.questionScope(question)
 	termQuestion := normalizeQuestionTerm(question)
-	intent := index.questionIntent(termQuestion)
-	if intent == intentService {
-		products = heldVersions(products, question)
-	}
 	asked := map[string]bool{}
 	fieldsAsked, supplementOverview := false, false
 	for _, entity := range entities {

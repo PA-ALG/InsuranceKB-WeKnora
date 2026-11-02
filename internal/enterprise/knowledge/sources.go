@@ -7,9 +7,10 @@ import (
 )
 
 // SourceEntities maps each material cited by a claim or wiki page of the release (the knowledge
-// ID of a source:v1 reference) to the display names of the entities citing it, in navigation
-// order without duplicate names. A claim cites for its subject (named by its ID when no visible
-// Entity member exists); a page for every entity it refers to that has a visible Entity member.
+// ID of a source:v1 reference) to the display names of the entities citing it, each followed by its
+// version label when it has a lifecycle, in navigation order without duplicates. A claim cites for
+// its subject (named by its ID when no visible Entity member exists); a page for every entity it
+// refers to that has a visible Entity member.
 // Raw passages are labelled with these names (QA1 §2.1), so a material is attributed only
 // through the release's own evidence. Malformed references are skipped.
 func (s *Service) SourceEntities(
@@ -60,9 +61,11 @@ func (s *Service) SourceEntities(
 	for knowledgeID, entities := range citing {
 		names, seen := []string{}, map[string]bool{}
 		for _, entity := range ordered {
-			if entities[entity.EntityID] && !seen[entity.Name] {
-				seen[entity.Name] = true
-				names = append(names, entity.Name)
+			// The version label tells a passage of a discontinued version from one on sale (PV-5 §2.1).
+			name := entity.Name + versionLabel(entity.Entity)
+			if entities[entity.EntityID] && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
 			}
 		}
 		out[knowledgeID] = names
