@@ -8,7 +8,8 @@ written here, named by request digest, are exactly what `methods compile` replay
 The value directory is a run root of models.durable, as for product compiles and reviews:
 budget.jsonl gains a line before every send, ledger.jsonl every attempt (an answered one with the
 digest of its answer), .lock keeps runs apart, and the root must lie outside any git repository
-(raw answers may quote material); none of these, nor raw/, may be a link. stage.json binds the
+(raw answers may quote material); responses.check_value_directory refuses a link anywhere in it or
+in raw/, and a raw/ inside a git work tree, before anything is sent or written. stage.json binds the
 directory to one set of request settings. raw/NNN.txt keeps every answer text received, a cut-off
 one too, through the client's `keep`; `<digest>.txt` is written only for an answer that passed
 the structure check, never replaced, and counts only while its call's ledger record backs it
@@ -36,6 +37,7 @@ from insurance_harness.compilers.methods.responses import (
     STAGE_FILE,
     LedgerAnswers,
     ResponsesError,
+    check_value_directory,
     directory_stage,
     request_settings,
 )
@@ -63,8 +65,6 @@ from insurance_harness.models.durable import (
 )
 
 ANSWERED, SAVED = "answered", "saved"
-# What a value run writes into its directory: never through a link (review #526 R5).
-_PERSISTED = ("raw", "ledger.jsonl", "budget.jsonl", STAGE_FILE, ".lock")
 _NUMBER = re.compile(r"[0-9]+")
 
 
@@ -117,8 +117,8 @@ def method_values(
             codes[method.method_id] = error.code
             continue
         requests.append((method.method_id, request))
-    _check_links(root)
     try:
+        check_value_directory(root)  # before anything is written or sent (review #526 R5)
         with run_lock(root):
             return _answer(root, config, max_sent, cards, requests, codes)
     except ResponsesError as error:
@@ -170,14 +170,6 @@ def _answer(
         "sent": prior_sends(root) - before,
         "sent_total": prior_sends(root),
     }
-
-
-def _check_links(root: Path) -> None:
-    """Before anything is written: no persisted target is a link, raw/ is a directory (R5)."""
-    if any((root / name).is_symlink() for name in _PERSISTED):
-        raise ValuesStopped("RUN_ROOT_INVALID")
-    if (root / "raw").exists() and not (root / "raw").is_dir():
-        raise ValuesStopped("RUN_ROOT_INVALID")
 
 
 def _bind_stage(root: Path, config: StageModelConfig) -> None:
