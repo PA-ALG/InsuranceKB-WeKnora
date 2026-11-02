@@ -4,7 +4,7 @@ import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from insurance_harness.catalog.trust_policy import load_trust_policy
+from insurance_harness.catalog.trust_policy import TrustPolicy
 from insurance_harness.compilers.schema_fields.engine import CompletionPort
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.models.answers import (
@@ -53,6 +53,8 @@ def replay_context(
     pages: Sequence[PageText],
     table_headers: Mapping[str, Sequence[PageText]] | None = None,
     materials: list[str] | None = None,
+    *,
+    trust_policy: TrustPolicy,
 ) -> str:
     """What a saved answer was produced for beyond the request text: product, pack, sources."""
 
@@ -67,7 +69,7 @@ def replay_context(
     if materials is not None:
         context["materials"] = materials
     if table_headers is not None:
-        context["trust_policy"] = load_trust_policy().model_dump(mode="json")
+        context["trust_policy"] = trust_policy.model_dump(mode="json")
         context["table_headers"] = [
             {"role": role, "sources": documents(group)} for role, group in table_headers.items()
         ]
@@ -91,13 +93,23 @@ def next_attempt(directory: Path) -> str:
     return f"attempt-{latest + 1:02d}"
 
 
+class ReplayContextError(IntegrityError):
+    """Keep the source/pack diagnostic distinct from damaged saved-answer files."""
+
+    def __init__(self) -> None:
+        super().__init__("REPLAY_CONTEXT_MISMATCH")
+        self.args = ("replay source was produced for another source or pack",)
+
+
 class Replay:
     """Consume each recorded draw in order, including repeated identical HTTP requests."""
 
     def __init__(self, source: Path, product: str, context: str) -> None:
         found = attempts(source / product / "responses")
-        if not found or read_regular(found[-1] / "context.json") != context.encode():
+        if not found:
             raise IntegrityError()
+        if read_regular(found[-1] / "context.json") != context.encode():
+            raise ReplayContextError()
         paths = sorted(found[-1].glob("[0-9][0-9][0-9].txt"))
         if not paths:
             raise IntegrityError()

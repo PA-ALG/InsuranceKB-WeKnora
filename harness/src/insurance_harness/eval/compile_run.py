@@ -225,7 +225,8 @@ def compile_products(
                 continue
             definitions = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack)
             context = replay_context(product, pack, pages, headers,
-                                      materials if revisions is not None else None)
+                                      materials if revisions is not None else None,
+                                      trust_policy=load_trust_policy())
             port: CompletionPort
             if replay_from is not None:
                 port = Replay(replay_from, product, context)
