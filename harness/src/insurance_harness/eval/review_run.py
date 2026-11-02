@@ -17,7 +17,8 @@ every send made in the root, the root records one served model, and runs on it n
 once the scorer accepted that answer, and a rerun answers the same request from it without
 sending. A rejected answer stays for diagnosis only, so a rerun sends its batch again (within
 the budget). The request fingerprint covers the items (keys, titles, rules, states, values,
-quotes), the configured model and the policy version.
+quotes), the HTTP body and semantic stage configuration (H1); every accepted answer is backed
+by its successful call record and exact response-byte digest.
 
 A scores file is never trusted once its product's run starts. Each product, in order:
 1. its scores.json moves to scores.json.previous, which the publish command never reads;
@@ -37,10 +38,8 @@ most the product id and an exception type name), never a path, key or material.
 """
 
 import argparse
-import hashlib
 import json
 import os
-import re
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
@@ -62,23 +61,25 @@ from insurance_harness.models import (
     StageModelConfig,
     load_stage_config,
 )
+from insurance_harness.models.answers import (
+    AnswerJournal,
+    accepted_answers,
+    check_answers,
+    request_fingerprint,
+)
 from insurance_harness.models.durable import (
     DurableLedger,
     RunRootBusy,
     ServedModelChanged,
     prior_sends,
     run_lock,
-    write_new,
 )
+from insurance_harness.models.run_files import IntegrityError
 from insurance_harness.review.scorer import (
-    Completion,
     ReviewOutputError,
     review_batches,
     score_items,
 )
-
-_DIGEST = re.compile(r"[0-9a-f]{64}")
-_NUMBER = re.compile(r"[0-9]+")
 
 
 class _Stop(Exception):
@@ -123,30 +124,6 @@ class _ScoresDocument(BaseModel):
         return value
 
 
-def _fingerprint(identity: str, system: str, user: str) -> str:
-    """One request under one reviewer identity (configured model and policy version)."""
-    encoded = json.dumps([identity, system, user], ensure_ascii=False)
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-
-
-def _accepted_answers(directory: Path) -> dict[str, str]:
-    """Fingerprint -> accepted answer text; a corrupt marker raises ValueError (or OSError)."""
-    accepted: dict[str, str] = {}
-    for marker in sorted(directory.glob("*.request.sha256")):
-        stem = marker.name.removesuffix(".request.sha256")
-        digest = marker.read_text(encoding="utf-8").removesuffix("\n")
-        answer = directory / f"{stem}.txt"
-        if (
-            not _NUMBER.fullmatch(stem)
-            or not _DIGEST.fullmatch(digest)
-            or digest in accepted
-            or not answer.is_file()
-        ):
-            raise ValueError("accepted answer marker is corrupt")
-        accepted[digest] = answer.read_text(encoding="utf-8")
-    return accepted
-
-
 class _Uncached(Exception):
     """The batch has no accepted answer: it must be sent."""
 
@@ -154,48 +131,14 @@ class _Uncached(Exception):
 class _Cached:
     """Answers a request only from accepted answers, never sending."""
 
-    def __init__(self, accepted: dict[str, str], identity: str) -> None:
+    def __init__(self, accepted: dict[str, str], identity: StageModelConfig) -> None:
         self._accepted, self._identity = accepted, identity
 
     def complete(self, *, system: str, user: str) -> str:
-        answer = self._accepted.get(_fingerprint(self._identity, system, user))
+        answer = self._accepted.get(request_fingerprint(self._identity, system=system, user=user))
         if answer is None:
             raise _Uncached
         return answer
-
-
-class _Answers:
-    """Sends a product's remaining batches; every raw answer is kept, accepted ones mark reuse."""
-
-    def __init__(
-        self, inner: Completion, directory: Path, ledger: DurableLedger, identity: str
-    ) -> None:
-        self._inner, self._directory, self._ledger = inner, directory, ledger
-        self._identity = identity
-        self._pending: list[tuple[str, str]] = []
-
-    def complete(self, *, system: str, user: str) -> str:
-        digest = _fingerprint(self._identity, system, user)
-        raw = self._inner.complete(system=system, user=user)
-        if len(self._ledger.served) > 1:
-            # This answer came from another served version: it is neither scored nor kept.
-            raise ServedModelChanged("served model changed within the run")
-        self._directory.mkdir(parents=True, exist_ok=True)
-        stem = f"{self._next_number():03d}"
-        write_new(self._directory / f"{stem}.txt", raw)
-        self._pending.append((stem, digest))
-        return raw
-
-    def accept(self) -> None:
-        """The answers since the last call were accepted: reruns may now reuse them."""
-        for stem, digest in self._pending:
-            write_new(self._directory / f"{stem}.request.sha256", digest + "\n")
-        self._pending.clear()
-
-    def _next_number(self) -> int:
-        # Every name counts, leftover temporary files included, so a new answer never collides.
-        heads = (path.name.lstrip(".").split(".", 1)[0] for path in self._directory.iterdir())
-        return max((int(head) for head in heads if _NUMBER.fullmatch(head)), default=0) + 1
 
 
 def _replace(path: Path, text: str) -> None:
@@ -244,7 +187,7 @@ def _review_product(
     repo: Path,
     compile_roots: Sequence[Path],
     run_root: Path,
-    completion: Completion,
+    completion: OpenAICompatibleCompletion,
     ledger: DurableLedger,
     config: StageModelConfig,
     max_chars: int,
@@ -255,7 +198,7 @@ def _review_product(
     if target.exists():
         os.replace(target, previous)
     directory = run_root / product / "responses"
-    accepted = _accepted_answers(directory)
+    accepted = accepted_answers(run_root, directory)
     output = _output(compile_roots, product)
     try:
         definitions = pack_definitions(
@@ -264,7 +207,7 @@ def _review_product(
         items = review_items(output, {d.field_key: d for d in definitions})
     except (OSError, ValueError):
         raise _Stop("DEFINITION_MISSING") from None
-    identity = f"{config.model}@{config.policy_version}"
+    identity = config
     # Each batch is scored on its own (batching a batch again returns it unchanged). Every
     # accepted answer this review reuses is checked before anything is sent.
     scores: dict[str, float] = {}
@@ -278,7 +221,7 @@ def _review_product(
         except ReviewOutputError:
             # It was accepted for exactly this request once: it has been altered since.
             raise _Stop("RUN_ROOT_INVALID") from None
-    answers = _Answers(completion, directory, ledger, identity)
+    answers = AnswerJournal(run_root, directory, completion)
     for batch in unanswered:
         scores.update(score_items(batch, answers, max_chars=max_chars))
         answers.accept()
@@ -329,7 +272,7 @@ def _arguments(argv: list[str] | None) -> argparse.Namespace:
 
 def _stop_detail(exc: BaseException) -> dict[str, str]:
     """Fixed codes; an exception type name at most, never its text (it may hold a path)."""
-    if isinstance(exc, _Stop):
+    if isinstance(exc, (_Stop, IntegrityError)):
         return {"stopped": exc.code}
     if isinstance(exc, RunRootBusy):
         return {"stopped": "RUN_ROOT_BUSY"}
@@ -357,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         # One lock spans the budget read, every send and every scores file.
         with run_lock(args.run_root):
             _withdraw_scores(args.run_root, args.products)
+            check_answers(args.run_root)
             ledger = DurableLedger.open(args.run_root, max_sent=args.max_sent)
             client = OpenAICompatibleCompletion(config, ledger=ledger)
             reviews: list[ProductReview] = []

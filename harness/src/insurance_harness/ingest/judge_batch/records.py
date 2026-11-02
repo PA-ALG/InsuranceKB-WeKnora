@@ -26,6 +26,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.bundle.client import (
     DecisionInput,
     PlatformClient,
@@ -33,6 +34,7 @@ from insurance_harness.bundle.client import (
     Release,
 )
 from insurance_harness.catalog.spot_check import SpotCheckPolicy
+from insurance_harness.compilers.schema_fields.claims import require_publishable_bundle
 from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.ingest.judge_batch.manifest import write_json
 from insurance_harness.ingest.judge_batch.points import JudgeBatchError
@@ -136,6 +138,10 @@ def start(
     decision: DecisionInput,
 ) -> Attempt:
     """Freeze the candidate and the decision before anything is sent."""
+    try:
+        require_publishable_bundle(bundle)
+    except BundleError as error:
+        raise JudgeBatchError(error.reason) from None
     latest = current(run_root, product)
     raw = json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False).encode("utf-8")
     number = _freeze(run_root, product, 0 if latest is None else latest.attempt, raw)
@@ -157,7 +163,11 @@ def _frozen(run_root: Path, record: Attempt) -> CandidateBundle:
         raw = _bundle_path(run_root, record.product, record.attempt).read_bytes()
         if hashlib.sha256(raw).hexdigest() != record.bundle_sha256:
             raise ValueError("changed")
-        return CandidateBundle.model_validate_json(raw)
+        bundle = CandidateBundle.model_validate_json(raw)
+        require_publishable_bundle(bundle)
+        return bundle
+    except BundleError as error:
+        raise JudgeBatchError(error.reason) from None
     except (OSError, ValueError, ValidationError):
         raise JudgeBatchError("RECORD_INVALID") from None
 

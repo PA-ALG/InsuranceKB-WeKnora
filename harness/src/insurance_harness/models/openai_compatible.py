@@ -158,6 +158,19 @@ class OpenAICompatibleCompletion:
         return self._config.model
 
     @property
+    def config(self) -> StageModelConfig:
+        """The immutable configuration that determines this client's actual HTTP request."""
+        return self._config
+
+    def retain(self, keep: Callable[[str], None]) -> None:
+        """Attach the run owner's private answer sink before a call, including cut-off text.
+
+        Factories may build the transport before the caller knows its product/attempt directory.
+        This uses the same callback as constructor keep; it changes no request or retry policy.
+        """
+        self._keep = keep
+
+    @property
     def ledger(self) -> CallLedger:
         return self._ledger
 

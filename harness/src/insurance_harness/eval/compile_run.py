@@ -13,7 +13,6 @@ value batches, in call order): no client, no sends, no budget reservation.
 """
 
 import argparse
-import hashlib
 import json
 import math
 import os
@@ -45,6 +44,12 @@ from insurance_harness.compilers.schema_fields.engine import (
     reusable,
     to_candidate,
 )
+from insurance_harness.eval.compile_answers import (
+    RecordedCompletion,
+    Replay,
+    next_attempt,
+    replay_context,
+)
 from insurance_harness.eval.convert import predictions_from_candidate
 from insurance_harness.eval.material_identity import (
     document_role_map,
@@ -65,10 +70,12 @@ from insurance_harness.ingest.registry import RegistryError
 from insurance_harness.ingest.source_map import load_source_map, reader_from_env
 from insurance_harness.models import (
     CallLedger,
+    ModelBudgetExceeded,
     ModelCallError,
     OpenAICompatibleCompletion,
     load_stage_config,
 )
+from insurance_harness.models.answers import check_answers
 from insurance_harness.models.durable import (
     DurableLedger,
     RunRootBusy,
@@ -78,6 +85,7 @@ from insurance_harness.models.durable import (
     stored_records,
     write_new,
 )
+from insurance_harness.models.run_files import IntegrityError, check_directory
 
 # The run-root guards live in models.durable (shared with the review run); callers of the
 # compile run still catch its stop conditions and read its budget through this module.
@@ -125,106 +133,6 @@ class ProductRun:
     fields: int
 
 
-class _RawResponses:
-    """Keep every raw completion beside the product so rejected output can be diagnosed.
-
-    Completions are untrusted model output that may quote source material; they
-    stay in the private run root and never enter logs, errors or the repository.
-    """
-
-    def __init__(self, inner: CompletionPort, directory: Path) -> None:
-        self._inner, self._directory, self._count = inner, directory, 0
-
-    @property
-    def model(self) -> str:
-        return self._inner.model
-
-    def complete(self, *, system: str, user: str) -> str:
-        raw = self._inner.complete(system=system, user=user)
-        self._count += 1
-        self._directory.mkdir(parents=True, exist_ok=True)
-        write_new(self._directory / f"{self._count:03d}.txt", raw)
-        # The answer is only meaningful for this exact request (segment ids name this source
-        # text); replay refuses any other request.
-        write_new(self._directory / f"{self._count:03d}.request.sha256",
-                   _request_sha256(system, user))
-        return raw
-
-
-def _replay_context(
-    product: str,
-    pack: str,
-    pages: Sequence[PageText],
-    table_headers: Mapping[str, Sequence[PageText]] | None = None,
-    materials: list[str] | None = None,
-) -> str:
-    """What a saved answer was produced for beyond the request text: product, pack, sources."""
-    def documents(group: Sequence[PageText]) -> list[dict[str, object]]:
-        sources: dict[tuple[str, str], int] = {}
-        for page in group:
-            key = (page.document, page.document_sha256)
-            sources[key] = sources.get(key, 0) + 1
-        return [{"document": d, "document_sha256": s, "pages": n}
-                for (d, s), n in sources.items()]
-
-    context: dict[str, object] = {"product": product, "pack_id": pack, "sources": documents(pages)}
-    if materials is not None:
-        context["materials"] = materials
-    if table_headers is not None:
-        context["trust_policy"] = load_trust_policy().model_dump(mode="json")
-        context["table_headers"] = [
-            {"role": role, "sources": documents(group)} for role, group in table_headers.items()
-        ]
-    return json.dumps(context, ensure_ascii=False, sort_keys=True) + "\n"
-
-
-def _request_sha256(system: str, user: str) -> str:
-    encoded = json.dumps([system, user], ensure_ascii=False, separators=(",", ":"))
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-
-
-def _attempts(directory: Path) -> list[Path]:
-    """Attempt folders in numeric order; zero padding is only a minimum width."""
-    found = [(int(path.name[len("attempt-"):]), path) for path in directory.glob("attempt-*")
-             if path.is_dir() and path.name[len("attempt-"):].isdigit()]
-    return [path for _, path in sorted(found)]
-
-
-def _next_attempt(directory: Path) -> str:
-    """Each compile attempt of a product keeps its own raw-response folder."""
-    attempts = _attempts(directory)
-    latest = int(attempts[-1].name[len("attempt-"):]) if attempts else 0
-    return f"attempt-{latest + 1:02d}"
-
-
-class _Replay:
-    """Serve one product's saved completions in call order instead of calling a model."""
-
-    model = "replay"
-
-    def __init__(self, source: Path, product: str, context: str) -> None:
-        attempts = _attempts(source / product / "responses")
-        if not attempts:
-            raise ValueError(f"{product}: replay source has no saved responses")
-        saved = attempts[-1] / "context.json"
-        if not saved.exists() or saved.read_text(encoding="utf-8") != context:
-            # Same visible text is not enough: the answers belong to one source snapshot and pack.
-            raise ValueError(f"{product}: replay source was produced for another source or pack")
-        self._saved = iter(sorted(attempts[-1].glob("[0-9][0-9][0-9].txt")))
-
-    def complete(self, *, system: str, user: str) -> str:
-        path = next(self._saved, None)
-        if path is None:
-            raise ValueError("replay source has fewer saved responses than calls")
-        fingerprint = path.with_name(f"{path.stem}.request.sha256")
-        if not fingerprint.exists():
-            raise ValueError("replay source lacks the request fingerprint of a saved response")
-        if fingerprint.read_text(encoding="utf-8").strip() != _request_sha256(system, user):
-            # Source text, cards, definitions or prompt differ from the run that produced it.
-            raise ValueError("replay request differs from the request that produced the response")
-        return path.read_text(encoding="utf-8")
-
-
 def compile_products(
     repo: Path, products: list[str], *,
     completion_factory: Callable[[CallLedger], CompletionPort] | None,
@@ -253,11 +161,21 @@ def compile_products(
         raise ValueError("carrying reviewed evidence needs fixed source revisions")
     if replay_from is None and completion_factory is None:
         raise ValueError("a completion factory is required unless replaying")
+    check_directory(run_root)
     if replay_from is not None:
+        check_answers(replay_from, offline=True)
         # A source whose last batch a served-model change rejected would be accepted here.
         if len({r.served_model for r in stored_records(replay_from) if r.served_model}) > 1:
             raise ServedModelChanged("replay source records more than one served model")
     with run_lock(run_root):
+        try:
+            check_answers(run_root, offline=True)
+        except IntegrityError as error:
+            # An exhausted root already refuses all new work. Raising its existing budget
+            # error does not restore trust or allow an unknown receipt to be resent.
+            if error.code == "OUTCOME_UNKNOWN" and prior_sends(run_root) >= max_sent:
+                raise ModelBudgetExceeded("budget_exceeded") from None
+            raise
         ledger = DurableLedger.open(run_root, max_sent=max_sent)
         completion = (
             completion_factory(ledger) if completion_factory and replay_from is None else None
@@ -306,18 +224,18 @@ def compile_products(
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
             definitions = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack)
-            context = _replay_context(product, pack, pages, headers,
+            context = replay_context(product, pack, pages, headers,
                                       materials if revisions is not None else None)
             port: CompletionPort
             if replay_from is not None:
-                port = _Replay(replay_from, product, context)
+                port = Replay(replay_from, product, context)
             else:
                 assert completion is not None
                 responses = run_root / product / "responses"
-                attempt = responses / _next_attempt(responses)
+                attempt = responses / next_attempt(responses)
                 attempt.mkdir(parents=True)
                 write_new(attempt / "context.json", context)
-                port = _RawResponses(completion, attempt)
+                port = RecordedCompletion(run_root, attempt, completion)
             # Step one sends SELECTION_DRAWS calls per batch (S12c-6); step two at most one call
             # per field.
             compiler = SchemaFieldsCompiler(
@@ -331,6 +249,8 @@ def compile_products(
             output = compiler.compile(product, definitions, pages, table_headers=headers,
                                       carry=quotes, roles=document_role_map(read),
                                       reviewed=reviewed)
+            if isinstance(port, Replay):
+                port.finish()
             output = output.model_copy(update={
                 "materials": materials, "material_roles": material_roles, "carry_digest": digest,
                 "carry_release": carried.release_id if digest is not None and carried else None,
@@ -412,7 +332,7 @@ def _summary(run_root: Path, runs: list[ProductRun]) -> dict[str, Any]:
 
 def _stop_reason(exc: BaseException) -> str:
     """Fixed, content-free diagnostics: stored files and model output may hold source text."""
-    if isinstance(exc, RegistryError):
+    if isinstance(exc, (RegistryError, IntegrityError)):
         return exc.code
     if isinstance(exc, ValidationError):
         return "invalid_record_shape"

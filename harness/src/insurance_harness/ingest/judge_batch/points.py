@@ -20,6 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.bundle.client import Release
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.changes.decision import decide_changes
@@ -27,7 +28,11 @@ from insurance_harness.changes.options import registry_inputs
 from insurance_harness.changes.sources import publication_entries
 from insurance_harness.changes.types import ChangeSet, Verdict
 from insurance_harness.compilers.schema_fields.cards import card_payload, cards_version
-from insurance_harness.compilers.schema_fields.claims import claims_from, require_cards_version
+from insurance_harness.compilers.schema_fields.claims import (
+    claims_from,
+    require_cards_version,
+    require_publishable_model,
+)
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.contracts.knowledge import Claim
@@ -203,6 +208,10 @@ def rebuild(
         )
     except (OSError, ValueError, ValidationError):
         raise JudgeBatchError("OUTPUT_UNREADABLE") from None
+    try:
+        require_publishable_model(output.model)
+    except BundleError as error:
+        raise JudgeBatchError(error.reason) from None
     source_map, facts = registry_inputs(registry, [product])
     name, pack = facts[product]
     if output.entity_id != product or output.pack_id != pack:

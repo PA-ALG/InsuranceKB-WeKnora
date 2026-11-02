@@ -12,8 +12,8 @@ left out and listed in the report: its page keeps the definition and the compari
 Run-root files: budget.jsonl, ledger.jsonl and .lock as in models.durable, so --max-sent counts
 every send made in the root and runs on it never overlap. responses/NNN.txt keeps every raw answer
 as it arrives; NNN.request.sha256 marks one the parser accepted, and a rerun answers the same
-request from it without sending. The fingerprint covers the configured model, the policy version
-and the whole request, so a changed value, prompt or policy is asked again. An earlier
+request from it without sending. The fingerprint covers the HTTP body and semantic stage
+configuration (H1), including the policy version. Changed inputs are asked again. An earlier
 concepts.json is withdrawn when a run starts; concepts.json ({"concepts": [ConceptSummary...]},
 based_on holding the member digests read) and report.json (per concept: the problem codes of each
 attempt and the sends it took) are written once every concept has its answer.
@@ -28,7 +28,6 @@ type name), never a path, key or material.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -68,17 +67,21 @@ from insurance_harness.models import (
     StageModelConfig,
     load_stage_config,
 )
+from insurance_harness.models.answers import (
+    AnswerJournal,
+    accepted_answers,
+    check_answers,
+    request_fingerprint,
+)
 from insurance_harness.models.durable import (
     DurableLedger,
     RunRootBusy,
     ServedModelChanged,
     prior_sends,
     run_lock,
-    write_new,
 )
+from insurance_harness.models.run_files import IntegrityError
 
-_DIGEST = re.compile(r"[0-9a-f]{64}")
-_NUMBER = re.compile(r"[0-9]+")
 _SPACE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 
 
@@ -97,31 +100,6 @@ class _Parser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
-def _fingerprint(identity: str, system: str, user: str) -> str:
-    encoded = json.dumps([identity, system, user], ensure_ascii=False)
-    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-
-
-def _accepted_answers(directory: Path) -> dict[str, str]:
-    """Fingerprint -> accepted answer text; a corrupt marker is corrupt run-root state."""
-    accepted: dict[str, str] = {}
-    if not directory.exists():
-        return accepted
-    for marker in sorted(directory.glob("*.request.sha256")):
-        stem = marker.name.removesuffix(".request.sha256")
-        digest = marker.read_text(encoding="utf-8").removesuffix("\n")
-        answer = directory / f"{stem}.txt"
-        if (
-            not _NUMBER.fullmatch(stem)
-            or not _DIGEST.fullmatch(digest)
-            or digest in accepted
-            or not answer.is_file()
-        ):
-            raise _Stop("RUN_ROOT_INVALID")
-        accepted[digest] = answer.read_text(encoding="utf-8")
-    return accepted
-
-
 class _Model:
     """Answers each request from an accepted answer, else sends it and keeps the raw answer."""
 
@@ -130,42 +108,33 @@ class _Model:
         completion: OpenAICompatibleCompletion,
         ledger: DurableLedger,
         directory: Path,
-        identity: str,
+        root: Path,
     ) -> None:
-        self._completion, self._ledger, self._directory = completion, ledger, directory
-        self._identity = identity
-        self._accepted = _accepted_answers(directory)
+        self._journal = AnswerJournal(root, directory, completion)
+        self._config = completion.config
+        self._accepted = accepted_answers(root, directory)
 
     def ask(
         self, batch: Sequence[ConceptInput], problems: dict[str, list[str]] | None = None
     ) -> tuple[dict[str, ConceptDraft] | None, bool]:
         """The batch's drafts (None when the answer was refused) and whether it was sent."""
         system, user = build_request(batch, problems)
-        digest = _fingerprint(self._identity, system, user)
+        digest = request_fingerprint(self._config, system=system, user=user)
         cached = self._accepted.get(digest)
         if cached is not None:
             try:
                 return parse_concepts(cached, batch), False
             except ConceptOutputError:
                 raise _Stop("RUN_ROOT_INVALID") from None  # accepted once, altered since
-        raw = self._completion.complete(system=system, user=user)
-        if len(self._ledger.served) > 1:
-            raise ServedModelChanged("served model changed within the run")
-        self._directory.mkdir(parents=True, exist_ok=True)
-        stem = f"{self._next_number():03d}"
-        write_new(self._directory / f"{stem}.txt", raw)
+        raw = self._journal.complete(system=system, user=user)
         try:
             drafts = parse_concepts(raw, batch)
         except ConceptOutputError:
+            self._journal.reject()
             return None, True
-        write_new(self._directory / f"{stem}.request.sha256", digest + "\n")
+        self._journal.accept()
         self._accepted[digest] = raw
         return drafts, True
-
-    def _next_number(self) -> int:
-        # Every name counts, leftover temporary files included, so a new answer never collides.
-        heads = (path.name.lstrip(".").split(".", 1)[0] for path in self._directory.iterdir())
-        return max((int(head) for head in heads if _NUMBER.fullmatch(head)), default=0) + 1
 
 
 @dataclass
@@ -320,7 +289,7 @@ def _publish(
 
 def _stop_detail(exc: BaseException) -> dict[str, str]:
     """Fixed codes; an exception type name at most, never its text (it may hold a path)."""
-    if isinstance(exc, _Stop):
+    if isinstance(exc, (_Stop, IntegrityError)):
         return {"stopped": exc.code}
     if isinstance(exc, KeyboardInterrupt):
         return {"stopped": "INTERRUPTED"}
@@ -351,22 +320,22 @@ def main(argv: list[str] | None = None) -> int:
         base_url, api_key = os.environ.get(BASE_URL_ENV), os.environ.get(API_KEY_ENV)
         if not base_url or not api_key:
             raise _Stop("PLATFORM_UNCONFIGURED")
-        client = PlatformClient(base_url, api_key)
-        release = client.active(args.space)
-        if release is None:
-            raise _Stop("RELEASE_NOT_FOUND")
-        concepts, names = concept_inputs(release), _names(release)
         # One lock spans the budget read, every send, both files and the publication.
         with run_lock(args.run_root):
             target = args.run_root / "concepts.json"
             if target.exists():
                 os.replace(target, args.run_root / "concepts.json.previous")
+            check_answers(args.run_root)
+            client = PlatformClient(base_url, api_key)
+            release = client.active(args.space)
+            if release is None:
+                raise _Stop("RELEASE_NOT_FOUND")
+            concepts, names = concept_inputs(release), _names(release)
             ledger = DurableLedger.open(args.run_root, max_sent=args.max_sent)
             before = prior_sends(args.run_root)
             completion = OpenAICompatibleCompletion(config, ledger=ledger)
             try:
-                identity = f"{config.model}@{config.policy_version}"
-                model = _Model(completion, ledger, args.run_root / "responses", identity)
+                model = _Model(completion, ledger, args.run_root / "responses", args.run_root)
                 outcomes = _write(concepts, model, names, config, args.per_call)
             finally:
                 completion.close()
