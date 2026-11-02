@@ -23,7 +23,7 @@
 ## 前提与设置
 
 - 宿主：colima、limactl、Docker CLI（带 compose 插件）、Python 3.11+、OpenSSL；Harness 环境：在本仓库 `harness/` 下 `uv sync --frozen`。
-- 本仓库检出到与镜像相同的提交：App 镜像不含 `contracts/`，安装时从仓库挂载（发现 F1）。
+- 本仓库检出到与镜像相同的提交：`images.lock` 固定的 App 镜像早于 I5、不含 `contracts/`，安装时从仓库挂载（发现 F1）。I5 起镜像自带 `contracts/`，`images.lock` 换到 I5 之后的镜像时，在同一变更里去掉这条挂载。
 - 内存：本机同时运行线上（8 GB）与演练（5 GB）虚拟机，`staging` profile 必须先停掉。
 - 用 GHCR 镜像时，若包是私有的，先用只读令牌 `docker --context colima-rehearsal login ghcr.io`。
 
@@ -103,7 +103,7 @@
 
 | # | 发现 | 处理 |
 |---|---|---|
-| F1 | App 镜像带 `config/`，不带 `contracts/`；配置 `ENTERPRISE_SPACES` 后发布需要 `ENTERPRISE_CONTRACTS_DIR` | 从与镜像同一提交的仓库只读挂载 `contracts/`。I2 上云沿用；也可另开 Issue 把 `contracts/` 打进镜像 |
+| F1 | App 镜像带 `config/`，不带 `contracts/`；配置 `ENTERPRISE_SPACES` 后发布需要 `ENTERPRISE_CONTRACTS_DIR` | 从与镜像同一提交的仓库只读挂载 `contracts/`。I5（#524）起镜像自带 `contracts/`，换装与预发布不再挂载；本演练在 `images.lock` 换到 I5 之后的镜像时去掉挂载 |
 | F2 | 宿主若用带 fake-IP DNS 的代理，`dashscope.aliyuncs.com` 解析到 `198.18.0.0/15`，App 的 SSRF 检查拒绝录入模型 | `app.defaults.env` 设 `SSRF_WHITELIST_EXTRA=dashscope.aliyuncs.com`（与线上一致）；DNS 返回真实地址的主机不需要 |
 | F3 | 镜像自带的 `config.yaml` 没有引用签名密钥环；一旦设置 `ENTERPRISE_SPACES`，App 启动即 panic（`enterprise capture needs an active artifact signing key`），且列表型配置无法只靠环境变量提供 | `images` 从镜像取出它自己的 `config.yaml`，追加 `schema_wiki_signing`，密钥写成 `${E2E_CITATION_SIGNING_KEY}` 占位，由 App 启动时展开；文件本身不含密钥 |
 | F4 | 新租户的内置快问快答智能体没有对话模型，问答直接返回 `chat model is not configured`，单次请求指定模型也不能代替 | `platform` 用 `PATCH /api/v1/agents/builtin-quick-answer` 设为 DeepSeek 模型 |

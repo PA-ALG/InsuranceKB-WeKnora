@@ -88,6 +88,8 @@ REQUIRED_COPY_ROOTS = {
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
     "config",
+    # I5: the platform validates candidates against contracts/ shipped in the image.
+    "contracts",
     "licenses",
     "scripts",
     "migrations",

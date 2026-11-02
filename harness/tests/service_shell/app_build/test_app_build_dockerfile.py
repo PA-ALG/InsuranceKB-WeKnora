@@ -357,3 +357,17 @@ def test_runtime_reuse_protects_upstream_runtime_resources() -> None:
     source = inspect.getsource(module.runtime_reuse_facts)
     for path in ("LICENSE", "THIRD_PARTY_NOTICES.md", "licenses"):
         assert path in source
+
+
+def test_runtime_image_ships_contracts_from_the_build_stage() -> None:
+    # I5: contracts come from the same build context as the binary, never from an outside mount.
+    source = DOCKERFILE_PATH.read_text(encoding="utf-8")
+    runtime = source.split("FROM ${RUNTIME_IMAGE} AS runtime", 1)[1]
+    assert "COPY --from=builder /app/contracts ./contracts" in runtime
+
+
+def test_runtime_reuse_protects_contracts() -> None:
+    # A reused runtime base keeps its own contracts/ (runtime-rebase only swaps the binary).
+    module = _artifact_module()
+    source = inspect.getsource(module.runtime_reuse_facts)
+    assert '"contracts",' in source

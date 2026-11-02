@@ -264,6 +264,7 @@ COPY --from=builder /app/yanyiwu/ /go/pkg/mod/github.com/yanyiwu/
 COPY --from=builder /app/config ./config
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/contracts ./contracts
 COPY --from=builder /app/dataset/samples ./dataset/samples
 COPY --from=builder /root/.duckdb /home/appuser/.duckdb
 COPY --from=builder /app/WeKnora ./WeKnora
