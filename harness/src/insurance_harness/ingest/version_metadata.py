@@ -35,7 +35,7 @@ def entity_metadata(
             sale_end=version.sale_end,
             source_status=version.source_status,  # type: ignore[arg-type]  # checked by both models
             basis_commit=basis.commit if basis else None,
-            basis_date=basis.synced_at[:10] if basis else None,
+            basis_date=(basis.snapshot_date or basis.synced_at[:10]) if basis else None,
         )
     family = (
         ProductFamily(key=version.family.key, display_name=version.family.display_name)

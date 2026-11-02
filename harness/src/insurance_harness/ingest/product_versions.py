@@ -9,8 +9,16 @@ not stored: readers derive it from the period and the source status (PV-0 append
 import re
 from collections.abc import Iterable, Mapping
 from datetime import date
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 from pydantic.main import IncEx
 
 from insurance_harness.identity.attribution import AttributionPolicy, load_attribution_policy
@@ -62,6 +70,20 @@ class MetadataBasis(_Strict):
     commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     catalog_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     synced_at: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+    snapshot_date: DateText | None = None  # source data date; synced_at is audit time only
+
+    @model_validator(mode="after")
+    def _snapshot(self) -> "MetadataBasis":
+        if self.snapshot_date is not None:
+            date.fromisoformat(self.snapshot_date)
+        return self
+
+    @model_serializer(mode="wrap")
+    def _document(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if self.snapshot_date is None:
+            data.pop("snapshot_date", None)  # omit only the new field, including when nested
+        return data
 
 
 def family_of(name: str, policy: AttributionPolicy) -> ProductFamily | None:

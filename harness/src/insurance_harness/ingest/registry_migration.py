@@ -120,7 +120,10 @@ def plan_migration(
         product.version = versions[product_id].model_copy(update=update)
     planned.contract = V2
     old = registry.metadata_basis
-    unchanged = refresh and old is not None and old.catalog_sha256 == catalog.digest() and all(
+    unchanged = refresh and old is not None and (
+        old.repository == catalog.repository and old.commit == catalog.commit
+        and old.catalog_sha256 == catalog.digest() and old.snapshot_date == catalog.snapshot_date
+    ) and all(
         planned.products[pid].version == registry.products[pid].version for pid in planned.products
     )
     planned.metadata_basis = old if unchanged else MetadataBasis(
@@ -128,6 +131,7 @@ def plan_migration(
         commit=catalog.commit,
         catalog_sha256=catalog.digest(),
         synced_at=now_text(now),
+        snapshot_date=catalog.snapshot_date,
     )
     try:
         planned = ProductRegistry.model_validate(planned.model_dump())
