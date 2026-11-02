@@ -153,7 +153,9 @@ func publishedHits(
 	for _, space := range spaces {
 		id := v.turn.Releases[space]
 		// A sales question learns each named product's sale status first (PV-5 §1.2).
-		statuses, fields, err := service.QuestionReferences(ctx, v.tenant, space, id, question, maxPublishedHits)
+		statuses, fields, err := service.QuestionReferences(
+			ctx, v.tenant, space, id, question, maxPublishedHits, cm.Query,
+		)
 		if err != nil {
 			return nil, err
 		}
