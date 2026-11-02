@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 )
@@ -19,7 +21,8 @@ type entityPayload struct {
 	Labels    []string   `json:"classification_labels"`
 	Lifecycle *Lifecycle `json:"lifecycle"`
 	Family    *Family    `json:"product_family"`
-	// Identifiers are read only for SK-2's notice flag; other identifiers stay with the member.
+	// Identifiers carry SK-2's notice flag and the registered codes that name the entity in a
+	// question (PV-5 §3); the platform knows none of their keys.
 	Identifiers map[string]any `json:"identifiers"`
 }
 
@@ -83,6 +86,9 @@ type conceptPayload struct {
 type indexedEntity struct {
 	Entity
 	kind string
+	slug string // the Entity member's logical slug
+	// identifiers are the normalized identifier values a question may name the entity by.
+	identifiers []string
 	// placeholder marks an entry made for a claim subject without a visible Entity member.
 	placeholder bool
 }
@@ -134,11 +140,11 @@ func indexRelease(ctx context.Context, r release.Release) (*releaseIndex, error)
 				payload.Family = nil
 			}
 			index.entityByID[payload.ID] = len(index.entities)
-			notice, _ := payload.Identifiers["notice"].(string)
+			notice, _ := payload.Identifiers[noticeKey].(string)
 			index.entities = append(index.entities, indexedEntity{Entity: Entity{
 				EntityID: payload.ID, Kind: payload.Type, Name: name, Names: payload.Names, Labels: payload.Labels,
 				Lifecycle: payload.Lifecycle, Family: payload.Family, Notice: notice,
-			}, kind: payload.Type})
+			}, kind: payload.Type, slug: member.LogicalSlug, identifiers: identifierValues(payload.Identifiers)})
 		case "relation":
 			// A relation only adds version links: one that does not decode loses its link, not the read.
 			var payload relationPayload
@@ -245,4 +251,31 @@ func malformed(member release.Member, detail string) error {
 		Code:   release.ErrorInvalidRequest,
 		Detail: fmt.Sprintf("invalid %s member %q: %s", member.Kind, member.LogicalSlug, detail),
 	}
+}
+
+// minIdentifierRunes keeps one- and two-character values, which name nothing specific, out of
+// question recognition.
+const minIdentifierRunes = 3
+
+// noticeKey is SK-2's notice flag among a method's identifiers: a flag, not a code.
+const noticeKey = "notice"
+
+// identifierValues are an entity's string identifier values, normalized, unique and sorted.
+func identifierValues(identifiers map[string]any) []string {
+	seen := map[string]bool{}
+	values := []string{}
+	for key, raw := range identifiers {
+		if key == noticeKey {
+			continue
+		}
+		value, ok := raw.(string)
+		value = normalize(value)
+		if !ok || utf8.RuneCountInString(value) < minIdentifierRunes || seen[value] {
+			continue
+		}
+		seen[value] = true
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	return values
 }

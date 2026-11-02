@@ -152,9 +152,20 @@ func publishedHits(
 	var hits []*types.SearchResult
 	for _, space := range spaces {
 		id := v.turn.Releases[space]
-		fields, err := service.QuestionFields(ctx, v.tenant, space, id, question, maxPublishedHits)
+		// A sales question learns each named product's sale status first (PV-5 §1.2).
+		statuses, fields, err := service.QuestionReferences(ctx, v.tenant, space, id, question, maxPublishedHits)
 		if err != nil {
 			return nil, err
+		}
+		for _, status := range statuses {
+			hits = append(hits, &types.SearchResult{
+				ID: "release:" + id + ":" + status.Slug, Content: status.Text, KnowledgeTitle: status.Title,
+				Score: 1, ChunkType: types.ChunkTypeText, MatchType: types.MatchTypeKeywords,
+				Metadata: knowledge.StatusMetadata(space, id, status),
+			})
+			if len(hits) == maxPublishedHits {
+				return hits, nil
+			}
 		}
 		for _, field := range fields {
 			if len(field.Evidence) == 0 {
