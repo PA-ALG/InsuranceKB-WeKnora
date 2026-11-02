@@ -29,8 +29,10 @@ func (s *Service) QuestionFields(
 
 // QuestionReferences reads the release once for what a quick answer puts ahead of retrieval: a
 // sales question's status lines (QuestionStatuses) and the published fields (QuestionFields).
+// An optional original question preserves its explicit sales naming if retrieval rewriting lost
+// that intent (PV-5c). Without an independently named sales question, keep the rewrite's scope.
 func (s *Service) QuestionReferences(
-	ctx context.Context, tenantID uint64, spaceID, releaseID, question string, limit int,
+	ctx context.Context, tenantID uint64, spaceID, releaseID, question string, limit int, original ...string,
 ) ([]StatusLine, []Field, error) {
 	index, err := s.read(ctx, tenantID, spaceID, releaseID)
 	if err != nil {
@@ -39,6 +41,11 @@ func (s *Service) QuestionReferences(
 	fields, err := index.questionFields(ctx, question, limit)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(original) > 0 {
+		if statuses := index.statusLines(original[0]); len(statuses) > 0 {
+			return statuses, fields, nil
+		}
 	}
 	return index.statusLines(question), fields, nil
 }
