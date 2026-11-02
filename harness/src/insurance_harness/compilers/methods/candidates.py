@@ -7,25 +7,25 @@ located among the blocks the original's method-use record holds, on the original
 candidate file carries names and block IDs only; SK-2a admission checks it again from the start.
 """
 
-import unicodedata
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from insurance_harness.compilers.methods.admission import Candidate, CandidateFile, CopyEntry
+from insurance_harness.compilers.methods.candidate_locations import (
+    RecordedLocations,
+    normalized_text,
+)
 from insurance_harness.compilers.methods.copies import CopyBook, MethodCopy, check_discovery_kb
 from insurance_harness.compilers.wiki_pages.members import NativePage
-from insurance_harness.evidence.segments import SegmentedSource
-from insurance_harness.ingest.method_registry import block_order
 from insurance_harness.ingest.method_use_model import MethodUse
 from insurance_harness.ingest.raw_sources import RawListing, RawSource, material_pages
 from insurance_harness.ingest.registry import ProductRegistry
 from insurance_harness.ingest.source_map import PageReader
 
 PAGE_TYPES = frozenset({"entity", "concept"})  # the pages S6c also takes as reading pages
-# A shorter text is too generic to tie a page to a place in the source (as S6c).
-LOCATE_MIN_CHARS = 8
+RECALL_MINIMUM = 0.5  # SK-2d: candidate coverage only, not permission to run values or publish
 
 
 @dataclass(frozen=True)
@@ -34,18 +34,14 @@ class CandidateRun:
     report: dict[str, Any]  # codes and counts only
 
 
-def _squeeze(text: str) -> str:
-    return "".join(unicodedata.normalize("NFKC", text).split())
-
-
 class _Originals:
     """Each original's recorded blocks as folded text, read and segmented once."""
 
     def __init__(self, reader: PageReader, space_id: str) -> None:
         self.reader, self.space_id = reader, space_id
-        self.blocks: dict[tuple[str, int, str], list[tuple[str, str]]] = {}
+        self.blocks: dict[tuple[str, int, str], RecordedLocations] = {}
 
-    def recorded(self, use: MethodUse) -> list[tuple[str, str]]:
+    def recorded(self, use: MethodUse) -> RecordedLocations:
         if use.triple not in self.blocks:
             raw = RawSource(
                 knowledge_id=use.knowledge_id,
@@ -53,26 +49,10 @@ class _Originals:
                 file_name=use.file_name,
                 sha256=use.sha256,
             )
-            source = SegmentedSource(material_pages(self.reader, self.space_id, raw))
-            prefix = next(iter(source.document_ids.values()))
-            hits = set(use.block_ids)
-            self.blocks[use.triple] = [
-                (block, _squeeze(segment.text))
-                for segment in source.segments
-                if (block := segment.id.removeprefix(prefix)) in hits
-            ]
+            self.blocks[use.triple] = RecordedLocations(
+                material_pages(self.reader, self.space_id, raw), use.block_ids
+            )
         return self.blocks[use.triple]
-
-
-def _located(blocks: Sequence[tuple[str, str]], chunks: Sequence[str]) -> tuple[str, ...]:
-    """The recorded blocks a page's chunks of one material cite (Spec §4)."""
-    found = {
-        block
-        for block, text in blocks
-        for chunk in chunks
-        if min(len(text), len(chunk)) >= LOCATE_MIN_CHARS and (text in chunk or chunk in text)
-    }
-    return tuple(sorted(found, key=block_order))
 
 
 def method_candidates(
@@ -89,6 +69,11 @@ def method_candidates(
     }
     records = {use.triple: use for use in registry.method_uses}
     originals = _Originals(reader, registry.space_id)
+    # Denominators include active signals without a copy or citation; never hide misses.
+    for record in registry.method_uses:
+        if record.state == "active":
+            originals.recorded(record)
+    covered: dict[tuple[str, int, str], set[str]] = {}
     counts: Counter[str] = Counter()
     candidates: list[Candidate] = []
     for page in pages:
@@ -96,7 +81,7 @@ def method_candidates(
             continue
         cited: dict[str, list[str]] = {}
         for chunk in page.chunks:
-            cited.setdefault(chunk.knowledge_id, []).append(_squeeze(chunk.content))
+            cited.setdefault(chunk.knowledge_id, []).append(normalized_text(chunk.content))
         for copy_id, chunks in cited.items():
             copy = usable.get(copy_id)
             if copy is None:
@@ -106,10 +91,11 @@ def method_candidates(
             if use is None or use.state != "active":
                 counts["METHOD_USE_NOT_ACTIVE"] += 1
                 continue
-            blocks = _located(originals.recorded(use), chunks)
+            blocks = originals.recorded(use).located(chunks)
             if not blocks:
                 counts["NO_RECORDED_BLOCKS"] += 1
                 continue
+            covered.setdefault(use.triple, set()).update(blocks)
             candidates.append(
                 Candidate(
                     name=page.title,
@@ -135,5 +121,18 @@ def method_candidates(
         copies=entries,
         candidates=unique,
     )
-    report = {"candidates": len(unique), "counts": dict(sorted(counts.items()))}
+    total = sum(len(locations.eligible) for locations in originals.blocks.values())
+    recalled = sum(len(covered.get(triple, set()) & locations.eligible)
+                   for triple, locations in originals.blocks.items())
+    ratio = recalled / total if total else None
+    report = {
+        "candidates": len(unique), "counts": dict(sorted(counts.items())),
+        "recall": {
+            "eligible": {"total": total, "covered": recalled, "ratio": ratio},
+            "short": {"total": sum(loc.short_count for loc in originals.blocks.values()),
+                      "covered": 0},
+            "gate": {"minimum": RECALL_MINIMUM,
+                     "passed": ratio is not None and ratio >= RECALL_MINIMUM},
+        },
+    }
     return CandidateRun(file, report)
