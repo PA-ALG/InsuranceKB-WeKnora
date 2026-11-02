@@ -36,6 +36,19 @@ from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.review.routing import HUMAN_DECISION, Route, Scores, labelled
 
 
+def require_publishable_model(model: str | None) -> None:
+    """Pure CompletionPort runs are evaluation data, never a platform candidate source."""
+    if model is not None and model.startswith("offline/"):
+        raise BundleError("ANSWERS_UNVERIFIED")
+
+
+def require_publishable_bundle(bundle: CandidateBundle) -> None:
+    """Also applies when a previously frozen candidate bypasses the normal rebuild."""
+    for member in bundle.members:
+        if member.kind == "claim":
+            require_publishable_model(Claim.model_validate(member.payload).provenance.model)
+
+
 def candidate_bundle(
     output: CompileOutput,
     source: SegmentedSource,
@@ -52,6 +65,7 @@ def candidate_bundle(
 
     Claims are labelled by the review route (RV1): without one, a person decides.
     """
+    require_publishable_model(output.model)
     if page is not None and (
         page.entity.entity_id != output.entity_id or page.profile.schema_pack_id != output.pack_id
     ):

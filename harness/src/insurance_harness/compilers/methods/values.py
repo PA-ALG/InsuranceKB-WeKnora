@@ -39,7 +39,6 @@ from insurance_harness.compilers.methods.responses import (
     ResponsesError,
     check_value_directory,
     directory_stage,
-    request_settings,
 )
 from insurance_harness.compilers.schema_fields.prompt import JudgeLikeRequest
 from insurance_harness.evidence.weknora_pages import SourcePagesError
@@ -55,6 +54,7 @@ from insurance_harness.models import (
     StageModelConfig,
     TruncatedCompletion,
 )
+from insurance_harness.models.answers import request_settings
 from insurance_harness.models.durable import (
     DurableLedger,
     RunRootBusy,

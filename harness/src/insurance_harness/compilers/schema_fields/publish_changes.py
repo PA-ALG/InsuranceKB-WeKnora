@@ -29,7 +29,11 @@ from insurance_harness.changes.options import (
 )
 from insurance_harness.changes.reporting import summarize, write_reviews
 from insurance_harness.changes.sources import publication_entries
-from insurance_harness.compilers.schema_fields.claims import claims_from, require_cards_version
+from insurance_harness.compilers.schema_fields.claims import (
+    claims_from,
+    require_cards_version,
+    require_publishable_model,
+)
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.compilers.schema_fields.page import ProductPage, product_page
 from insurance_harness.contracts.bundle import CandidateBundle, ReviewPlan
@@ -65,6 +69,8 @@ def delta_bundle(
     scores: Scores | None,
     compiler_identity: str,
 ) -> CandidateBundle:
+    for claim in claims:
+        require_publishable_model(claim.provenance.model)
     existing = {member.logical_slug for member in active.members} if active else set()
     return assemble(
         labelled(claims, review, scores),
@@ -131,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         "release_id": None,
     }
     try:
+        require_publishable_model(output.model)
         version = require_cards_version(output)
         name = (
             registered[0] if registered else display_name(source_directory(args.repo, args.product))

@@ -59,6 +59,7 @@ from insurance_harness.compilers.schema_fields.claims import (
     candidate_bundle,
     claims_from,
     require_cards_version,
+    require_publishable_model,
 )
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.compilers.schema_fields.page import product_page
@@ -135,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         # Written before outputs recorded their card version (or blank): publishing it under
         # today's cards would misstate how it was compiled. Same rule as candidate_bundle.
+        require_publishable_model(output.model)
         version = require_cards_version(output)
     except BundleError as error:
         return _stop(error.reason)

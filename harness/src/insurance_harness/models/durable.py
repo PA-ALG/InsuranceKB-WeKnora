@@ -12,12 +12,14 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import stat
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 from .ledger import CallLedger, CallRecord
+from .run_files import IntegrityError, check_directory, read_regular
 
 
 class ServedModelChanged(RuntimeError):
@@ -31,7 +33,8 @@ class RunRootBusy(RuntimeError):
 def write_new(path: Path, text: str) -> None:
     """Create path atomically and durably; an existing file (or stale temp) is never replaced."""
     temporary = path.with_name(f".{path.name}.tmp")
-    with temporary.open("x", encoding="utf-8") as stream:
+    descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         stream.write(text)
         stream.flush()
         os.fsync(stream.fileno())
@@ -42,16 +45,21 @@ def write_new(path: Path, text: str) -> None:
 
 
 def _append_durably(path: Path, line: str) -> None:
-    with path.open("a", encoding="utf-8") as stream:
+    descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT
+                         | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    with os.fdopen(descriptor, "a", encoding="utf-8") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise IntegrityError()
         stream.write(line + "\n")
         stream.flush()
         os.fsync(stream.fileno())
 
 
 def _lines(path: Path) -> list[str]:
-    if not path.exists():
+    content = read_regular(path)
+    if content is None:
         return []
-    return [line for line in path.read_text(encoding="utf-8").splitlines() if line]
+    return [line for line in content.decode("utf-8").splitlines() if line]
 
 
 def stored_records(run_root: Path) -> list[CallRecord]:
@@ -144,13 +152,6 @@ class DurableLedger(CallLedger):
             self._served.add(record.served_model)
 
 
-def _check_outside_git(run_root: Path) -> None:
-    """Resolve symlinks before checking every ancestor for Git worktrees or repositories."""
-    resolved = run_root.resolve()
-    if any((parent / ".git").exists() for parent in (resolved, *resolved.parents)):
-        raise ValueError("run root must be outside any git repository")
-
-
 _HELD: dict[Path, int] = {}
 
 
@@ -162,14 +163,18 @@ def run_lock(run_root: Path) -> Iterator[None]:
     points take it again so direct callers are protected as well. Another thread opens its
     own descriptor, which flock then refuses.
     """
-    _check_outside_git(run_root)
-    run_root.mkdir(parents=True, exist_ok=True)
+    check_directory(run_root)
+    run_root.mkdir(mode=0o700, parents=True, exist_ok=True)
     key = run_root.resolve()
     if _HELD.get(key) == threading.get_ident():
         yield
         return
-    descriptor = os.open(run_root / ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+    descriptor = os.open(
+        run_root / ".lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600,
+    )
     try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise IntegrityError()
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
