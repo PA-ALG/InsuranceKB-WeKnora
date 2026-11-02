@@ -180,3 +180,72 @@ def test_regular_saved_answers_are_still_reused_without_a_call(
     )
     assert summary["codes"] == {"saved": 1} and created == []
     compile_with(world, LedgerAnswers(tmp_path))
+
+
+# --- R5c (round 3): a non-regular answer is refused at once, never opened blocking ------------
+
+_CHILD = """
+import json, os, sys
+from pathlib import Path
+from insurance_harness.compilers.methods.responses import (
+    LedgerAnswers, ResponsesError, SavedResponses,
+)
+root, request, mode = Path(sys.argv[1]), json.loads(Path(sys.argv[2]).read_text()), sys.argv[3]
+(answer,) = root.glob("*.txt")
+port = LedgerAnswers(root) if mode == "ledger" else SavedResponses(root, "hand-model")
+answer.unlink()
+os.mkfifo(answer)  # no writer: a blocking open would never return
+try:
+    port.complete(system=request["system"], user=request["user"])
+    print("READ")
+except ResponsesError as error:
+    print(error.code)
+"""
+
+
+@pytest.mark.parametrize("mode", ["ledger", "offline"])
+def test_a_saved_answer_replaced_by_a_fifo_is_refused_at_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """Replaced after the port checked the directory: the read itself must not block. Run in a
+    child process with a timeout, so a blocking open fails this test instead of hanging it."""
+    import subprocess
+    import sys
+
+    world = World()
+    model = FakeProvider({METHOD_A: full_answer})
+    install(monkeypatch, model)
+    root = tmp_path / "values"
+    method_values(
+        world.registry, candidates_of(world, deck_a(world)), pages=world.reader, root=root,
+        config=stage_config(), max_sent=10,
+    )
+    messages = json.loads(model.bodies[0])["messages"]
+    request = tmp_path / "request.json"
+    request.write_text(
+        json.dumps({"system": messages[0]["content"], "user": messages[1]["content"]}),
+        encoding="utf-8",
+    )
+    done = subprocess.run(
+        [sys.executable, "-I", "-c", _CHILD, str(root), str(request), mode],
+        capture_output=True, text=True, timeout=20, check=False,
+    )
+    assert done.stdout.strip() == "RUN_ROOT_INVALID", done.stderr[-500:]
+
+
+@pytest.mark.parametrize("where", ["root", "raw"])
+def test_a_non_regular_entry_in_the_directory_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, where: str
+) -> None:
+    """Every entry is a regular file (or the raw/ directory): a FIFO named like a run file or an
+    answer is refused by the directory check, which never opens anything."""
+    import os
+
+    from insurance_harness.compilers.methods.responses import check_value_directory
+
+    world = World()
+    answered(monkeypatch, world, deck_a(world), tmp_path, {METHOD_A: full_answer})
+    os.mkfifo(tmp_path / ("stage.json.fifo" if where == "root" else "raw/002.txt"))
+    with pytest.raises(ResponsesError) as raised:
+        check_value_directory(tmp_path)
+    assert raised.value.code == "RUN_ROOT_INVALID"
