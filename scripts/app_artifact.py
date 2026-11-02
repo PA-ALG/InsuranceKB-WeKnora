@@ -812,6 +812,7 @@ def runtime_reuse_facts(
             raise ArtifactContractError("runtime source must be full commit ID")
     protected = (
         "config",
+        "contracts",
         "scripts",
         "migrations",
         "dataset/samples",

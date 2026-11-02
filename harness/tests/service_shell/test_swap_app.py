@@ -25,6 +25,10 @@ SPACES = '{"spaces":[{"id":"SENTINEL-space-55e1"}]}'
 TYPES = "insurance_product"
 OTHER_TYPES = "insurance_product,rider"
 SENTINELS = (OLD_DB, SIGNING, "SENTINEL-space-55e1")
+CONTRACT_FILES = (
+    "/app/contracts/candidate_bundle.schema.json",
+    "/app/contracts/evidence.schema.json",
+)
 
 FAKE_DOCKER = r"""
 import json, os, sys
@@ -64,6 +68,14 @@ match argv:
     case ["network", "connect", network, name]:
         state["containers"][name]["NetworkSettings"]["Networks"][network] = {}
         save()
+    case ["run", "--rm", "--network", "none", "--pull", "never", "--entrypoint", "test", image,
+          *checks]:
+        # I5 contracts probe: `test -f A -a -f B` in a throwaway container of the image.
+        if "probe_exit" in state:
+            sys.exit(state["probe_exit"])
+        files = state["image_files"].get(image, [])
+        wanted = [checks[i + 1] for i, flag in enumerate(checks) if flag == "-f"]
+        sys.exit(0 if wanted and all(path in files for path in wanted) else 1)
     case ["create", *rest]:
         options, env_keys, mounts, i = {}, [], [], 0
         while rest[i].startswith("-"):
@@ -151,6 +163,8 @@ class World:
             "images": {i["Id"]: i for i in (original_image, current_image, new_image)},
             "fail": [],
             "context": "fake-context",
+            # I5: images built after I5 ship contracts/; the current and original images do not.
+            "image_files": {NEW_IMAGE: list(CONTRACT_FILES)},
         }
 
     def with_current(self, **env: str) -> World:
@@ -367,7 +381,7 @@ def test_unknown_new_image_is_refused(world: World) -> None:
     assert world.with_current().run().returncode != 0 and world.writes() == []
 
 
-@pytest.mark.parametrize("missing", ["config.yaml", "contracts", "secrets.env"])
+@pytest.mark.parametrize("missing", ["config.yaml", "secrets.env"])
 def test_private_dir_must_hold_its_files(world: World, missing: str) -> None:
     target = world.private / missing
     if target.is_dir():
