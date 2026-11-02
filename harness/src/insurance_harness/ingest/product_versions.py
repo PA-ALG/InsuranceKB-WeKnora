@@ -172,7 +172,8 @@ def predecessors(
     """The unique predecessor of each entry (appendix A §1.4): same plan code, its sale ending the
     day this one starts, and exactly one such entry. Failing that, the year version of the same
     product line that stopped selling last before this one began (PV-5 Spec §4.1); versions sold
-    side by side never succeed each other, and an ambiguous line links nothing."""
+    side by side never succeed each other, and an ambiguous line links nothing: a version that
+    already has a successor, by either rule, gets no second one by its line."""
     linked: dict[str, str | None] = {}
     for product_id, version in versions.items():
         found = [
@@ -190,7 +191,8 @@ def predecessors(
     by_line = {
         pid: _line_predecessor(pid, versions, lines) for pid in versions if linked[pid] is None
     }
-    claimed = [older for older in by_line.values() if older is not None]
+    # A predecessor the plan-code rule already gave a successor counts too: a line never forks.
+    claimed = [older for older in [*linked.values(), *by_line.values()] if older is not None]
     for product_id, older in by_line.items():
         if older is not None and claimed.count(older) == 1:
             linked[product_id] = older  # one predecessor for two successors links neither

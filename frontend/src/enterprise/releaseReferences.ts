@@ -29,6 +29,9 @@ export function isReleaseReference(reference: Reference): boolean {
 export function releaseCitationTarget(reference: Reference): ReleaseCitationTarget | null {
   const metadata = reference.metadata
   if (!isPinnedTier(metadata?.source_tier)) return null
+  // A sale status (PV-5) has no evidence; one that arrives with an evidence index is malformed and
+  // must never open as the entity's evidence (#530 R1).
+  if (metadata.knowledge_class === 'sale_status') return null
   const spaceId = text(metadata.space_id), releaseId = text(metadata.release_id), member = text(metadata.logical_slug)
   const raw = metadata.evidence_index
   const evidence = typeof raw === 'number' ? raw : typeof raw === 'string' && /^(0|[1-9]\d*)$/.test(raw) ? Number(raw) : NaN
