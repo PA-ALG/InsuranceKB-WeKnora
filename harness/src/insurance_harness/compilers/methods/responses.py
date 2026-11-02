@@ -60,20 +60,23 @@ class SavedResponses:
 
 
 def check_value_directory(root: Path) -> None:
-    """Neither the directory nor raw/ lies in a git work tree (each and its parents hold no .git),
-    no entry of either is a link (existing ones included), raw/ is a directory (Spec §3.1, R5)."""
+    """Neither the directory nor raw/ lies in a git work tree (each and its parents hold no .git);
+    every entry of either is a regular file, besides the raw/ directory itself: no link (existing
+    ones included), FIFO or other special file (Spec §3.1, R5). Only lstat: nothing is opened."""
     if _in_git(root):
         raise ResponsesError("RUN_ROOT_INVALID")
     if not root.is_dir():
         return  # a new directory: the value run creates it
     raw = root / "raw"
-    entries = list(root.iterdir())
-    if raw.is_symlink() or raw.exists():
-        if raw.is_symlink() or not raw.is_dir() or _in_git(raw):
+    for entry in root.iterdir():
+        mode = entry.lstat().st_mode
+        if entry == raw:
+            if not stat.S_ISDIR(mode) or _in_git(raw):
+                raise ResponsesError("RUN_ROOT_INVALID")
+            if not all(stat.S_ISREG(kept.lstat().st_mode) for kept in raw.iterdir()):
+                raise ResponsesError("RUN_ROOT_INVALID")
+        elif not stat.S_ISREG(mode):
             raise ResponsesError("RUN_ROOT_INVALID")
-        entries += raw.iterdir()
-    if any(entry.is_symlink() for entry in entries):
-        raise ResponsesError("RUN_ROOT_INVALID")
 
 
 def _in_git(path: Path) -> bool:
@@ -82,15 +85,26 @@ def _in_git(path: Path) -> bool:
 
 
 def _read_regular(path: Path) -> bytes | None:
-    """A saved answer's bytes, opened without following a link; None when there is none."""
+    """A saved answer's bytes; None when there is none. Anything but a regular file is refused
+    before it is opened (opening a FIFO without a writer would block, review #526 R5c); the open
+    neither follows a link nor blocks, and the descriptor must be the very file lstat saw."""
     try:
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        seen = os.lstat(path)
     except FileNotFoundError:
         return None
-    except OSError:  # a link (ELOOP) or an unreadable entry
+    except OSError:
+        raise ResponsesError("RUN_ROOT_INVALID") from None
+    if not stat.S_ISREG(seen.st_mode):
+        raise ResponsesError("RUN_ROOT_INVALID")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:  # replaced since: gone, a link (ELOOP) or unreadable
         raise ResponsesError("RUN_ROOT_INVALID") from None
     with os.fdopen(descriptor, "rb") as stream:
-        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (
+            seen.st_dev, seen.st_ino,
+        ):
             raise ResponsesError("RUN_ROOT_INVALID")
         return stream.read()
 
@@ -102,14 +116,12 @@ def request_settings(config: StageModelConfig) -> dict[str, Any]:
 
 def directory_stage(directory: Path) -> StageModelConfig | None:
     """The stage a value directory was created with, or None when it has none."""
-    path = directory / STAGE_FILE
-    if path.is_symlink():
-        raise ResponsesError("RUN_ROOT_INVALID")
-    if not path.exists():
+    content = _read_regular(directory / STAGE_FILE)  # a link or special file is refused
+    if content is None:
         return None
     try:
-        return StageModelConfig.model_validate_json(path.read_bytes())
-    except (OSError, ValueError):
+        return StageModelConfig.model_validate_json(content)
+    except ValueError:
         raise ResponsesError("RUN_ROOT_INVALID") from None
 
 
