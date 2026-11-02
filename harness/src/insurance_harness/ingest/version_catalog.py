@@ -16,7 +16,7 @@ import re
 import subprocess
 import tempfile
 import threading
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -25,8 +25,10 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
+    SerializerFunctionWrapHandler,
     StringConstraints,
     ValidationError,
+    model_serializer,
     model_validator,
 )
 
@@ -85,11 +87,14 @@ class VersionCatalog(BaseModel):
     contract: Literal["product-catalog.v1"]
     repository: str = Field(min_length=1)
     commit: _Commit
+    snapshot_date: DateText | None = None  # commit's committer date in UTC+8 (PV-5b)
     versions: tuple[VersionRecord, ...]
     _by_code: dict[str, tuple[str, ...]] = PrivateAttr(default_factory=dict)
 
     @model_validator(mode="after")
     def _unique(self) -> "VersionCatalog":
+        if self.snapshot_date is not None:
+            date.fromisoformat(self.snapshot_date)
         keys = [v.version_key for v in self.versions]
         if len(set(keys)) != len(keys):
             raise ValueError("a version key repeats")
@@ -99,6 +104,13 @@ class VersionCatalog(BaseModel):
                 found.setdefault(version.clause_code, []).append(version.version_key)
         self._by_code = {code: tuple(sorted(keys)) for code, keys in found.items()}
         return self
+
+    @model_serializer(mode="wrap")
+    def _document(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if self.snapshot_date is None:
+            data.pop("snapshot_date", None)  # old catalogs keep their exact bytes and digest
+        return data
 
     def keys_for(self, clause_code: str) -> tuple[str, ...]:
         """The versions that print this canonical clause code; more than one means it is shared."""
@@ -261,6 +273,17 @@ def _record(meta: dict[str, Any], tree: str, pattern: str) -> VersionRecord:
         raise CatalogError("CATALOG_INVALID") from None
 
 
+def _snapshot_date(directory: Path, commit: str) -> str:
+    """The pinned commit's committer time, not author time, HEAD, mtime or the sync clock."""
+    raw = _git(directory, "--no-replace-objects", "show", "-s", "--format=%ct", commit, "--")
+    try:
+        return datetime.fromtimestamp(
+            int(raw.decode("ascii").strip()), timezone(timedelta(hours=8))
+        ).date().isoformat()
+    except (UnicodeDecodeError, ValueError, OverflowError, OSError):
+        raise CatalogError("CATALOG_INVALID") from None
+
+
 def catalog_from_checkout(directory: Path, commit: str) -> VersionCatalog:
     """The catalog of exactly this commit of the repository cloned at `directory`, read from its
     object store (the working tree may be sparse, dirty or hold untracked files)."""
@@ -269,6 +292,7 @@ def catalog_from_checkout(directory: Path, commit: str) -> VersionCatalog:
     resolved = _git(directory, "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}")
     if resolved.decode("ascii", "replace").strip() != commit:
         raise CatalogError("CATALOG_COMMIT_MISMATCH")
+    snapshot_date = _snapshot_date(directory, commit)
     pattern = load_attribution_policy().clause_code_pattern
     tracked = _tracked(directory, commit)
     records = []
@@ -287,6 +311,7 @@ def catalog_from_checkout(directory: Path, commit: str) -> VersionCatalog:
             contract=CONTRACT,
             repository=REPOSITORY,
             commit=commit,
+            snapshot_date=snapshot_date,
             versions=tuple(sorted(records, key=lambda r: (r.plan_code, r.version_no))),
         )
     except ValidationError:
