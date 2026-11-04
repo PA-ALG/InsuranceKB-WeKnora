@@ -1,4 +1,7 @@
+// @vitest-environment happy-dom
+import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { createI18n } from 'vue-i18n'
 import vocabulary from './entityReviewVocabulary.json'
 import zhCN from './i18n/messages/zh-CN'
 import enUS from './i18n/messages/en-US'
@@ -9,6 +12,8 @@ import { reviewRows } from './reviewView'
 import { pointDetail, pointItem } from './__tests__/reviewPointFixtures'
 import type { EntityReview } from './entityReview'
 import type { ReleaseMember } from './enterpriseApi'
+import ReviewPointCard from './ReviewPointCard.vue'
+import { entityReview } from './entityReview'
 
 describe('entity vocabulary and paired profile boundary', () => {
   it('resolves every configured label in every language, without using parent labels for unknown children', () => {
@@ -35,5 +40,28 @@ describe('entity vocabulary and paired profile boundary', () => {
     expect(projected.entity.beforeKnown).toBe(false)
     expect(projected.entity.fields.find(field => field.path === '/identifiers/notice')?.after).toEqual({ present: true, value: 'test' })
     expect(JSON.stringify(rows.get(entity.logical_slug))).not.toContain('不得借用')
+  })
+
+  it('does not describe a nonentity replacement as deletion of the preceding entity', () => {
+    const old: ReleaseMember = { kind: 'entity', logical_slug: 'entity/E1', member_digest: 'a'.repeat(64), access_scope: 'space',
+      payload: { entity_id: 'E1', names: ['旧实体'] } }
+    const next = { ...old, kind: 'navigation', payload: { domains: [] } }
+    const release = { id: 'r1', epoch: 1, members: [old] }
+    expect(entityReview(old.logical_slug, old, next, true, release, { ...release, members: [next] })).toBeUndefined()
+  })
+
+  it('keeps entity identity visible alongside its name after a decision without actions', () => {
+    const view = mount(ReviewPointCard, { props: {
+      row: { slug: 'entity/E1', title: '同名实体', entity: { name: '同名实体', beforeKnown: true, fields: [] },
+        beforeExists: true, before: null, after: null, quotes: [] },
+      entry: { point: { slug: 'entity/E1', kind: 'member', status: 'released', decision: null, release_id: 'r2', blocker: '' },
+        error: '', result: null }, busy: false, comparable: true, readonly: true,
+    }, global: { plugins: [createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN } })] } })
+    try {
+      expect(view.get('h3').text()).toBe('同名实体')
+      expect(view.get('[data-entity-identity]').text()).toBe('entity/E1')
+      expect(view.find('[data-point-state]').exists()).toBe(true)
+      expect(view.find('[data-point-approve]').exists()).toBe(false)
+    } finally { view.unmount() }
   })
 })

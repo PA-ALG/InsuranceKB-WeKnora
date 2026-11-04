@@ -17,13 +17,13 @@ const blocker = computed(() => props.entry.point.blocker === 'NEEDS_REBASE' ? t(
 <template>
   <article class="ek-review-change" :data-point="entry.point.slug" :aria-labelledby="`${id}-title`" :aria-busy="busy">
     <h3 :id="`${id}-title`">{{ row.title }}</h3>
+    <p v-if="row.entity" class="ek-page__meta" data-entity-identity>{{ row.slug }}</p>
     <p v-if="entry.result || readonly || status !== 'pending'" data-point-state class="ek-review-result" role="status" tabindex="-1">
       {{ entry.result?.epoch ? t('enterpriseKnowledge.review.releasedAt', { n: entry.result.epoch }) : t(`enterpriseKnowledge.review.${status}`) }}
       <span v-if="reason" class="ek-review-text"> · {{ reason }}</span>
     </p>
     <template v-else>
       <template v-if="row.entity">
-        <p class="ek-page__meta" data-entity-identity>{{ row.slug }}</p>
         <p v-if="entry.point.kind === 'removal'" class="ek-alert">{{ t('enterpriseKnowledge.review.removal') }}</p>
         <p v-if="entry.point.kind === 'removal'" data-point-before class="ek-page__meta">{{ t('enterpriseKnowledge.review.existingContent') }}</p>
         <EntityReviewChanges :change="row.entity" />

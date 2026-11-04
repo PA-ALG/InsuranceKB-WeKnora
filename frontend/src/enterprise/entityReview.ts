@@ -57,6 +57,7 @@ export function entityReview(
 ): EntityReview | undefined {
   const before = beforeKnown && old?.kind === 'entity' ? record(old.payload) : null
   const after = next?.kind === 'entity' ? record(next.payload) : null
+  if (next && !after) return undefined
   if (!before && !after) return undefined
   const identity = after ?? before!
   const name = strings(identity.names)[0] || text(identity.entity_id).trim() || slug
