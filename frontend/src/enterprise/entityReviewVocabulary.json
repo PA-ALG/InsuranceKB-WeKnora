@@ -1,0 +1,28 @@
+{
+  "version": "2026-11-04.1",
+  "fields": {
+    "/entity_id": "id",
+    "/entity_type": "type",
+    "/names": "names",
+    "/aliases": "aliases",
+    "/classification_labels": "classifications",
+    "/owner_module": "owner",
+    "/identifiers": "identifiers",
+    "/identifiers/notice": "notice",
+    "/identifiers/product_code": "productCode",
+    "/identifiers/filing_no": "filingNo",
+    "/identifiers/clause_no": "clauseNo",
+    "/lifecycle": "lifecycle",
+    "/lifecycle/sale_start": "saleStart",
+    "/lifecycle/sale_end": "saleEnd",
+    "/lifecycle/source_status": "sourceStatus",
+    "/lifecycle/basis_commit": "basisCommit",
+    "/lifecycle/basis_date": "basisDate",
+    "/product_family": "family",
+    "/product_family/key": "familyKey",
+    "/product_family/display_name": "familyName"
+  },
+  "profile_dictionaries": {
+    "/identifiers/notice": "notices"
+  }
+}

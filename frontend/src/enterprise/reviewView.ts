@@ -1,8 +1,10 @@
 import type { Release, ReviewDetail } from './enterpriseApi'
 import { entitySummaries, entityView, type FieldView } from './releaseView'
+import { entityReview, type EntityReview } from './entityReview'
 
 export interface ReviewRow {
   slug: string; title: string; beforeExists: boolean; before: FieldView | null; after: FieldView | null; quotes: string[]
+  entity?: EntityReview
 }
 
 function fields(release: Release) {
@@ -26,13 +28,19 @@ export function reviewRows(detail: ReviewDetail, release: Release | null): Map<s
   const proposed = new Map(detail.bundle_members.map(member => [member.logical_slug, member]))
   for (const member of detail.bundle_members) members.set(member.logical_slug, member)
   for (const slug of detail.bundle_removals) members.delete(slug)
-  const after = fields({ ...base, members: [...members.values()] })
+  const afterRelease = { ...base, members: [...members.values()] }
+  const entityAfterRelease = comparable ? afterRelease : { ...base, members: detail.bundle_members }
+  const after = fields(afterRelease)
   return new Map(detail.points.map(point => {
     const old = before.get(point.slug), next = after.get(point.slug)
     const evidence = proposed.get(point.slug)?.payload?.evidence
     const claim = point.kind === 'claim'
+    const entity = claim ? undefined : entityReview(point.slug,
+      comparable ? base.members.find(member => member.logical_slug === point.slug) : undefined,
+      proposed.get(point.slug), comparable, comparable ? base : { ...base, members: [] }, entityAfterRelease)
     return [point.slug, {
-      slug: point.slug, title: point.kind === 'member' ? point.slug : next?.title || old?.title || point.slug,
+      slug: point.slug, title: entity?.name ?? (point.kind === 'member' ? point.slug : next?.title || old?.title || point.slug),
+      ...(entity ? { entity } : {}),
       beforeExists: comparable && existing.has(point.slug),
       before: point.kind === 'member' ? null : old?.field ?? null,
       after: claim ? next?.field ?? null : null,
