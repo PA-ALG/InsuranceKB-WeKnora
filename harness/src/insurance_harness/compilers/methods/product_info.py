@@ -7,12 +7,13 @@ that the terms and the published product knowledge prevail.
 """
 
 import re
+import unicodedata
 from collections.abc import Sequence
 
 from insurance_harness.catalog.method_cards import MethodCards
 from insurance_harness.identity.text import fold
 
-PRODUCT_NAME_MIN_CHARS = 4  # a shorter name ("智盈") is part of too many ordinary words
+PRODUCT_NAME_MIN_CHARS = 4  # shorter registered aliases require Unicode token boundaries
 NOTICE = {"notice": "product_info"}  # the method entity's flag for SK-3's notice
 
 
@@ -22,7 +23,19 @@ def product_signals(text: str, cards: MethodCards, product_names: Sequence[str])
     found: set[str] = {
         p.signal for p in cards.product_info_patterns if re.search(p.pattern, folded)
     }
-    names = (fold(name) for name in product_names)
-    if any(len(name) >= PRODUCT_NAME_MIN_CHARS and name in folded for name in names):
+    if any(fold(term) in folded for term in cards.product_info_terms):
+        found.add("responsibility")
+    # Keep delimiters for short names; removing whitespace would both miss separated aliases
+    # and manufacture matches. Private-use layout codes are ignored just as in identity.fold.
+    bounded = "".join(
+        c for c in unicodedata.normalize("NFKC", text) if unicodedata.category(c) != "Co"
+    )
+    names = {fold(name) for name in product_names} - {""}
+    if any(
+        name in folded
+        if len(name) >= PRODUCT_NAME_MIN_CHARS
+        else re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", bounded) is not None
+        for name in names
+    ):
         found.add("product")
     return frozenset(found)
