@@ -64,9 +64,9 @@ describe('entity review projection from the paired snapshot', () => {
     expect(projected(payload({ extra: { a: 1, b: 2 } }), base(payload({ extra: { b: 2, a: 1 } }))).entity.fields).toEqual([])
     const row = projected(payload({ aliases: ['B', 'A'], extra: {}, list: [], type: { a: 'x' } }),
       base(payload({ aliases: ['A', 'B'], extra: { a: 1 }, list: ['x'], type: 'old' })))
-    expect(row.entity.fields.map(field => field.path)).toEqual(['/aliases', '/extra', '/list', '/type'])
+    expect(row.entity.fields.map(field => field.path)).toEqual(['/aliases', '/extra/a', '/list', '/type'])
     expect(row.entity.fields.find(field => field.path === '/type')?.after.value).toEqual({ a: 'x' })
-    expect(row.entity.fields.find(field => field.path === '/extra')?.after.value).toEqual({})
+    expect(row.entity.fields.find(field => field.path === '/extra/a')?.after.present).toBe(false)
   })
 
   it('expands new/deleted objects, preserves empty ones, and names a removed entity from its snapshot', () => {
@@ -105,6 +105,9 @@ describe('entity review projection from the paired snapshot', () => {
     same.bundle_members.push(profile({ old: '仅字典变化' }))
     const unchanged = reviewRows(same, release).get('entity/E1') as ReviewRow & { entity: EntityChange }
     expect(unchanged.entity.fields).toEqual([])
+    const deleted = projected(payload({ identifiers: {} }), release)
+    expect(deleted.entity.fields).toEqual([{ path: '/identifiers/notice',
+      before: { present: true, value: 'old', explanation: '旧版说明' }, after: { present: false } }])
   })
 
   it('does not treat a nonentity member as an entity merely because of its slug', () => {
