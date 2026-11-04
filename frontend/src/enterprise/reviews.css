@@ -29,3 +29,6 @@
 .ek-decided-points { margin: 24px 0; border-top: 1px solid var(--td-component-border); }
 .ek-review-batch { margin-top: 24px; }
 .ek-review-card__heading, .ek-review-change h3, .ek-review-result { overflow-wrap: anywhere; }
+.ek-entity-change { margin: 16px 0; }
+.ek-entity-change h4 { margin: 0 0 8px; font-size: 14px; overflow-wrap: anywhere; }
+.ek-entity-change pre { margin: 8px 0; font: inherit; }

@@ -97,7 +97,7 @@ describe('review points by product', () => {
     expect(removal.get('[data-point-before]').text()).toContain('60日。')
     expect(removal.find('[data-point-after]').exists() && removal.get('[data-point-after]').text().includes('60日')).toBe(false)
     const content = product.get('[data-point="entity/M1"]')
-    expect(content.text()).toContain('其他内容有更新')
+    expect(content.get('h3').text()).toBe('甲医疗') // U-3: an entity point now has its own readable name.
     expect(content.text()).toContain('entity/M1')
     expect(content.text()).not.toContain('classification_labels')
 
