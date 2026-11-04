@@ -21,11 +21,11 @@ PACKS = (
 )
 
 
-def test_the_shipped_policy_admits_no_pack() -> None:
+def test_sk5_admits_only_methods_and_keeps_product_packs_unadmitted() -> None:
     policy = load_review_policy()
-    assert policy.version == "3"
-    assert policy.policy_ref == "review-policy@3"
-    assert policy.admitted_packs == []
+    assert policy.version == "4"
+    assert policy.policy_ref == "review-policy@4"
+    assert policy.admitted_packs == ["methods_sales"]
     for pack in PACKS:
         assert not policy.admitted(pack)
         assert policy.threshold(pack, "waiting_period") is None

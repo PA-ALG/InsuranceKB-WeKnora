@@ -85,11 +85,11 @@ def test_inconsistent_cards_are_refused(change: Callable[[dict[str, Any]], None]
 @pytest.mark.parametrize(
     ("text", "signals"),
     [
-        ("保额50万元起步", {"amount"}),
-        ("保额５０万起步", {"amount"}),
+        ("保额50万元起步", {"amount", "responsibility"}),
+        ("保额５０万起步", {"amount", "responsibility"}),
         ("年缴￥3000", {"amount"}),
-        ("保费只占收入10%", {"percentage"}),
-        ("保费只占收入１０％", {"percentage"}),
+        ("保费只占收入10%", {"percentage", "responsibility"}),
+        ("保费只占收入１０％", {"percentage", "responsibility"}),
         ("百分之五的预算", {"percentage"}),
         ("适合30至45周岁客户", {"age"}),
         ("60岁以后", {"age"}),

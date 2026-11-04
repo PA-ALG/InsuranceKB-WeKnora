@@ -382,4 +382,4 @@ def test_a_method_without_product_information_has_no_notice() -> None:
     assert not [item for item in run.review_items if item.kind == ReviewKind.LINT]
     report = report_of(run, method_id)
     assert report["product_info"] is False and "CONTAINS_PRODUCT_INFO" not in report["reasons"]
-    assert "PACK_NOT_ADMITTED" in report["reasons"]
+    assert report["reasons"] == []

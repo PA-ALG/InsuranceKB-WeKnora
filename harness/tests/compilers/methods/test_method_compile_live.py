@@ -136,7 +136,7 @@ def test_live_submits_the_plan_after_writing_it_and_the_registry(
         (live.run_root / "candidate.json").read_text(encoding="utf-8")
     )
     assert bundle == planned
-    assert [plan.mode for plan in bundle.review_plan] == [ReviewMode.HUMAN]
+    assert [plan.mode for plan in bundle.review_plan] == [ReviewMode.MACHINE]
     receipt = live.receipt()
     assert set(receipt) == {"space_id", "content_sha256", "candidate_sha256", "candidate_id"}
     assert receipt["space_id"] == live.world.registry.space_id == live.platform.spaces[0]
