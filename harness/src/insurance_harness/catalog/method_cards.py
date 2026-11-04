@@ -23,6 +23,7 @@ from pydantic import (
 )
 
 from insurance_harness.catalog.trust_policy import load_trust_policy
+from insurance_harness.identity.text import fold
 
 NonBlank = Annotated[str, StringConstraints(pattern=r"\S")]
 METHOD_ROLE = "sales_method"  # the material role whose scoped fields the cards are
@@ -80,6 +81,7 @@ class MethodCards(_Strict):
     presentation: MethodPresentation
     cards: tuple[MethodCard, ...] = Field(min_length=1)
     product_info_patterns: tuple[ProductInfoPattern, ...] = Field(min_length=1)
+    product_info_terms: tuple[NonBlank, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def _consistent(self) -> "MethodCards":
@@ -91,6 +93,9 @@ class MethodCards(_Strict):
         signals = [pattern.signal for pattern in self.product_info_patterns]
         if len(set(signals)) != len(signals):
             raise ValueError("a signal is listed twice")
+        terms = [fold(term) for term in self.product_info_terms]
+        if not all(terms) or len(set(terms)) != len(terms):
+            raise ValueError("product information terms must be nonempty and distinct")
         return self
 
 

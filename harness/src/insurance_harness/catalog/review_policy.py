@@ -1,9 +1,9 @@
 """The versioned review policy: which packs go live unattended, at which scores (RV1 §3.1).
 
-Blueprint §6.3: content goes live as machine review only when its pack has passed quality admission
-and every claim's independent review score reaches the threshold for its field. Thresholds are data,
-versioned with the policy (hard boundary 8); the shipped policy admits no pack until one passes
-admission (RV3), so everything waits for people meanwhile.
+Product packs require independent scores at their configured thresholds (blueprint §6.3).
+SK-5's explicit user calibration admits only the source-supported methods pack without scores;
+its dedicated compiler checks evidence and product-information signals. Generic score routing
+does not infer eligibility from that list. Both forms of admission remain versioned data.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from pydantic import (
     StringConstraints,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
 NonBlank = Annotated[str, StringConstraints(min_length=1, pattern=r"\S")]
@@ -38,14 +39,21 @@ class ReviewPolicy(BaseModel):
 
     version: NonBlank
     admitted_packs: list[NonBlank] = Field(default_factory=list)
+    source_supported_packs: list[NonBlank] = Field(default_factory=list)
     thresholds: dict[NonBlank, PackThresholds] = Field(default_factory=dict)
 
-    @field_validator("admitted_packs")
+    @field_validator("admitted_packs", "source_supported_packs")
     @classmethod
     def no_duplicates(cls, packs: list[str]) -> list[str]:
         if len(set(packs)) != len(packs):
             raise ValueError("a pack is admitted once")
         return packs
+
+    @model_validator(mode="after")
+    def source_supported_is_admitted(self) -> ReviewPolicy:
+        if not set(self.source_supported_packs) <= set(self.admitted_packs):
+            raise ValueError("source-supported packs must be admitted")
+        return self
 
     @property
     def policy_ref(self) -> str:

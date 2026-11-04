@@ -44,12 +44,15 @@ from insurance_harness.compilers.methods.responses import (
     SavedResponses,
     is_value_directory,
 )
+from insurance_harness.compilers.methods.review import MethodReviewError
 from insurance_harness.compilers.methods.values import ValuesStopped, method_values
 from insurance_harness.compilers.methods.withdraw import WithdrawError, withdraw_method
 from insurance_harness.compilers.schema_fields.engine import CompletionPort
 from insurance_harness.compilers.wiki_pages.native import NativeWikiError, NativeWikiReader
 from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.contracts.compile import ReviewItem
+from insurance_harness.contracts.enums import ReviewMode
+from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.ingest.registry import RegistryError, load_registry, save_registry
 from insurance_harness.ingest.registry_lock import RegistryBusy, RegistryLock
@@ -72,6 +75,12 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--model", help="the model that wrote the saved answers (default: theirs)")
     run.add_argument("--run-root", type=Path, required=True)
     run.add_argument("--live", action="store_true", help="submit the planned candidate")
+    run.add_argument(
+        "--review-route",
+        choices=("all", "machine", "human"),
+        default="all",
+        help="plan all points, or one review route for staged submission",
+    )
     values = commands.add_parser("values", help="answer the value requests on a model")
     values.add_argument("--registry", type=Path, required=True)
     values.add_argument("--candidates", type=Path, required=True)
@@ -175,7 +184,19 @@ def _compile(args: argparse.Namespace, base_url: str, api_key: str) -> dict[str,
             pages=reader_from_env(),
             port=port,
             active=client.active(registry.space_id),
+            review_route=args.review_route,
         )
+        if args.live and args.review_route == "all" and run.bundle is not None:
+            modes = {
+                Claim.model_validate(m.payload).review.mode
+                for m in run.bundle.members
+                if m.kind == "claim"
+            }
+            # Removals and metadata-only changes have no Claim review label, but are manual.
+            if any(plan.mode == ReviewMode.HUMAN for plan in run.bundle.review_plan):
+                modes.add(ReviewMode.HUMAN)
+            if len(modes) > 1:
+                raise MethodReviewError("REVIEW_SELECTION_REQUIRED")
         plan = _write_plan(args.run_root, run.bundle, run.review_items, run.report)
         save_registry(run.registry, args.registry)
         summary = _summary(run)
@@ -299,8 +320,13 @@ def _withdraw(args: argparse.Namespace, base_url: str, api_key: str) -> dict[str
     return {**result.report, "candidate_id": candidate_id}
 
 
-_COMMANDS = {"compile": _compile, "values": _values, "copies": _copies,
-             "candidates": _candidates, "withdraw": _withdraw}
+_COMMANDS = {
+    "compile": _compile,
+    "values": _values,
+    "copies": _copies,
+    "candidates": _candidates,
+    "withdraw": _withdraw,
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -315,8 +341,17 @@ def main(argv: list[str] | None = None) -> int:
     except ValuesStopped as stop:
         return _emit(_stopped(stop), 2)
     except (
-        RegistryError, AdmissionError, CopiesError, WithdrawError, PlatformError,
-        PlatformCallError, SourceMapError, SourcePagesError, NativeWikiError, ResponsesError,
+        RegistryError,
+        AdmissionError,
+        CopiesError,
+        WithdrawError,
+        PlatformError,
+        PlatformCallError,
+        SourceMapError,
+        SourcePagesError,
+        NativeWikiError,
+        ResponsesError,
+        MethodReviewError,
     ) as error:
         return _emit({"stopped": error.code}, 2)
     except BundleError as error:

@@ -1,5 +1,5 @@
 {
- "version": "2026-11-01.1",
+ "version": "2026-11-04.1",
  "entity_type": "sales_method",
  "owner_module": "harness/sales_methods",
  "review_pack": "methods_sales",
@@ -55,6 +55,7 @@
    "verbatim": false
   }
  ],
+ "product_info_terms": ["理赔", "赔付", "报销", "给付", "保额", "保费", "免赔", "等待期"],
  "product_info_patterns": [
   {"signal": "amount", "pattern": "[¥$]\\d|\\d(?:[\\d,.]*\\d)?(?:[万千百亿]+元?|元)"},
   {"signal": "percentage", "pattern": "\\d(?:[\\d.]*\\d)?%|百分之[零一二三四五六七八九十百\\d]"},

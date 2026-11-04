@@ -21,7 +21,7 @@ from insurance_harness.catalog.method_cards import MethodCards, load_method_card
 from insurance_harness.catalog.review_policy import ReviewPolicy, load_review_policy
 from insurance_harness.catalog.sales_taxonomy import SalesTaxonomy, Term, load_sales_taxonomy
 from insurance_harness.changes import decide_changes
-from insurance_harness.changes.types import ChangeSet, Verdict
+from insurance_harness.changes.types import Verdict
 from insurance_harness.compilers.methods.admission import Admission, CandidateFile, admit
 from insurance_harness.compilers.methods.claims import (
     COMPILER,
@@ -39,6 +39,14 @@ from insurance_harness.compilers.methods.parse import MethodResponseError, parse
 from insurance_harness.compilers.methods.profile import method_profile, profile_needed
 from insurance_harness.compilers.methods.prompt import build_method_request, offered_labels
 from insurance_harness.compilers.methods.responses import ResponseMissing
+from insurance_harness.compilers.methods.review import (
+    PRODUCT_INFO,
+    MethodReviewError,
+    ReviewSelection,
+    claim_route,
+    reviewed_claim,
+    selected,
+)
 from insurance_harness.compilers.schema_fields.engine import CompletionPort
 from insurance_harness.compilers.schema_fields.prompt import JudgeLikeRequest
 from insurance_harness.contracts.bundle import CandidateBundle, ReviewPlan
@@ -49,9 +57,6 @@ from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.ingest.method_registry import MethodEntry, MethodLink, valid_links
 from insurance_harness.ingest.registry import V2, ProductRegistry, RegistryError
 from insurance_harness.ingest.source_map import PageReader
-from insurance_harness.review.routing import Route, labelled, route
-
-PRODUCT_INFO = "CONTAINS_PRODUCT_INFO"
 
 
 @dataclass(frozen=True)
@@ -73,10 +78,12 @@ class _Run:
     policy: ReviewPolicy
     taxonomy: SalesTaxonomy
     cache: MaterialCache
+    selection: ReviewSelection
     claims: list[Claim] = field(default_factory=list)
     entities: list[Entity] = field(default_factory=list)
     removals: list[str] = field(default_factory=list)
     reviews: list[ReviewItem] = field(default_factory=list)
+    manual_metadata: bool = False
 
 
 def compile_methods(
@@ -89,8 +96,11 @@ def compile_methods(
     cards: MethodCards | None = None,
     policy: ReviewPolicy | None = None,
     taxonomy: SalesTaxonomy | None = None,
+    review_route: ReviewSelection = "all",
 ) -> MethodRun:
     """Admit the candidates and compile every method of a v2 registry against `active`."""
+    if review_route not in {"all", "machine", "human"}:
+        raise MethodReviewError("REVIEW_SELECTION_INVALID")
     updated, admission = admitted_registry(registry, candidates)
     run = _Run(
         registry=updated,
@@ -100,6 +110,7 @@ def compile_methods(
         policy=policy or load_review_policy(),
         taxonomy=taxonomy or load_sales_taxonomy(),
         cache=MaterialCache(pages, updated.space_id, updated.method_uses),
+        selection=review_route,
     )
     reports = [_method(run, method) for method in updated.methods]
     bundle = None
@@ -108,13 +119,23 @@ def compile_methods(
         # members and whenever the cards change it; a removal-only candidate needs none.
         profile = method_profile(run.cards)
         carried = (run.claims or run.entities) and profile_needed(profile, active)
+        human = (
+            run.manual_metadata
+            or bool(run.removals)
+            or any(claim.review.mode == ReviewMode.HUMAN for claim in run.claims)
+        )
         bundle = assemble(
             run.claims,
             compiler_identity=f"{COMPILER}@{compiler_version(run.cards)}",
             base=active.head if active else None,
             entities=run.entities,
             profiles=[profile] if carried else [],
-            review_plan=[ReviewPlan(mode=ReviewMode.HUMAN, policy_ref=None)],
+            review_plan=[
+                ReviewPlan(
+                    mode=ReviewMode.HUMAN if human else ReviewMode.MACHINE,
+                    policy_ref=None if human else run.policy.policy_ref,
+                )
+            ],
             removals=sorted(run.removals),
         )
     report = {
@@ -123,6 +144,8 @@ def compile_methods(
         "members": len(bundle.members) if bundle else 0,
         "removals": len(bundle.removals) if bundle else 0,
         "no_changes": bundle is None,
+        "review_route": review_route,
+        "policy_ref": run.policy.policy_ref,
     }
     return MethodRun(updated, bundle, report, tuple(run.reviews))
 
@@ -168,9 +191,14 @@ def _method(run: _Run, method: MethodEntry) -> dict[str, Any]:
     entry: dict[str, Any] = {"method_id": method.method_id, "status": "skipped", "code": None}
     links = valid_links(method, run.registry.method_uses)
     if method.suppressed or not links:
-        removals = published_members(run.active, method.method_id)
-        run.removals.extend(removals)
-        return {**entry, "status": "retired", "removals": len(removals)}
+        retired = published_members(run.active, method.method_id)
+        if run.selection != "machine":
+            run.removals.extend(retired)
+        return {
+            **entry,
+            "status": "retired",
+            "removals": len(retired) if run.selection != "machine" else 0,
+        }
     try:
         paragraphs, labels, request = method_request(
             method, links, run.cache, run.cards, run.taxonomy
@@ -194,24 +222,50 @@ def _method(run: _Run, method: MethodEntry) -> dict[str, Any]:
     changes = decide_changes(
         run.active, method.method_id, content.claims, {link.knowledge_id for link in links}
     )
-    # The notice and the routing follow what Active shows once this delta is activated: a kept or
-    # conflicting old Claim stays published, and so does its product information (#516 R1).
-    signals = claim_signals(_in_force(run.active, method.method_id, changes), run.cards, names)
+    # First route the planned in-force set (including KEEP/CONFLICT old facts), then project only
+    # selected changes. A human fact excluded from the machine phase must not enter its entity.
+    proposed = _in_force(run.active, method.method_id, changes.members, changes.removals)
+    proposed_signals = claim_signals(proposed, run.cards, names)
+    verdicts = {item.logical_key: item.verdict for item in changes.items}
+    routes = {
+        claim.logical_key: claim_route(
+            claim,
+            cards=run.cards,
+            policy=run.policy,
+            links=links,
+            verdict=verdicts[claim.logical_key],
+            signals=proposed_signals.get(claim.logical_key, ()),
+        )
+        for claim in proposed
+    }
+    members = [
+        reviewed_claim(claim, routes[claim.logical_key])
+        for claim in changes.members
+        if selected(routes[claim.logical_key], run.selection)
+    ]
+    removals = changes.removals if run.selection != "machine" else ()
+    effective = _in_force(run.active, method.method_id, members, removals)
+    signals = claim_signals(effective, run.cards, names)
     records = {use.triple: use for use in run.registry.method_uses}
     categories = {label for link in links for label in records[link.triple].categories}
     entity = method_entity(method, categories, content.labels, bool(signals), run.cards)
-    review = _route(run, changes.members, bool(signals))
-    run.claims.extend(labelled(changes.members, review, None))
-    run.removals.extend(changes.removals)
-    if _changed(run.active, entity):
+    run.claims.extend(members)
+    run.removals.extend(removals)
+    metadata_only = not changes.members and not changes.removals and run.selection != "machine"
+    if (members or removals or metadata_only) and _changed(run.active, entity):
         run.entities.append(entity)
-    run.reviews.extend(changes.review_items)
+        run.manual_metadata |= metadata_only
+    if run.selection != "machine":
+        run.reviews.extend(changes.review_items)
     run.reviews.extend(
         _lint(claim, signals[claim.logical_key])
-        for claim in changes.members
+        for claim in members
         if claim.logical_key in signals
     )
     counts = Counter(item.verdict.value for item in changes.items)
+    reasons = {reason for route in routes.values() for reason in route.reasons}
+    if signals:
+        reasons.add(PRODUCT_INFO)
     return {
         **entry,
         "status": "compiled",
@@ -221,27 +275,36 @@ def _method(run: _Run, method: MethodEntry) -> dict[str, Any]:
         "product_info": bool(signals),
         "counts": {verdict.value: counts[verdict.value] for verdict in Verdict},
         "conflicts": [i.logical_key for i in changes.items if i.verdict == Verdict.CONFLICT],
-        "reasons": list(review.reasons),
-        "removals": len(changes.removals),
+        "reasons": sorted(reasons),
+        "removals": len(removals),
+        "proposed_points": [
+            {
+                "logical_key": claim.logical_key,
+                "mode": routes[claim.logical_key].mode.value,
+                "reasons": list(routes[claim.logical_key].reasons),
+                "signals": sorted(proposed_signals.get(claim.logical_key, ())),
+                "selected": any(m.logical_key == claim.logical_key for m in members),
+            }
+            for claim in proposed
+        ],
+        "effective_points": [
+            {
+                "logical_key": claim.logical_key,
+                "state": claim.state.value,
+                "signals": sorted(signals.get(claim.logical_key, ())),
+            }
+            for claim in effective
+        ],
+        "effective_counts": {
+            **dict(Counter(c.state.value for c in effective)),
+            "product_info": len(signals),
+        },
     }
 
 
-def _route(run: _Run, claims: Sequence[Claim], product_info: bool) -> Route:
-    """People decide: the pack is not admitted (SK-0 §5.2 (5)), and a method showing product
-    information never goes live unattended, whatever a future admission says (§4.5)."""
-    pack = run.cards.review_pack
-    routed = route(
-        claims,
-        admitted=run.policy.admitted(pack),
-        threshold=lambda predicate: run.policy.threshold(pack, predicate),
-        scores=None,  # SK-2a has no independent review; machine review needs one
-        policy_ref=run.policy.policy_ref,
-    )
-    reasons = {*routed.reasons, *([PRODUCT_INFO] if product_info else [])}
-    return Route(mode=ReviewMode.HUMAN, policy_ref=None, reasons=tuple(sorted(reasons)))
-
-
-def _in_force(active: Release | None, method_id: str, changes: ChangeSet) -> list[Claim]:
+def _in_force(
+    active: Release | None, method_id: str, members: Sequence[Claim], removals: Sequence[str]
+) -> list[Claim]:
     """The method's Claims once the delta is activated: Active's, replaced by the members,
     without the removals (decide_changes has already validated every Active payload)."""
     claims = {
@@ -251,8 +314,8 @@ def _in_force(active: Release | None, method_id: str, changes: ChangeSet) -> lis
         and isinstance(member.payload, dict)
         and member.payload.get("subject_ref") == method_id
     }
-    claims.update({claim.logical_key: claim for claim in changes.members})
-    for slug in changes.removals:
+    claims.update({claim.logical_key: claim for claim in members})
+    for slug in removals:
         claims.pop(slug, None)
     return list(claims.values())
 

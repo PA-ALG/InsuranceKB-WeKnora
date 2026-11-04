@@ -37,7 +37,7 @@ def method_report(run: Any) -> dict[str, Any]:
     return report  # type: ignore[no-any-return]
 
 
-def test_the_first_publish_adds_every_claim_and_goes_to_people() -> None:
+def test_the_first_publish_adds_every_supported_clean_claim_for_machine_review() -> None:
     world = World()
     run = compiled(
         world,
@@ -47,9 +47,11 @@ def test_the_first_publish_adds_every_claim_and_goes_to_people() -> None:
     report = method_report(run)
     assert report["counts"]["add"] == 5 and report["status"] == "compiled"
     assert run.bundle is not None and run.bundle.base_release_id is None
-    assert [(p.mode, p.policy_ref) for p in run.bundle.review_plan] == [(ReviewMode.HUMAN, None)]
-    assert all(c.review.mode == ReviewMode.HUMAN for c in claims_of(run.bundle).values())
-    assert "PACK_NOT_ADMITTED" in report["reasons"]
+    assert [(p.mode, p.policy_ref) for p in run.bundle.review_plan] == [
+        (ReviewMode.MACHINE, "review-policy@4")
+    ]
+    assert all(c.review.mode == ReviewMode.MACHINE for c in claims_of(run.bundle).values())
+    assert report["reasons"] == []
     assert run.bundle.compiler_identity.startswith("sales_methods@")
 
 
