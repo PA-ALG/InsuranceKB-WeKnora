@@ -93,7 +93,7 @@ def step_two(completion: Completion) -> tuple[str, dict[str, Any]]:
 
 
 def test_the_value_protocol_moves_to_2026_10_29_4() -> None:
-    assert prompt.VALUE_PROTOCOL_VERSION == "2026-10-29.4"
+    assert prompt.VALUE_PROTOCOL_VERSION == "2026-11-05.1"
 
 
 def test_a_carried_field_shows_step_two_its_reviewed_value_and_segments() -> None:

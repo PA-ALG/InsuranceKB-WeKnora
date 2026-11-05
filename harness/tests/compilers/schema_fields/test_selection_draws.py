@@ -289,7 +289,7 @@ def test_the_protocol_version_and_production_draws() -> None:
     # S12c-7 moved the value protocol to 2026-10-29.2 (document roles in step two); S12c-6b to
     # 2026-10-29.3 when the production compile went back to one step-one draw;
     # S12c-8 to 2026-10-29.4 (a recompile's step two sees the reviewed value).
-    assert prompt.VALUE_PROTOCOL_VERSION == "2026-10-29.4"
+    assert prompt.VALUE_PROTOCOL_VERSION == "2026-11-05.1"
     assert SELECTION_DRAWS == 1
 
 

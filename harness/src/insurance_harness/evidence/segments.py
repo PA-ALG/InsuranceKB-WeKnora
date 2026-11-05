@@ -23,7 +23,7 @@ from collections.abc import Mapping, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from insurance_harness.catalog.trust_policy import load_trust_policy
+from insurance_harness.catalog.trust_policy import TrustPolicy, load_trust_policy
 from insurance_harness.contracts.enums import LocatorKind
 from insurance_harness.contracts.knowledge import Locator
 from insurance_harness.evidence.office_pages import OfficeBlock, OfficePageText
@@ -35,6 +35,7 @@ from insurance_harness.evidence.quote_verification import (
     QuoteMatch,
     VerifiedQuote,
 )
+from insurance_harness.evidence.rate_notes import numeric_row, restricted_regions
 
 MAX_CHARS = 300
 COPY_MIN_CHARS = 20  # shorter passages ("本合同终止。") repeat everywhere and prove nothing
@@ -55,7 +56,6 @@ _MARKER_CHARS = "●○■◆▪•◦►▶➢➤"
 _MARKER_RANGES = ((0xE000, 0xF8FF), (0x2460, 0x2473), (0x2776, 0x277F), (0x24EB, 0x24F4))
 _MARKER = re.compile(r"^[ \t\u3000]*(?P<mark>\S)[ \t\u3000]+\S")
 _LINE_BREAK = re.compile(r"\s*\n\s*")
-_NUMBER = re.compile(r"^[+-]?\d+(?:[.,]\d+)*%?$")
 
 
 def header_block(text: str) -> tuple[int, int] | None:
@@ -64,7 +64,7 @@ def header_block(text: str) -> tuple[int, int] | None:
     position = end = 0
     for line in text.splitlines(keepends=True):
         tokens = line.split()
-        if len(tokens) >= 2 and all(_NUMBER.fullmatch(token) for token in tokens):
+        if numeric_row(line):
             return (start, end) if start < end else None
         if tokens:
             end = position + len(line.rstrip())
@@ -194,15 +194,6 @@ def _split_ranges(
     return out
 
 
-def _clip(ranges: list[tuple[int, int]], text: str) -> list[tuple[int, int]]:
-    """The parts of the ranges inside the page's header block (S4j), if it has one."""
-    block = header_block(text)
-    if block is None:
-        return []
-    clipped = [(max(a, block[0]), min(b, block[1])) for a, b in ranges]
-    return [(a, b) for a, b in clipped if a < b]
-
-
 def _squeeze(text: str) -> tuple[str, list[int]]:
     """Width-folded text without whitespace, plus each kept character's original offset."""
     kept, offsets = [], []
@@ -263,7 +254,11 @@ class SegmentedSource:
         digests: dict[str, str] = {}
         seen: set[tuple[str, int]] = set()
         segments: list[Segment] = []
-        scoped = load_trust_policy().scoped_roles()
+        policy = load_trust_policy()
+        scoped = policy.scoped_roles()
+        self._regions: dict[tuple[str, int], list[tuple[int, int]]] = {}
+        self._region_of: dict[str, int] = {}
+        self._kind_of: dict[str, str] = {}
         self._block_of: dict[str, int] = {}  # an Office segment's block, by its index on the page
         for page in self.pages:
             if (page.document, page.page) in seen:
@@ -278,11 +273,18 @@ class SegmentedSource:
             blocks = self._blocks.get((page.document, page.page))
             ranges = [(0, len(page.text))] if blocks is None else [(b.start, b.end) for b in blocks]
             restricted = self.header_role(page.document)
+            regions = [(i, a, b, "scoped") for i, (a, b) in enumerate(ranges)]
             if restricted is not None and restricted not in scoped:
-                ranges = _clip(ranges, page.text)  # a header role serves its header block only
+                regions = restricted_regions(
+                    ranges, page.text, header_block(page.text), *policy.note_layout(restricted)
+                )
+            ranges = [(a, b) for _, a, b, _ in regions]
+            self._regions[(page.document, page.page)] = ranges
             for index, segment in _split_ranges(page, number, ranges):
+                self._region_of[segment.id] = index
+                self._kind_of[segment.id] = regions[index][3]
                 if blocks is not None:
-                    self._block_of[segment.id] = index
+                    self._block_of[segment.id] = regions[index][0]
                 segments.append(segment)
         self.segments = tuple(segments)
         # The "D<n>" prefix of each document's segment ids, in reading order.
@@ -296,6 +298,23 @@ class SegmentedSource:
         """The restricted role of a document (a header or a scoped role, read through
         table_headers), or None for ordinary/unknown documents."""
         return self._header_roles.get(document)
+
+    def permits(self, field_key: str, segment_id: str, policy: TrustPolicy | None = None) -> bool:
+        """One field's permission for this exact segment, shared by compile/publish/score."""
+        segment = self.segments[self._position[segment_id]]
+        role = self.header_role(segment.document)
+        if role is None:
+            return True
+        policy = policy or load_trust_policy()
+        kind = self._kind_of[segment_id]
+        fields = (
+            policy.note_fields(role)
+            if kind == "note"
+            else policy.header_fields(role)
+            if kind == "header"
+            else policy.restricted_fields(role)
+        )
+        return field_key in fields
 
     def listing(self) -> str:
         """One line per segment: the id, a space, and the text with line breaks folded."""
@@ -352,6 +371,7 @@ class SegmentedSource:
                 segment is None
                 or (segment.document, segment.page) != (run[-1].document, run[-1].page)
                 or self._position[segment.id] != self._position[run[-1].id] + 1
+                or self._region_of[segment.id] != self._region_of[run[-1].id]
                 or self._block_of.get(segment.id) != self._block_of.get(run[-1].id)
             ):
                 page = self._pages[(run[0].document, run[0].page)]
@@ -414,6 +434,10 @@ class SegmentedSource:
         if at < 0 or haystack.find(needle, at + 1) >= 0:
             return set()
         first, last = offsets[at], offsets[at + len(needle) - 1] + 1
+        if self.header_role(document) is not None and not any(
+            a <= first and last <= b for a, b in self._regions[(document, page)]
+        ):
+            return set()
         return {
             s.id
             for s in self.segments
