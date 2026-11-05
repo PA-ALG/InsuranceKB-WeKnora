@@ -88,7 +88,9 @@ def _requests(
         }
         for point in product.points
     ]
-    materials = [{"document": m.document, "file": m.file} for m in product.materials]
+    materials = [
+        {"document": m.document, "file": m.file, "role": m.role} for m in product.materials
+    ]
     return [
         JudgeRequest(
             system,

@@ -29,6 +29,9 @@ class FieldDefinition(BaseModel):
     # from an entity identifier: to_candidate then requires the explicit pack.
     pack_id: str = ""
     semantic_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    # Complete catalog inventory, before extraction filtering or batching. None means unknown,
+    # not "this pack has no dedicated sibling field" (S12c-12a).
+    pack_fields: tuple[str, ...] | None = None
 
 
 class _CatalogField(FieldDefinition):
@@ -76,6 +79,13 @@ def pack_definitions(
         if not only_source_extractable or "原文抽取" in (field.formation_method or "")
     ]
     return [
-        FieldDefinition.model_validate({**field.model_dump(), "ordinal": index, "pack_id": pack_id})
+        FieldDefinition.model_validate(
+            {
+                **field.model_dump(),
+                "ordinal": index,
+                "pack_id": pack_id,
+                "pack_fields": tuple(item.field_key for item in packs[pack_id].fields),
+            }
+        )
         for index, field in enumerate(fields)
     ]
