@@ -109,8 +109,7 @@ def _forbidden(
     """Restricted segments the field may not use: a header or scoped role serves only its fields."""
     return {
         segment.id for segment in source.ordered(ids)
-        if (role := source.header_role(segment.document)) is not None
-        and field_key not in policy.restricted_fields(role)
+        if not source.permits(field_key, segment.id, policy)
     }
 
 

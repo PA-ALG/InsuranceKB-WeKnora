@@ -156,20 +156,30 @@ def remap_golden(
         for quote in field.evidence:
             old = _check(quote, previous, snapshot)
             role = current.header_role(old.document)
-            header = role is not None and field.field_key in policy.header_fields(role)
             key = (old.document, old.page)
-            block = header_block(snapshot[key].text) if header else None
-            if quote.document in excluded and not (
-                block is not None and old.start < block[1] and block[0] < old.end
-            ):
+            block = header_block(snapshot[key].text)
+            header = (
+                role is not None
+                and field.field_key in policy.header_fields(role)
+                and block is not None
+                and old.start < block[1]
+                and block[0] < old.end
+            )
+            hits = [
+                s
+                for s in on_page.get(key, [])
+                if current.permits(field.field_key, s.id)
+                and (
+                    (block is not None and block[0] <= s.start and s.end <= block[1])
+                    if header
+                    else (s.start < old.end and old.start < s.end)
+                )
+            ]
+            if quote.document in excluded and not hits:
                 removed += 1
                 if field.field_key not in cited:
                     cited.append(field.field_key)
                 continue
-            hits = [
-                s for s in on_page.get(key, [])
-                if header or (s.start < old.end and old.start < s.end)
-            ]
             if not hits:
                 raise RemapError("UNMAPPED")
             if header and field.field_key not in restored:

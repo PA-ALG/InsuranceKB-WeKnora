@@ -1,6 +1,11 @@
 {
- "version": "2026-11-01.1",
+ "version": "2026-11-05.1",
  "header_rules": [{"role": "rate_table", "fields": ["premium_payment_term"]}],
+ "note_rules": [{
+  "role": "rate_table", "fields": ["premium_payment_term", "premium_payment_frequency"],
+  "markers": ["注", "注释", "说明"],
+  "title_endings": ["保险", "保险条款", "费率表", "现金价值表", "产品说明书"]
+ }],
  "scoped_rules": [
   {
    "role": "sales_training",

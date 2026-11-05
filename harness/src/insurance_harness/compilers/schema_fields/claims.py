@@ -167,6 +167,8 @@ def _evidence(
     # segments step two used.
     wanted = [*field.segment_ids, *field.carried_segment_ids, *field.recalled_segment_ids]
     ids, dropped = source.resolve(wanted)
+    if any(not source.permits(field.field_key, sid, policy) for sid in ids):
+        raise BundleError("EVIDENCE_ROLE_NOT_TRUSTED", index)
     spans = source.spans(ids) if ids and not dropped and ids == wanted else []
     if (
         not spans
