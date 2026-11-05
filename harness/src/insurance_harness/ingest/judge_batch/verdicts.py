@@ -11,16 +11,18 @@ give the same verdicts.
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from insurance_harness.eval.judge import JudgeProtocolError
-from insurance_harness.eval.judge_files import FileJudgeClient, stored_requests
+from insurance_harness.eval.judge_files import stored_requests
 from insurance_harness.ingest.judge_batch.manifest import check_run_root, check_sessions, write_json
 from insurance_harness.ingest.judge_batch.points import JudgeBatchError
 from insurance_harness.ingest.judge_batch.sessions import prompt
+from insurance_harness.models.run_files import IntegrityError, read_regular
 
 _KEYS = ("slug", "verdict", "category", "reason")
 
@@ -92,24 +94,33 @@ def _answer(
 
 
 def _session_rows(
-    session_dir: Path, model: str, categories: set[str], approve: str
+    session_dir: Path,
+    response_dir: Path,
+    expected: dict[str, str],
+    categories: set[str],
+    approve: str,
 ) -> list[tuple[str, dict[str, Any]]]:
+    # Questions come from trusted templates, never from the judge-writable attempt.
     try:
         requests = stored_requests(session_dir)
     except JudgeProtocolError:
         raise JudgeBatchError("REQUEST_CHANGED") from None
-    client = FileJudgeClient(session_dir, model_id=model)
     rows: list[tuple[str, dict[str, Any]]] = []
-    for request in requests:
+    for number, request in enumerate(requests, 1):
+        name = f"{number:03d}.json"
         try:
-            raw = client.complete(request)
-        except JudgeProtocolError:
-            # The requests matched the manifest, so only the answer can be missing or unreadable.
-            raise JudgeBatchError("ANSWER_MISSING") from None
+            raw = read_regular(response_dir / name)
+            if raw is None:
+                raise JudgeBatchError("ANSWER_MISSING")
+            if hashlib.sha256(raw).hexdigest() != expected.get(name):
+                raise JudgeBatchError("REVIEW_RECORD_INVALID")
+            text = raw.decode("utf-8")
+        except (IntegrityError, UnicodeError):
+            raise JudgeBatchError("ANSWER_INVALID") from None
         question = json.loads(request.user)
-        for row in _answer(raw, question["points"], categories, approve):
+        for row in _answer(text, question["points"], categories, approve):
             rows.append((question["product"], row))
-    if client.unconsumed():
+    if set(expected) != {f"{i:03d}.json" for i in range(1, len(requests) + 1)}:
         raise JudgeBatchError("COVERAGE_MISMATCH")
     return rows
 
@@ -131,10 +142,12 @@ def ingest(run_root: Path) -> dict[str, Any]:
     for session, entry in sorted(plan["sessions"].items()):
         try:
             answered = _session_rows(
+                run_root / "sessions" / session,
                 workspace(
                     run_root, {"session": session, "attempt": verified_sessions[session]["attempt"]}
-                ),
-                plan["model"],
+                )
+                / "responses",
+                verified_sessions[session]["answers"],
                 categories,
                 approve,
             )

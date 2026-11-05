@@ -212,3 +212,25 @@ def test_failed_process_with_truncated_events_can_use_new_known_attempt(
     calls = fake_run(monkeypatch, "fresh-after-failure")
     assert execution.execute(world["run_root"], "s01", retry=True)["status"] == "complete"
     assert len(calls) == 1 and len(execution.ledger(world["run_root"])) == 2
+
+
+def test_answer_changed_after_receipt_check_is_rejected_before_verdict_writes(
+    world: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared(world)
+    fake_run(monkeypatch, "one")
+    execution.execute(world["run_root"], "s01")
+    original = execution.proof
+
+    def changed(root: Path) -> dict[str, dict[str, Any]]:
+        result = original(root)
+        answer = next((root / "attempts").rglob("responses/001.json"))
+        data = json.loads(answer.read_text())
+        data["points"][0]["reason"] = "changed after check"
+        answer.write_text(json.dumps(data))
+        return result
+
+    monkeypatch.setattr(execution, "proof", changed)
+    with pytest.raises(JudgeBatchError):
+        ingest(world["run_root"])
+    assert not (world["run_root"] / "verdicts").exists()
