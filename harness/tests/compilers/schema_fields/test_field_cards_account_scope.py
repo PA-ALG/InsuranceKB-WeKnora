@@ -41,7 +41,7 @@ def definition(key: str) -> FieldDefinition:
 
 
 def test_the_cards_carry_the_s12c10_version() -> None:
-    assert cards_version() == "draft-2026-10-31b"
+    assert cards_version() == "draft-2026-11-05a"
 
 
 def test_the_account_writing_rule_reaches_step_two_only() -> None:
