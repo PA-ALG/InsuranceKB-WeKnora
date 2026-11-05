@@ -49,7 +49,10 @@ def stage(root: Path, *, approve: bool = False) -> None:
             kwargs["stdout"].write(("\n".join(json.dumps(e) for e in events) + "\n").encode())
             return subprocess.CompletedProcess(args, 0)
 
-        with patch.object(execution, "probe"), patch("insurance_harness.ingest.judge_batch.execution.subprocess.run", run):
+        with (
+            patch.object(execution, "probe"),
+            patch("insurance_harness.ingest.judge_batch.execution.subprocess.run", run),
+        ):
             execution.execute(root, session)
 
 
