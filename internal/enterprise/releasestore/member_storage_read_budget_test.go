@@ -32,7 +32,7 @@ type storageTiming struct {
 }
 
 func TestPostgresMemberStorageReadBudget(t *testing.T) {
-	for _, n := range []int{3600, 37500} {
+	for _, n := range storageAcceptanceScale(t).sizes {
 		t.Run(fmt.Sprint(n), func(t *testing.T) {
 			db := memberStorageDB(t)
 			referenceFixtureScope(t, db)

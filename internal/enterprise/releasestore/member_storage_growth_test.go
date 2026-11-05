@@ -98,13 +98,14 @@ func logicalStorageBytes(t *testing.T, db *gorm.DB) storageBytes {
 func TestPostgresMemberStorageGrowthIndependentOfRemotePopulation(t *testing.T) {
 	type delta struct{ content, chunk, root int64 }
 	var measured []delta
-	for _, n := range []int{3600, 37500} {
+	scale := storageAcceptanceScale(t)
+	for _, n := range scale.sizes {
 		t.Run(fmt.Sprint(n), func(t *testing.T) {
 			db := memberStorageDB(t)
 			referenceFixtureScope(t, db)
 			store := New(db, testSpaces(t))
 			// The larger version extends an identical prefix through ordinary publication.
-			base := make([]release.Member, 3600)
+			base := make([]release.Member, scale.sizes[0])
 			for i := range base {
 				base[i] = paddedStorageMember(t, i, 0)
 			}
@@ -117,7 +118,7 @@ func TestPostgresMemberStorageGrowthIndependentOfRemotePopulation(t *testing.T) 
 				storagePublish(t, store, "append-remote", base)
 			}
 			before := logicalStorageBytes(t, db)
-			for i := 500; i < 625; i++ {
+			for i := scale.localStart; i < scale.localStart+125; i++ {
 				base[i] = paddedStorageMember(t, i, 1)
 			}
 			storagePublish(t, store, "same-local-change", base)
@@ -131,8 +132,8 @@ func TestPostgresMemberStorageGrowthIndependentOfRemotePopulation(t *testing.T) 
 	require.Len(t, measured, 2)
 	require.Equal(t, measured[0].content, measured[1].content)
 	require.Equal(t, measured[0].chunk, measured[1].chunk)
-	require.LessOrEqual(t, measured[1].root-measured[0].root, int64(42192))
-	t.Logf("3600/37500 additions: %+v", measured)
+	require.LessOrEqual(t, measured[1].root-measured[0].root, scale.rootDeltaLimit)
+	t.Logf("sizes=%v local125 additions=%+v root-delta-limit=%d", scale.sizes, measured, scale.rootDeltaLimit)
 }
 
 func oldSerializedWidths(t *testing.T, db *gorm.DB) (memberColumns, prepItem int64) {
@@ -150,7 +151,7 @@ func oldSerializedWidths(t *testing.T, db *gorm.DB) (memberColumns, prepItem int
 	return out.Fields + 2*int64(len("rel_"+strings.Repeat("x", 32))) + 1 + int64(len("group/000000")), out.Item
 }
 
-func TestPostgresMemberStorageSixHundredColdHistoriesAndStructureBudget(t *testing.T) {
+func TestPostgresMemberStorageColdHistoriesAndStructureBudget(t *testing.T) {
 	db := memberStorageDB(t)
 	referenceFixtureScope(t, db)
 	store := New(db, testSpaces(t))
@@ -160,6 +161,7 @@ func TestPostgresMemberStorageSixHundredColdHistoriesAndStructureBudget(t *testi
 		n         int
 		revisions [300]int
 	}
+	scale := storageAcceptanceScale(t)
 	var versions []version
 	var revisions [300]int
 	var members []release.Member
@@ -177,15 +179,15 @@ func TestPostgresMemberStorageSixHundredColdHistoriesAndStructureBudget(t *testi
 			checkStorageResourceBudget(t, db)
 		}
 	}
-	for product := 0; product < 300; product++ {
+	for product := 0; product < scale.products; product++ {
 		for field := 0; field < 125; field++ {
 			members = append(members, paddedStorageMember(t, product*125+field, 0))
 		}
 		publish(fmt.Sprintf("append-%03d", product))
 	}
 	for round := 0; round < 10; round++ {
-		for j := 0; j < 30; j++ {
-			product := (round*30 + j) % 300
+		for j := 0; j < scale.updatedPerRound; j++ {
+			product := (round*scale.updatedPerRound + j) % scale.products
 			revisions[product]++
 			for field := 0; field < 125; field++ {
 				i := product*125 + field
@@ -194,7 +196,7 @@ func TestPostgresMemberStorageSixHundredColdHistoriesAndStructureBudget(t *testi
 			publish(fmt.Sprintf("round-%02d-%03d", round, product))
 		}
 	}
-	require.Len(t, versions, 600)
+	require.Len(t, versions, scale.products+10*scale.updatedPerRound)
 	b := logicalStorageBytes(t, db)
 	structure := b.Chunks + b.Roots + b.Mappings + b.Control
 	require.LessOrEqual(t, 10*structure, b.Contents, "count every structural logical column, not only blobs")
@@ -224,9 +226,9 @@ func TestPostgresMemberStorageSixHundredColdHistoriesAndStructureBudget(t *testi
 		require.Equal(t, expected, snapshots)
 	}
 	checkStorageResourceBudget(t, db)
-	t.Logf("600 releases: content=%d structural=%d (chunks=%d roots=%d mappin"+
+	t.Logf("%d releases: content=%d structural=%d (chunks=%d roots=%d mappin"+
 		"gs=%d control=%d); actual legacy columns=%d preparation-array-tex"+
-		"t=%d", b.Contents, structure, b.Chunks, b.Roots, b.Mappings, b.Control, oldMemberBytes, oldPreparationBytes)
+		"t=%d", len(versions), b.Contents, structure, b.Chunks, b.Roots, b.Mappings, b.Control, oldMemberBytes, oldPreparationBytes)
 }
 
 func mustStorageScope(t *testing.T) types.WikiReleaseScope {

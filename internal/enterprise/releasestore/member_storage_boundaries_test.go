@@ -65,11 +65,16 @@ func TestPostgresMemberStorageLocalBoundariesAndScatteredChanges(t *testing.T) {
 		db := memberStorageDB(t)
 		referenceFixtureScope(t, db)
 		store := New(db, testSpaces(t))
-		base := storageMembers(t, 37500, 0)
+		scale := storageAcceptanceScale(t)
+		base := storageMembers(t, scale.sizes[1], 0)
 		first := storagePublish(t, store, "scatter-first", base)
 		old := rootChunks(t, db, first.ID)
 		for j := 0; j < 125; j++ {
-			i := j * 299
+			stride := 299
+			if scale.sizes[1] == 3750 {
+				stride = 30
+			}
+			i := j * stride
 			base[i].Payload = []byte(`{"value":9}`)
 			base[i].MemberDigest = memberDigest(t, string(base[i].Payload))
 		}
