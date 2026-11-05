@@ -1,13 +1,15 @@
 # ST-1 · Release 成员与准备记录存储
 
-> 第1步调查与设计，**待 Claude 确认**。Refs #550；Codex 调查/拟实施，Claude 审核。
+> r2，基于 `ac1bb1a1e` 修订 M1–M3，**待 Claude 明确确认后才进 RED**。Refs #550。
+> Codex 文档修订/拟实施，Claude 审核；本轮仍只有文档。
 > 本提交不含 RED、运行时代码、迁移或合同变更，不是上线/清理许可。
 > 依据：蓝图 §5.1「成员内容寻址」、§6.2/6.5、§7.4/7.5、§12；S4c-2a/2b-1/2b-2、S3i、S8b。
 > 调查源码固定于 `76f06b695`；目录 `.worktrees/st1`，分支 `slice/st1`。
 
 ## 1. 结论与证据边界
 
-推荐 **(a) 完整成员内容寻址 + (b) 激活准备记录引用同一不可变成员集合**，不采用 (c) 历史成员按年龄删除。
+已确认采用 **(a) 完整成员内容寻址 + (b) 准备记录引用**，不采用(c)年龄历史GC。
+r2 将集合改为**共享内容块 + 小型块列表**，取代 r1 全量逐成员引用表；未改已确认的身份/隔离/历史方向。
 不是拿 payload digest 去合并“同文”，不是删准备记录整行，也不是把历史 Release 改成当前 Head。
 
 容量基线为 [#547 报告](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/547#issuecomment-6659202624)
@@ -26,9 +28,9 @@
 `row_bytes` 是旧聚合的行尺寸口径，不能冒充原始 payload 或关系物理大小。`pg_stat` 的 rows_est
 不是上述精确 count；ready 与 Release 数的差值也不能证明哪些记录可删。
 
-本轮两次必要轻量聚合尝试在连接阶段 EOF，未取数、未进入查询；随后总控明确暂停线上调查。
+上一调查阶段两次必要轻量聚合尝试在连接阶段 EOF，未取数、未进入查询；随后总控明确暂停线上调查。
 无活动查询/长事务，无线上写入。**完整存储身份的 count/字节加权重叠率尚未实测**，不以
-相同文本、payload digest 数或“历史行数÷当前行数”代替。后续安全测量门见附录A §4。
+相同文本、payload digest 数或“历史行数÷当前行数”代替。线上迁移前的安全测量门见附录A §5；它不阻塞设计确认后的 RED/实现。本轮不做测量。
 没有访问 #549 的登记/编译/运行目录，不要求其暂停或测量；合法发布后的增长不据此判异常。
 
 ## 2. 当前实际写入与读取
@@ -77,7 +79,7 @@
 
 | 方案 | 收益 | 约束/判断 |
 |---|---|---|
-| (a) 完整内容对象 + 小型成员集合引用 | 未变的大 content/payload 跨 Release 不重复；历史版本仍完整 | 推荐。对象身份必须覆盖完整 snapshot，集合引用仍有 `O(版本×成员)` 开销，不能说总量线性或自动节省某固定百分比 |
+| (a) 内容对象 + 内容定义块 + 根块列表 | 内容与未变块跨版本共享，历史版本完整；新增块规模受本次改动邻域约束 | 采用。块列表仍有 `O(版本×成员/块长)` 小型开销，不宣称总存储完全 O(delta) |
 | (b) 已提交准备项精简 | 不再存第二份完整成员数组 | 与(a)组合：准备项和 Release 可引用同一集合；保留 manifest、原身份与审计。单独清空 members 虽可能省一份，但没解决成员表增长，也不能泛化到 draft/未关联 ready |
 | (c) 非 Active、未 pinned、超回滚窗删除成员 | 删除历史可能省更多 | 本片拒绝。外部历史 ID/引用/审计/replay/rebase 仍依赖；无 pin 不是无消费者。现有退役也明确保留成员。需要改变历史保留合同与用户裁定，不能作为 ST-1 隐式 GC |
 
@@ -102,61 +104,122 @@ Space 或 KB 合并，即使字节相同。没有按 digest 直接读内容的�
 - 相同键插入冲突时校验完整字段相等，任何不等/损坏失败关闭，不能 `DO NOTHING` 后无条件信任赢家。
   企业封套仍按现有读法核验 MemberDigest；不趁迁移改 frozen 的业务摘要规则或“修复”旧坏行。
 
-### 4.2 对象、集合和映射
+### 4.2 选择：保留未变边界的局部内容定义分块（M1）
 
-新增自有表（均有上述 scope、FK/唯一约束；名字在 RED 前按最终迁移编号冻结）：
+不选父 Release delta 链+定期全量检查点：它会把历史冷读变成回溯、检查点仍周期复制全量引用，
+且同 base 分支/历史重放更复杂。选分块后每个根是自足的完整块列表，读时**不沿父 Release 链**。
+父根只用于写时识别可共享块；缺失新格式父根失败，未迁移 legacy 父根只允许一次明确的布局引导。
 
-1. `enterprise_member_contents`：storage_digest + 完整 snapshot（payload_json TEXT），不可变。
-2. `enterprise_member_sets`：set_digest、codec、member_count，不含大正文。
-3. `enterprise_member_set_items`：set_digest、ordinal、slug、storage_digest；slug/ordinal 在集合内唯一，
-   对内容对象是完整 scope FK。集合摘要前缀 `enterprise-member-set.v1\0`，绑定 member_count 后按
-   **有序** `(uint64 ordinal, slug, storage_digest)` 长度编码计算；不能排序后冒称原序不变。
-4. Release 与 preparation 的 storage 映射分别指向集合；其外键绑定对应原行的 ID **和完整 scope**。
-   只有完整字段和顺序都相同才复用一个集合；旧准备数组可与 Release 不同（例如既有
-   `materializeMembers` 将空 kind 变成 `page`，或数组顺序不同）。分别保留各自有序集合，仅共享
-   真正相同的内容对象，不能把 Release 行反写成原准备数组或为节省引用改序。
+**冻结分块 codec v1：**
 
-保留原五张表中所有头/manifest/身份字段。已激活准备项改为集合引用后，不再重复大 members 数组；
-其原 manifest/摘要保持。旧 members 列可在验证后置 JSONB `[]`（不是null），但新/旧格式必须由
-明确映射标记选择，不能把 `[]` 当作“已迁移”或“确实空集合”的判据。
-所有 legacy draft 和未证实已提交的 ready 保持原样，不设年龄清除定时器。
-新模型没有内容 GC：对象即使暂时不可达也不在本片自动删除；未来 GC 必须检查全部集合/迁移中状态。
+- Release 列表按既有 UTF-8 slug 字节字典序；历史 preparation 保留其原数组顺序，根带 order_mode
+  `slug_asc` 或 `legacy_sequence`。边界 hash 只用 slug，不看 payload/storage_digest/类型/产品编号。
+- 首建或历史回填从头扫描：`H=SHA256("enterprise-member-boundary.v1\0" + LP(slug))`，LP同§4.1；
+  块满32项后，H首8字节 big-endian 的低6位为0则自然切开；到128项强制切开。全局末块可少于32。
+  目标平均64–128；均匀 hash 下修尾前期望约81.11，不把真实输入分布当随机保证。
+- **只改值、slug不变：保留原分块边界**，只生成包含变化项的新块；块外引用不重写。
+- 插删：从父列表与最终列表的一次diff（不依命令次序）标出真实增删键的连续区间；两个变化键间
+  有未变键即分为不同区间。插入键归到父列表第一个较大键所在块，尾端归末块，空父集独立建块。
+  取所有相交/插入点所在块，再加左右各一个未变完整邻块；重叠窗口合并，只对窗口内幸存键+
+  新键按上述规则重切，外部整块原样复用。
+  非末尾窗口若最后碎块不足32，合并末两碎块；合计≤128则一块，否则按 ceil/floor 两半拆开。
+  只修这两块，不继续向窗口外借项。窗口数据为空时直接移除，整集合空时产生合法空根。
+  同轮换值先随这些窗口应用，窗口外换值只替换原块，不因处理顺序重复重切。
+- 这是**增量维护的布局**：最小/最大/修尾强制点可不满足自然 hash 条件，只依赖键序、窗口及父边界，
+  不依赖内容值。同一父根+同一最终序列操作确定；不同历史可能得到同逻辑序列的不同布局根，允许，
+  不改变任何业务/manifest/snapshot hash。无变化直接用父根。不能每次对全表从头重新切块。
+- 设K为变化键数、J为分离的键序区间数、Lmax=128：只改值重写的条目数
+  `Wm≤min(N,K+2J(Lmax−1))`；插删窗口新条目保守界 `Wa≤min(N_new,K+4J·Lmax)`。
+  因此散布修改也有 `W≤K·Lmax` 的只改值界，不能承诺总是只改一块或两组任意125键的块字节相等。
+  删除自然切点/触及最小最大/短尾也只影响所选窗口；无自然切点不引发全表强制边界移位。
 
-### 4.3 真实读写路径
+**紧凑存储与校验：**
 
-- 唯一 Head/epoch 权威仍为原 `WikiReleaseRepository.Activate`；成员存储经明确的存储适配接缝接入，
-  不复制第二套发布事务/Head。内存完整目标和现有 preparation 等价校验保持在任何持久副作用之前。
-- 对象、集合、两个映射、Release、来源 pin/links、决定、CAS 和 receipt 均在**同一现有事务**提交。
-  任一步失败整体回滚。保持 review-candidate→candidate digest→来源知识/来源行→Head 的锁顺序；
-  内容键按稳定顺序写入，不引入跨 scope 的共享对象锁或全局锁。
-- `MembersOf` 只读引用与摘要；完整读通过集合 join 一批还原 snapshot，不逐对象请求。payload 的
-  DB 归一和对象写入按批处理，不新增每成员一个 SQL 的路径。受影响查询性能在未来测试验证。
-- `ReleaseByID` 保留原 decode/digest 校验、授权、退休状态、缓存键和深拷贝行为。新格式标记存在但
-  缺对象/错 scope/顺序/计数/摘要时失败关闭，沿用存储错误的 `INTERNAL_ERROR`/500 脱敏映射
-  （配置不可用仍按既有 `SERVICE_UNAVAILABLE`/503）；不能退回旧副本掩盖损坏，
-  更不能读 Active 代替指定版本。只有**未迁移且明确 legacy 格式**才走旧读取路径。
-- manifest/MemberDigest、所有外部 ID/epoch、candidate/decision/source 指纹不变。迁移不刷新任何业务
-  时间、审核标签、专家锁或内容，不重新评审/激活/封存/pin，也不解锁来源。
+1. `enterprise_member_scopes` 将完整四段 scope 唯一映射为内部 bigint；scope_id不是授权依据，
+   每次必须由已授权四段 scope解析并核对。所有内容/块/根主键均为 `(scope_id, BYTEA32 digest)`。
+2. `enterprise_member_contents` 保存§4.1七字段，索引按上述完整身份。内容/版本/访问范围不同不可合并。
+3. `enterprise_member_chunks` **一块一行**，列含codec、count及`refs BYTEA`（恰好count×32字节的
+   storage_digest序列）；不建逐成员关系表、不在每项重复scope或hex。chunk_digest前缀
+   `enterprise-member-chunk.v1\0`，绑定count及有序 `(LP(slug), storage_digest32)`；slug从同scope
+   内容对象元数据取得，读取时批量核存在/唯一/order/hash。无逐项FK不代表可跳过完整性验证。
+4. `enterprise_member_sets` 一根一行：codec、order_mode、member_count、chunk_count、`blocks BYTEA`；
+   每项固定36字节（uint32块count+32字节chunk_digest），无逐成员行。set_digest前缀
+   `enterprise-member-chunk-set.v1\0`，绑定mode、uint64成员数、uint32块数及完整有序块列表。
+5. Release/preparation 映射保留原ID及完整scope关系，指同scope根；FK/约束核映射和原行四段scope一致。
+   内容、块、根键冲突都核全部字段/有序数据，不一致失败关闭，不能盲目忽略冲突。
+
+新写 materialize 和既有 kind 默认处理**只做一次**，以最终同一有序七字段列表同时构造准备和Release，
+调用一次Put、共享同一根，不产生新“空kind/page”差异。只有历史数组顺序/字段确有差别时才保留
+独立准备根；不能拿Release行反写历史准备。根、块只读即可完整还原，结构摘要不能取代业务摘要。
+
+保留原五表的头/manifest/身份。已验证准备members可置JSONB `[]`而非null，但只依明确格式映射读取；
+不能把`[]`当迁移完成或真正空集的判据。draft/未证实已提交ready保持原样，不设年龄清理或内容GC。
+
+### 4.3 冻结端口、真实路径和查询（M1/M2）
+
+不改原 Publisher/REST/MCP 合同，也不改现有 repository 构造/公开方法参数。只新增内部存储端口：
+
+```go
+// internal/types/wiki_release.go
+type WikiReleaseMemberSetWrite struct {
+    Scope WikiReleaseScope
+    PreparationID, ReleaseID, ParentReleaseID string
+    Members []WikiReleaseMemberSnapshot // 已materialize的同一最终列表
+}
+```
+
+```go
+// internal/application/repository/wiki_release.go
+type WikiReleaseMemberStorage interface {
+    Put(context.Context, *gorm.DB, types.WikiReleaseMemberSetWrite) error
+    Read(context.Context, *gorm.DB, types.WikiReleaseScope, string) ([]types.WikiReleaseMemberSnapshot, error)
+    Digests(context.Context, *gorm.DB, types.WikiReleaseScope, string) (map[string]string, error)
+}
+func (r *WikiReleaseRepository) WithMemberStorage(WikiReleaseMemberStorage) *WikiReleaseRepository
+func (r *WikiReleaseRepository) GetReleaseMemberDigests(context.Context, types.WikiReleaseScope, string) (map[string]string, error)
+```
+
+`WithMemberStorage`返回新实例，不可修改共享实例；`NewWikiReleaseRepository(db)`原签名不变。
+生产`releasestore.New`及其事务内repository实例都接入`memberstore.New()`，不是只接测试；无端口的
+legacy repository不得在ref-only生产scope服务。新模块不反向调用repository，接口依赖在repository，
+实现只依types/GORM，避免循环。ParentReleaseID是本次既有Expected Head，不补读更新后的Head。
+
+- 唯一Head仍由原Activate事务负责；输入等价/最终列表校验先于持久写。内容、块、根、两个映射、
+  原头/receipt、点决定和Source pin/links同一事务提交。保持review-candidate→candidate digest→
+  来源知识/来源行→Head锁顺序；对象/块稳定键序插入，不引入跨scope共享锁或全局锁。
+- Read先过现有scope/header权限，批量读映射+根、块、内容：存储阶段最多3组集合查询，无按块或
+  按成员N+1。完整读校验内容storage_digest、块hash/count/引用长度、根hash/总数/序/slug唯一，
+  再走原decode/MemberDigest校验。Digests只取对象元数据，仍核块/根/存在性，不载大正文。
+- 新格式缺块/对象、错scope/hash/count/order时`INTERNAL_ERROR`/500脱敏失败；配置不可用仍503。
+  不能退回旧副本/当前Head掩盖损坏。只有未迁移且明确legacy格式才走旧路径；保留缓存键/深拷贝、
+  header每次授权/退役检查及ETag规则。
+- manifest、原MemberDigest、全部ID/epoch、candidate/decision/source/exact3指纹不变；不改审核、
+  业务时间、专家锁、来源生命周期，不重新评审/激活/pin。新写两映射必须同根，不各自重建一份。
 
 ## 5. 迁移、并发与回滚
 
 线上升级/整理/备份/空间回收必须另开运维 Issue，本阶段无执行。本设计采用**有退出条件的过渡**，
 不是永久双存或新旧双 Head。
 
-1. **expand**：新增表/完整 FK 与唯一约束、迁移进度/格式元数据，不动旧列；迁移号从当前 head12
-   的下一空号开始，实施前 Owner 锁定，不能与其他片抢号。大表索引/约束的在线/短锁步骤在运维预检
-   计划中明确，不能把重型回填藏在应用启动 DDL 里。
+1. **expand**：冻结迁移 `000013_enterprise_member_chunks.{up,down}.sql`，包含scope/内容/块/根/两映射
+   与迁移进度/格式表，head12→13；本轮核origin/main仍head12、开放PR数0，没有并行占号证据。
+   这只是文档预留，不执行DDL。后续若发现冲突先协调，不私自改号。新增schema不动旧列；索引/
+   约束的在线短锁步骤另列运维计划，不能把重型回填藏在应用启动里。
 2. **短期桥接**：一个明确版本的应用，在原事务内同时保持旧快照和新对象引用；对外仍一个 Head。
    对新发布强制同时生成完整新映射，便于随后切换和二进制回退；这一阶段暂时增加而非释放空间。
 3. **分批回填**：仅从既有不可变成员/明确已提交准备读取，按发布/行批次和字节上限断点推进。
    不整库长事务/长快照，不锁线上 Head。每个映射只有在对应完整集合验证成功后才标记可读；
-   失败/中断留下的 staged 对象不进入读路径。准备快照的完整内容/行版本需核前后未变，不能仅信
+   游标绑定scope/原行身份/完整列表摘要与批次，记录对象/块/根各阶段；重复批次只复用全字段相同内容。
+   格式映射只在完整根验证的同一事务里发布；失败/中断的staged对象不进入读路径，也不自动GC。
+   准备快照的完整内容/行版本需核前后未变，不能仅信
    PreparationDigest（它不覆盖 members）。draft/无可信提交关联的行跳过并报计数。
 4. **核验/追平**：逐版本核四段 scope、全部字段、计数/唯一性、原数组顺序、manifest 对应、
    原企业 payload digest 与封套字节。历史成员、引用、pins、retirements、receipt/决定总数和身份不变。
    校验进度持久化且可重复；增量新发布由桥接写保证，不只依赖 created_at 水位推断“没有漏行”。
 5. **cutover**：读方按已验证的格式标记切新，未标记只读 legacy；新写转为 reference-only 前确保
-   所有运行实例支持新格式。观察期建议7天供 Owner 确认，**不是历史保留期**，不自动执行删除。
+   所有运行实例支持新格式。默认观察窗**7天**，部署运维可事先调整；退出硬条件为**全部映射
+   验证通过且整个观察窗读校验失败0**。任一读校验失败先调查并重新开始完整观察窗，不能以
+   缓存命中或平均错误率豁免。这不是历史保留期，不自动删除。
 6. **退出旧副本**：全量核验、恢复演练、容量预检、观察期和 Owner 运维批准都满足后，才移除
    已验证映射对应的冗余旧大列/行；保留所有历史逻辑内容及旧准备头/manifest，未关联旧准备不动。
    只有所有原本可读 Release 都完成迁移后，才移除迁移用 fallback/双写能力；不能把未迁移的
@@ -176,40 +239,70 @@ VACUUM 可复用页与 OS/VM 真正可用空间分开报告；rewrite/VACUUM FUL
 指标/错误日志不含正文、凭据或对象原文。共享对象受损会影响引用它的多个历史版本，必须完整验证、
 失败关闭并从经过核验的备份修复，不能由另一个 tenant/Scope 或“相似文本”补齐；修复另走运维授权。
 
-## 6. 未来 RED 验收矩阵（此阶段只描述）
+## 6. 未来 RED 定量矩阵（M2，本轮不写测试）
 
-| 类别 | 将来独立 RED 必须反驳 |
+### 6.1 增长隔离与边界控制
+
+- N=3600与37500两个独立合成scope/同字节宽度身份，从同样局部分块布局出发；大的版本用普通
+  追加流程在编辑邻域外增加整块数据，保留修改邻域及其外侧完整保护块；不按产品编号分派边界。
+  两者修改同一连续125个slug、七字段变化完全相同：新增内容对象125，内容与被重写块的字节
+  **必须相等**。只有根块列表长度可不同，差额≤`36×(floor(37500/32)+1)=42192 B`；固定根头/映射
+  元数据宽度相同。若出现按N复制的条目/块则失败，不用物理压缩掩盖。
+- 这条对照隔离的是远处总量，不把“任意散布125键”假装同邻域。另以随机散布125键验证
+  `W≤125×128`、只改值最多125个块；报告实际块字节，不能声称它与连续125键同成本。
+- 插删（首/中/尾、删切点、无自然切点、密集自然点、32/128边缘、空集/短尾）验证局部窗口界
+  `Wa≤K+4J×128`及外部块地址不变；最小/最大强制点不向全表传播。初建自然hash/强制点另锁，
+  修改路径不能偷偷从头重分块。不同历史布局可异根，但每次同父输入确定且内容一致。
+
+### 6.2 规模、完整历史、读取性能
+
+- 300款×125成员，按slug分组的合成通用键序逐款激活；再10轮，每轮固定轮换10%产品，修改其全部
+  125成员（每成员只生成一次新完整身份、每款一次激活）。另有多类型/不连续键控制，不能把本夹具
+  的局部性推广为所有输入。统计**所有唯一内容、块、根、scope及两映射的全部逻辑列字节**；集合
+  结构总字节≤内容对象总字节10%。包括根块列表/元数据，不能只报块blob；不包括PG压缩/索引/WAL，
+  这些单列实测。内容对象统一5KiB（含身份/列元数据）的合成尺寸，不能用私有大正文抬高分母。
+- 同夹具用旧格式序列化/列宽计数器给完整历史出现次数与旧两份数据对照；无需实际存数百GiB旧
+  重复数据。计数器复用旧格式逐对象字节长度并按各历史成员出现次数加权，准备数组标点/转义亦计；
+  模型中的`2×内容字节`只是近似，未来报告必须给实际旧逻辑列计数，物理尺寸另列。
+- 每个历史Release（上述600次激活）冷缓存还原，七字段和原序逐字节对旧格式真值比对；同时覆盖
+  历史准备异序/空kind与page、PDF/Office/专家引用、退役/Source pin和304，缺块/错摘要必须失败。
+  逐版本流式验证、限制峰值内存，不把全历史旧payload复制到DB，不靠热对象缓存掩盖缺失。
+- 采集未来基准：隔离合成PG环境、同硬件/schema/数据与连接池，N=3600/37500分别比较冻结旧适配器
+  与新生产Read链。冷应用成员/对象缓存（不用清生产DB缓存），ABBA交替30次，记SQL数、全读字节、
+  wall-clock p50/p95；DB缓冲状态和预热步骤两侧一致。两档**查询数、p50、p95各≤旧2倍**，否则失败，
+  不能标成“需要上线观察”后放行。此轮无基准实测，RED/实现阶段采集，不恢复线上副本跑基准。
+
+### 6.3 必须保持的保护矩阵
+
+| 类别 | 反例/正控 |
 |---|---|
-| 字节与身份 | 同文不同 metadata/version/审核/EvidenceRefs/AccessScope/kind/slug/revision/title 不合并；JSON 键序/数字/空白差异保留旧业务 hash 和原 payload 字节；对象损坏/摘要冲突拒绝 |
-| 去重与隔离 | 多 Release 同 snapshot 只一对象；不同 tenant/Space/KB 绝不串用；含空集/相同最终集复用；集合顺序不同不错误等同 |
-| 完整历史 | 历史/Active/pinned/retired 同成员与同序；PDF/Office 引用/HTTP文件/MCP、304、专家记录、实体回退与 SourcePins 边界不变；冷缓存也覆盖，不能靠热缓存掩盖丢行 |
-| 准备依赖 | 激活后 manifest/custody/header/审计/replay 可用；draft/未关联 ready 不精简；准备与 Release 顺序不同可逆；关闭/拒绝记录不能仅按时间删 |
-| 发布并发 | 同 nonce/同候选不同决定重试只一次提交；不相干 rebase、同实体冲突、首次 Head 竞争、事务各故障点、点批量与整包两路径均保持 CAS/rollback；不死锁 |
-| 迁移 | mixed legacy/new、断点/短批/源行漂移、桥接时发布/退休/重放；缺一映射/对象/FK/count/顺序时不能标完成或读旧副本掩盖；幂等回填 |
-| 回滚与容量 | bridge 可回旧；ref-only 先恢复旧行/数组再 down，坏对象/空间不足/部分恢复拒绝；固定合成规模夹具验证对象/引用数量，不以 TOAST 压缩偶然值断言业务正确 |
-| 接口/性能 | 原公开合同/状态/授权输出不变、MembersOf 不载大内容、完整读批量 join 无 N+1；snapshot 与来源摘要不漂移 |
+| 内容/块/根身份 | 同文异metadata/version/refs/access/kind/slug/revision/title不合并；数字/JSONB/Unicode/空白保持业务hash和原字节；同键异字段冲突拒绝 |
+| 隔离/结构 | 四段scope、缺对象/块、count/长度/序/hash错、重复slug、根块列表截断；不同scope同摘要不串用；无变化与prepare/Release同根 |
+| 历史/准备 | 全历史、pinned/retired、冷缓存、manifest/custody/replay/rebase/回退及详情不变；draft/未关联ready不精简，历史两套集合可逆 |
+| 并发 | 同nonce/同候选不同决定、点批量/整包、独立rebase/同实体冲突、初始Head、各事务故障点保持CAS与全回滚；分支读不依赖父链 |
+| 迁移/回滚 | mixed格式、重入/断点/源漂移、桥接时发布/退役/重放、映射未完整不得标完成；ref-only先完整恢复旧行/准备数组再down，坏对象/容量不足拒绝 |
 
-RED 必须覆盖两种以上结构和完整生产存储/事务入口，含 PG 适配器与纯合成历史，非仅 hash helper。
-未来门禁按受影响 Go/PG、迁移升降、架构与合同漂移；不改旧保护断言遮错，不加 skip/xfail。
+完整PG适配入口和原公开合同均需覆盖；不改旧保护断言遮错、不新增skip/xfail。定量增长先按逻辑
+字节验收，不将其等同物理压缩或VM释放；线上迁移前测量另过M3门。
 
 ## 7. 阶段与拟写域
 
 本阶段仅本 Spec、[附录A](ST-1-附录A-容量与测量.md)及仓库外必要调查脚本/私密证据。
 将来如确认设计：自有 `internal/enterprise/releasestore/` 及必要成员存储子包；既有
 `internal/application/repository/wiki_release.go`、`internal/types/wiki_release.go` 的存储接缝；
-`migrations/enterprise/versioned/` 新迁移与 `internal/database/enterprise_migration.go` 迁移头；自身测试。
+`migrations/enterprise/versioned/000013_enterprise_member_chunks.{up,down}.sql` 与
+`internal/database/enterprise_migration.go` 迁移头；自身测试。
 三处既有扩展文件在固定上游 `f17ee8a8d` 不存在，不新增上游 patch 数；新模块只在自有 enterprise 路径、
-≤500行。具体端口/迁移号与独立 RED 仍需确认后冻结，保持原公开 repository/Publisher 签名。
+≤500行；端口与迁移号已在r2冻结。独立RED只在Claude确认M1–M3后写，原公开方法签名保持。
 
 不改 Harness、编译身份/值协议、contracts/前端/导航/领域规则、蓝图或守卫/基线；不删除审计或
 修改 Source 生命周期；不把未来存储实现混进本次 Spec 提交。
 
-### 待 Claude 明确确认
+### 本轮确认门（M3）
 
-1. 是否按(a)+(b)对象/有序集合引用推进，并明确拒绝本片历史年龄 GC？
-2. 是否接受完整 snapshot 存储身份、四段 scope 隔离和有界桥接；建议7天观察窗由后续运维再定？
-3. 是否接受附录A的显式容量情景与当前去重率未知；精确历史重叠/目标物理大小待稳定后的安全测量，
-   未完成测量前不据此批准大规模放量或承诺释放磁盘？
+既定a+b、完整身份/四段scope、唯一Head/同事务、历史与审计保留、不做年龄GC已获确认，不重新
+申请这些方向。本轮等待Claude明确确认M1结构共享/布局取舍、M2定量标准与新公式、M3测量门位置。
 
-Spec 发出后暂停于设计门，等 Claude 明确确认才启动后续 RED/实现；第1步交付不表示 ST-1 已实现、
-已合并或已迁移。线上迁移/整理、重型离线副本实验和构建仍各需明确运维安排。
+完整重叠率/U0/目标物理大小是**线上迁移前门**，不是设计确认后RED/实现的前置；工程可先用合成
+数据做。但本轮用户只授权文档，不能用原审核末句自行开始RED。确认后后续业务另行接续。
+当前不测线上DB/Docker、不恢复541副本、不与549编译/摄取争资源。线上迁移/空间回收与部署仍另开运维。
