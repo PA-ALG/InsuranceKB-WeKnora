@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"time"
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"gorm.io/gorm"
@@ -13,8 +12,7 @@ import (
 
 // StartObservation switches verified histories to new reads while retaining bridge writes.
 // No history is removed. A restart always begins a fresh seven-day observation.
-func (s *Store) StartObservation(ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope) (failure error) {
-	defer func() { noteValidationFailure(db, scope, failure) }()
+func (s *Store) startObservation(ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope) (failure error) {
 	before, err := s.verifyTransition(ctx, db, scope)
 	if err != nil {
 		return err
@@ -38,11 +36,18 @@ func (s *Store) StartObservation(ctx context.Context, db *gorm.DB, scope types.W
 		if !reflect.DeepEqual(before, after) {
 			return ErrState
 		}
+		if err := lockValidationGate(ctx, tx, sc, false); err != nil {
+			return err
+		}
+		if err := confirmValidation(ctx); err != nil {
+			return err
+		}
 		if err := markReferenceReads(tx, scope, releases); err != nil {
 			return err
 		}
 		return tx.Model(&scopeRow{}).Where("id = ?", sc.ID).Updates(map[string]any{
 			"observation_started_at": gorm.Expr("CURRENT_TIMESTAMP"), "read_failures": 0,
+			"observation_failure_since": gorm.Expr("clock_timestamp()"),
 		}).
 			Error
 	})
@@ -50,8 +55,7 @@ func (s *Store) StartObservation(ctx context.Context, db *gorm.DB, scope types.W
 
 // ReferenceOnly is an explicit operator action after durable verification and observation.
 // It does not compact any old data. Availability/telemetry gaps require restarting observation.
-func (s *Store) ReferenceOnly(ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope) (failure error) {
-	defer func() { noteValidationFailure(db, scope, failure) }()
+func (s *Store) referenceOnly(ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope) (failure error) {
 	before, err := s.verifyTransition(ctx, db, scope)
 	if err != nil {
 		return err
@@ -64,15 +68,8 @@ func (s *Store) ReferenceOnly(ctx context.Context, db *gorm.DB, scope types.Wiki
 		if sc.Mode != "bridge" && sc.Mode != "reference" {
 			return ErrState
 		}
-		var ready bool
-		if err := tx.Raw("SELECT observation_started_at <= CURRENT_TIMESTAMP-observation_wi"+
-			"ndow_seconds*INTERVAL '1 second'\n AND read_failures=0 FROM enterp"+
-			"rise_member_scopes WHERE id=?", sc.ID).
-			Scan(&ready).Error; err != nil {
+		if err := lockValidationGate(ctx, tx, sc, true); err != nil {
 			return err
-		}
-		if !ready {
-			return ErrState
 		}
 		releases, err := verifiedOwners(tx, scope)
 		if err != nil {
@@ -84,6 +81,9 @@ func (s *Store) ReferenceOnly(ctx context.Context, db *gorm.DB, scope types.Wiki
 		}
 		if !reflect.DeepEqual(before, after) {
 			return ErrState
+		}
+		if err := confirmValidation(ctx); err != nil {
+			return err
 		}
 		if err := markReferenceReads(tx, scope, releases); err != nil {
 			return err
@@ -144,8 +144,7 @@ func markReferenceReads(db *gorm.DB, scope types.WikiReleaseScope, releases []ty
 
 // CompactLegacy removes at most one verified release's redundant copies per call.
 // Repeated bounded calls finish the scope; unassociated preparations are never selected.
-func (s *Store) CompactLegacy(ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope) (failure error) {
-	defer func() { noteValidationFailure(db, scope, failure) }()
+func (s *Store) compactLegacy(ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope) (failure error) {
 	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		sc, err := lockedScope(tx, scope, false)
 		if err != nil {
@@ -154,14 +153,8 @@ func (s *Store) CompactLegacy(ctx context.Context, db *gorm.DB, scope types.Wiki
 		if sc.Mode != "reference" || sc.ReadFailures != 0 {
 			return ErrState
 		}
-		var ready bool
-		if err := tx.Raw("SELECT observation_started_at <= CURRENT_TIMESTAMP-observation_wi"+
-			"ndow_seconds*INTERVAL '1 second'\n AND read_failures=0 FROM enterp"+
-			"rise_member_scopes WHERE id=?", sc.ID).Scan(&ready).Error; err != nil {
+		if err := lockValidationGate(ctx, tx, sc, true); err != nil {
 			return err
-		}
-		if !ready {
-			return ErrState
 		}
 		var r types.WikiRelease
 		query := exactScope(tx.Model(&types.WikiRelease{}), scope).
@@ -171,7 +164,7 @@ func (s *Store) CompactLegacy(ctx context.Context, db *gorm.DB, scope types.Wiki
 				"d AND p.members<>'[]'::jsonb)").Order("release_id ASC")
 		err = query.Take(&r).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
+			return confirmValidation(ctx)
 		}
 		if err != nil {
 			return err
@@ -180,6 +173,9 @@ func (s *Store) CompactLegacy(ctx context.Context, db *gorm.DB, scope types.Wiki
 			return ErrIntegrity
 		}
 		if err := s.verifyRelease(tx, scope, r); err != nil {
+			return err
+		}
+		if err := confirmValidation(ctx); err != nil {
 			return err
 		}
 		if err := tx.Where("release_id = ?", r.ID).Delete(&types.WikiReleaseMember{}).Error; err != nil {
@@ -194,10 +190,9 @@ func (s *Store) CompactLegacy(ctx context.Context, db *gorm.DB, scope types.Wiki
 // RestoreLegacy restores one complete history per bounded transaction. Mode legacy stops
 // this new writer immediately; old binaries still cannot run until every marker is clear
 // and migration13 can safely go down. maxBytes is a logical write budget, not free-disk proof.
-func (s *Store) RestoreLegacy(
+func (s *Store) restoreLegacy(
 	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, maxBytes int64,
 ) (failure error) {
-	defer func() { noteValidationFailure(db, scope, failure) }()
 	if maxBytes <= 0 {
 		return ErrState
 	}
@@ -209,6 +204,9 @@ func (s *Store) RestoreLegacy(
 		var r types.WikiRelease
 		err = exactScope(tx, scope).Where("member_storage <> ''").Order("release_id ASC").Take(&r).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := confirmValidation(ctx); err != nil {
+				return err
+			}
 			return tx.Model(&scopeRow{}).Where("id = ?", sc.ID).Update("mode", "legacy").Error
 		}
 		if err != nil {
@@ -242,6 +240,9 @@ func (s *Store) RestoreLegacy(
 		}
 		if bytes > maxBytes {
 			return ErrState
+		}
+		if err := confirmValidation(ctx); err != nil {
+			return err
 		}
 		// Every read and capacity check completed before the first mutation.
 		if err := tx.Model(&scopeRow{}).Where("id = ?", sc.ID).Update("mode", "legacy").Error; err != nil {
@@ -288,19 +289,6 @@ func (s *Store) RestoreLegacy(
 		}
 		return tx.Model(&progressRow{}).Where("release_id = ?", r.ID).Update("phase", "restored").Error
 	})
-}
-
-func noteValidationFailure(db *gorm.DB, scope types.WikiReleaseScope, err error) {
-	if !errors.Is(err, ErrIntegrity) {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(db.Statement.Context), time.Second)
-	defer cancel()
-	// Operational integrity telemetry only; never alter Head, decisions or business data.
-	// Any telemetry outage is an observation gap and must restart the operator's seven-day window.
-	_ = exactScope(db.Session(&gorm.Session{NewDB: true}).WithContext(ctx).Model(&scopeRow{}), scope).
-		Where("observation_started_at IS NOT NULL AND read_failures = 0").
-		UpdateColumn("read_failures", gorm.Expr("read_failures+1")).Error
 }
 
 type transitionOwner struct {

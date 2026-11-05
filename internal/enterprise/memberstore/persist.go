@@ -229,7 +229,7 @@ func failedRead(err error) error {
 }
 
 // Put persists a complete final collection inside the original activation transaction.
-func (s *Store) Put(ctx context.Context, tx *gorm.DB, w types.WikiReleaseMemberSetWrite) error {
+func (s *Store) putValidated(ctx context.Context, tx *gorm.DB, w types.WikiReleaseMemberSetWrite) error {
 	db := tx.WithContext(ctx)
 	sc, err := lockedScope(db, w.Scope, true)
 	if err != nil {

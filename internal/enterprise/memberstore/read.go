@@ -141,10 +141,9 @@ func readLayout(
 }
 
 // Read preserves explicitly legacy/bridge reads; chunks.v1 never falls back to a retained copy.
-func (s *Store) Read(
+func (s *Store) readValidated(
 	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, id string,
 ) (out []types.WikiReleaseMemberSnapshot, failure error) {
-	defer func() { noteValidationFailure(db, scope, failure) }()
 	tx := db.WithContext(ctx)
 	header, err := releaseHeader(tx, scope, id)
 	if err != nil {
@@ -169,15 +168,10 @@ func (s *Store) Read(
 }
 
 // Digests verifies the entire ordered index without fetching payload/content columns.
-func (s *Store) Digests(
-	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, id string,
+func (s *Store) digestsValidated(
+	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, id string, header types.WikiRelease,
 ) (out map[string]string, failure error) {
-	defer func() { noteValidationFailure(db, scope, failure) }()
 	tx := db.WithContext(ctx)
-	header, err := releaseHeader(tx, scope, id)
-	if err != nil {
-		return nil, err
-	}
 	var rows []types.WikiReleaseMemberSnapshot
 	switch header.MemberStorage {
 	case "", "bridge.v1":

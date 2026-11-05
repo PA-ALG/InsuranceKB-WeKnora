@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
+	"github.com/Tencent/WeKnora/internal/enterprise/memberstore"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/types"
 )
@@ -84,7 +85,31 @@ func (s *Store) MembersOf(ctx context.Context, tenantID uint64, spaceID, release
 
 // ReleaseByID reads a complete release (the active one for an empty ID) and verifies
 // every member's payload against its digest before returning it.
-func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, releaseID string) (release.Release, error) {
+func (s *Store) ReleaseByID(
+	ctx context.Context, tenantID uint64, spaceID, releaseID string,
+) (out release.Release, err error) {
+	scope, err := s.spaces.Scope(tenantID, spaceID)
+	if err != nil {
+		return out, err
+	}
+	observedErr := s.storage.Validate(ctx, s.db, scope, func(ctx context.Context) error {
+		out, err = s.releaseByID(ctx, tenantID, spaceID, releaseID)
+		var missing *release.Error
+		if errors.As(err, &missing) && missing.Code == release.ErrorReleaseNotFound {
+			return nil
+		}
+		return err
+	})
+	if err != nil {
+		return release.Release{}, err
+	}
+	if observedErr != nil {
+		return release.Release{}, observedErr
+	}
+	return out, nil
+}
+
+func (s *Store) releaseByID(ctx context.Context, tenantID uint64, spaceID, releaseID string) (release.Release, error) {
 	scope, err := s.spaces.Scope(tenantID, spaceID)
 	if err != nil {
 		return release.Release{}, err
@@ -103,6 +128,7 @@ func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 		for _, snapshot := range snapshots {
 			m, err := decodeMember(snapshot)
 			if err != nil {
+				memberstore.ValidationIntegrity(ctx)
 				return nil, fmt.Errorf("release %s member %s: %w", header.ID, snapshot.LogicalSlug, err)
 			}
 			members = append(members, m)
@@ -144,6 +170,30 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 	if err != nil {
 		return release.Release{}, err
 	}
+	var result release.Release
+	var activationErr error
+	observedErr := s.storage.Validate(ctx, s.db, scope, func(ctx context.Context) error {
+		result, activationErr = s.activateValidated(ctx, scope, w)
+		var expected *release.Error
+		if errors.As(activationErr, &expected) {
+			return nil
+		}
+		return activationErr
+	})
+	if activationErr != nil {
+		return release.Release{}, activationErr
+	}
+	if observedErr != nil {
+		return release.Release{}, observedErr
+	}
+	return result, nil
+}
+
+// Admission precedes the transaction: Put must not borrow a second pool slot
+// while every slot is held by concurrent activation transactions waiting on Head.
+func (s *Store) activateValidated(
+	ctx context.Context, scope types.WikiReleaseScope, w release.ActivationWrite,
+) (release.Release, error) {
 	if committed, ok, err := s.committed(ctx, scope, w); ok || err != nil {
 		return committed, err
 	}

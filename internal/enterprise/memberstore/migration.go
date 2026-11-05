@@ -106,10 +106,9 @@ func logicalSequenceEqual(a, b []types.WikiReleaseMemberSnapshot) bool {
 // Backfill handles one immutable release and its associated preparation, bounded by
 // a caller-supplied logical-byte budget. The staged source identity survives a failed
 // second transaction; retry must match it. It never selects an unassociated draft.
-func (s *Store) Backfill(
+func (s *Store) backfillValidated(
 	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, id string, maxBytes int64,
 ) (failure error) {
-	defer func() { noteValidationFailure(db, scope, failure) }()
 	if s.verify == nil || maxBytes <= 0 {
 		return ErrState
 	}

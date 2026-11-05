@@ -40,6 +40,7 @@ type scopeRow struct {
 	types.WikiReleaseScope
 	Mode                     string     `gorm:"column:mode"`
 	ObservationStartedAt     *time.Time `gorm:"column:observation_started_at"`
+	ObservationFailureSince  *time.Time `gorm:"column:observation_failure_since"`
 	ObservationWindowSeconds int64      `gorm:"column:observation_window_seconds;default:604800"`
 	ReadFailures             int64      `gorm:"column:read_failures"`
 }

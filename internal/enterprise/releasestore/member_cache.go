@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/memberstore"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"golang.org/x/sync/singleflight"
 )
@@ -66,7 +67,8 @@ func (c *memberCache) load(
 		if members, ok := c.get(key); ok {
 			return copyMembers(members), nil
 		}
-		pending := c.flights.DoChan(fmt.Sprintf("%d:%q:%q", key.Tenant, key.Space, key.Release), func() (any, error) {
+		releaseValidation := memberstore.RetainValidation(ctx)
+		flight := c.flights.DoChan(fmt.Sprintf("%d:%q:%q", key.Tenant, key.Space, key.Release), func() (any, error) {
 			// A previous flight may have completed between the lookup and joining.
 			if members, ok := c.get(key); ok {
 				return members, nil
@@ -81,6 +83,12 @@ func (c *memberCache) load(
 			c.put(key, members)
 			return members, nil
 		})
+		pending := make(chan singleflight.Result, 1)
+		go func() {
+			result := <-flight
+			releaseValidation(result.Err)
+			pending <- result
+		}()
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()

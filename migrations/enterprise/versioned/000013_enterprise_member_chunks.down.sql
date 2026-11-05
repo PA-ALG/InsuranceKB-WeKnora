@@ -27,11 +27,13 @@ BEGIN
  LOCK TABLE wiki_releases, wiki_release_preparations, wiki_release_members,
   enterprise_member_scopes, enterprise_member_contents, enterprise_member_chunks,
   enterprise_member_sets, enterprise_member_releases, enterprise_member_preparations,
-  enterprise_member_progress IN ACCESS EXCLUSIVE MODE;
+  enterprise_member_progress, enterprise_member_validation_pending,
+  enterprise_member_validation_failures IN ACCESS EXCLUSIVE MODE;
 
  IF EXISTS(SELECT 1 FROM wiki_releases WHERE member_storage <> '')
  OR EXISTS(SELECT 1 FROM wiki_release_preparations WHERE member_storage <> '')
  OR EXISTS(SELECT 1 FROM enterprise_member_scopes WHERE mode <> 'legacy')
+ OR EXISTS(SELECT 1 FROM enterprise_member_validation_pending)
  THEN RAISE EXCEPTION 'member storage legacy restoration required'; END IF;
 
  -- A Release also owns its original preparation representation; absence of that
@@ -176,6 +178,8 @@ BEGIN
   THEN RAISE EXCEPTION 'member storage root total differs'; END IF;
  END LOOP;
  DROP TABLE pg_temp.st1_down_member_seen;
+ DROP TABLE enterprise_member_validation_failures;
+ DROP TABLE enterprise_member_validation_pending;
  DROP TABLE enterprise_member_progress;
  DROP TABLE enterprise_member_preparations;
  DROP TABLE enterprise_member_releases;
