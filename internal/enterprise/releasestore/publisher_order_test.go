@@ -2,16 +2,23 @@ package releasestore
 
 import (
 	"context"
+	"testing"
+
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"testing"
 )
 
 func TestPublisherUnsortedInputFailsBeforeAnyDatabaseAccess(t *testing.T) {
 	store, mock := reviewSQL(t)
-	_, err := store.Activate(context.Background(), release.ActivationWrite{TenantID: 7, SpaceID: "space-1", Members: []release.Member{{LogicalSlug: "b"}, {LogicalSlug: "a"}}})
+	_, err := store.Activate(context.Background(), release.ActivationWrite{
+		TenantID: 7,
+		SpaceID:  "space-1", Members: []release.Member{
+			{LogicalSlug: "b"},
+			{LogicalSlug: "a"},
+		},
+	})
 	var failure *release.Error
 	require.ErrorAs(t, err, &failure)
 	require.Equal(t, release.ErrorCandidateInvalid, failure.Code)
@@ -27,7 +34,11 @@ func TestPostgresPublisherUnsortedInputIsZeroWriteAndSortedInputPublishes(t *tes
 			w.Members = storageMembers(t, 2, 0)
 			w.Members[0].EvidenceRefs = []string{seedSource(t, db, "order-source", 7, "raw-1", 1)}
 			if withPoints {
-				w.Points = []release.PointDecision{{TenantID: 7, SpaceID: w.SpaceID, CandidateID: w.CandidateID, Slug: w.Members[0].LogicalSlug, Outcome: "approve", Subject: w.Subject}}
+				w.Points = []release.PointDecision{{
+					TenantID: 7, SpaceID: w.SpaceID,
+					CandidateID: w.CandidateID, Slug: w.Members[0].LogicalSlug,
+					Outcome: "approve", Subject: w.Subject,
+				}}
 			}
 			w.Members[0], w.Members[1] = w.Members[1], w.Members[0]
 			before := fullStorageCounts(t, db)
