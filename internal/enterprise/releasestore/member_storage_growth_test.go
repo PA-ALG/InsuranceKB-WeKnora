@@ -99,9 +99,12 @@ func TestPostgresMemberStorageGrowthIndependentOfRemotePopulation(t *testing.T) 
 	type delta struct{ content, chunk, root int64 }
 	var measured []delta
 	scale := storageAcceptanceScale(t)
-	for _, n := range scale.sizes {
+	// Allocate the same two independent fixtures at the parent level. A missing
+	// PG capability must stop the parent before its cross-case assertions.
+	databases := []*gorm.DB{memberStorageDB(t), memberStorageDB(t)}
+	for index, n := range scale.sizes {
 		t.Run(fmt.Sprint(n), func(t *testing.T) {
-			db := memberStorageDB(t)
+			db := databases[index]
 			referenceFixtureScope(t, db)
 			store := New(db, testSpaces(t))
 			// The larger version extends an identical prefix through ordinary publication.
