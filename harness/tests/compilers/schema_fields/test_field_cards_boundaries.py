@@ -25,7 +25,7 @@ S12C5_RULES = {
 }
 # #425 R1: the customer-profile examples were rewritten to the ruling; they are pinned too.
 EXAMPLES_REWRITTEN = ("target_customer_profile",)
-RULES_DIGEST = "6dabf1d60660fbef55e56304b97d60289d131aad25433987333f9162abb69600"
+RULES_DIGEST = "73bc98c85902678869a2bbce42d22b09700db3cb077ea9a903c2ec4cc58f70a9"
 TARGET_KEY = re.compile(r"[a-z][a-z0-9_]+")
 
 
@@ -36,7 +36,7 @@ def _rules(card: dict[str, object], rules: tuple[str, ...]) -> str:
 def test_the_cards_carry_the_s12c5_version() -> None:
     # S12c-9, S12c-10 and S12c-11 bumped the version again; the S12c-5 rules themselves stay
     # pinned by the digest below.
-    assert cards_version() == "draft-2026-10-31b"
+    assert cards_version() == "draft-2026-11-05a"
 
 
 def test_the_rewritten_rules_read_exactly_as_specified() -> None:
@@ -72,6 +72,7 @@ def test_the_segments_of_the_fields_own_facts_stay_selectable() -> None:
     def excludes(key: str) -> str:
         return "".join(content for content, _ in cards[key]["excludes"])
 
-    assert "交费频率仍属本字段" in excludes("premium_payment_frequency")
+    assert "不证明本产品提供这些选项" in excludes("premium_payment_frequency")
+    assert "只有明确适用于本产品的约定才收录" in excludes("premium_payment_frequency")
     assert "第一步选入所有说明产品为谁而设的段落" in cards["target_customer_profile"]["includes"]
     assert "适用的增长比例都要写明" in cards["sum_assured_growth_rate"]["includes"]
