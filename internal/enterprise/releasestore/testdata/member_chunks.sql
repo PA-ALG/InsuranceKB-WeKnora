@@ -6,7 +6,7 @@ ALTER TABLE wiki_release_preparations ADD UNIQUE(preparation_id,tenant_id,space_
 CREATE TABLE enterprise_member_scopes (
  id BIGSERIAL PRIMARY KEY, tenant_id BIGINT NOT NULL, space_id TEXT NOT NULL,
  raw_kb_id TEXT NOT NULL, wiki_kb_id TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'bridge',
- observation_started_at TIMESTAMPTZ, read_failures BIGINT NOT NULL DEFAULT 0,
+ observation_started_at TIMESTAMPTZ, observation_failure_since TIMESTAMPTZ, read_failures BIGINT NOT NULL DEFAULT 0,
  UNIQUE(tenant_id,space_id,raw_kb_id,wiki_kb_id), UNIQUE(id,tenant_id,space_id,raw_kb_id,wiki_kb_id),
  CHECK(mode IN ('bridge','reference','legacy')), CHECK(read_failures>=0)
 );

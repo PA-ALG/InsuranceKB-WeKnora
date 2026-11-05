@@ -41,6 +41,9 @@ func TestReviewPublicationTransactionFindsConcurrentCommitBeforeSourceOrHeadWrit
 		WithArgs(`[7,"space-1","bundle"]`).WillReturnResult(sqlmock.NewResult(0, 1))
 	expectCandidateLookup(mock, "bundle", "original")
 	mock.ExpectCommit()
+	mock.ExpectExec(`WITH admission AS MATERIALIZED`).
+		WithArgs(sqlmock.AnyArg(), uint64(7), "space-1", "raw-1", "wiki-1", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`SELECT .* FROM "wiki_releases"`).
 		WithArgs(uint64(7), "space-1", "raw-1", "wiki-1", "original", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"release_id", "preparation_id", "base_activation_epoch"}).
@@ -52,6 +55,9 @@ func TestReviewPublicationTransactionFindsConcurrentCommitBeforeSourceOrHeadWrit
 	mock.ExpectQuery(`SELECT .* FROM "enterprise_release_retirements"`).
 		WithArgs(uint64(7), "space-1", "original", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"retired_at"}))
+	mock.ExpectExec(`DELETE FROM enterprise_member_validation_pending`).
+		WithArgs(uint64(7), "space-1", "raw-1", "wiki-1", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	store.members.put(memberKey{Tenant: 7, Space: "space-1", Release: "original"}, nil)
 	r, err := store.Activate(ctx, release.ActivationWrite{
 		TenantID: 7, SpaceID: "space-1", CandidateID: "candidate", BundleDigest: "bundle",
