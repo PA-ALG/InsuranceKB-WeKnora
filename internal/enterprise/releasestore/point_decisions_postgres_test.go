@@ -7,6 +7,7 @@ package releasestore
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"testing"
 
@@ -68,6 +69,7 @@ func pointActivation(t *testing.T, store *Store, base release.Release, c release
 			members = append(members, m)
 		}
 	}
+	sort.Slice(members, func(i, j int) bool { return members[i].LogicalSlug < members[j].LogicalSlug })
 	return release.ActivationWrite{
 		TenantID: 7, SpaceID: "space-1", Subject: "user-1", CandidateID: c.ID,
 		BundleDigest: digestOf([]byte(c.BundleDigest + "|" + batch)), DecisionID: "points-" + batch,
