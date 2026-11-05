@@ -183,9 +183,11 @@ func (r *WikiReleaseRepository) GetReleaseMemberDigests(context.Context, types.W
 ```
 
 `WithMemberStorage`返回新实例，不可修改共享实例；`NewWikiReleaseRepository(db)`原签名不变。
-生产`releasestore.New`及其事务内repository实例都接入`memberstore.New()`，不是只接测试；无端口的
+生产`releasestore.New`及其事务内repository实例都接入同一成员存储实例，不是只接测试；无端口的
 legacy repository不得在ref-only生产scope服务。新模块不反向调用repository，接口依赖在repository，
-实现只依types/GORM，避免循环。ParentReleaseID是本次既有Expected Head，不补读更新后的Head。
+实现只依types/GORM，避免循环。`releasestore.NewMemberStorage()`向底层构造注入企业历史验证函数，
+复用原 decodeMember/MemberDigest，并核 manifest/准备/Release 对应及 JSONB 投影；未知协议的纯存储实例
+不得认证、切换或精简历史。该内部构造不修改冻结三方法端口。ParentReleaseID是本次既有Expected Head，不补读更新后的Head。
 
 - 唯一Head仍由原Activate事务负责；输入等价/最终列表校验先于持久写。内容、块、根、两个映射、
   原头/receipt、点决定和Source pin/links同一事务提交。保持review-candidate→candidate digest→
