@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         SourcePagesError,
     ) as error:
         print(error.code, file=sys.stderr)
-        return 1
+        return 3 if error.code == "SANDBOX_PROBE_FAILED" else 1
     except OSError:
         print("REVIEW_IO_ERROR", file=sys.stderr)
         return 1

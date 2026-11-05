@@ -35,7 +35,7 @@ def run_script(run_root: Path, sessions: list[str]) -> str:
     ]
     for session in sessions:
         lines.append(
-            f"{shlex.quote(sys.executable)} -m insurance_harness.ingest.judge_batch.execution "
+            f"{shlex.quote(sys.executable)} -m insurance_harness.ingest.judge_batch "
             f"execute --run-root {shlex.quote(str(run_root))} --session {shlex.quote(session)}"
         )
     return "\n".join(lines) + "\n"

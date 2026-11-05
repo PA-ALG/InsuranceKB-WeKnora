@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import argparse
 import fcntl
 import hashlib
 import json
 import re
 import shlex
 import subprocess
-import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -437,28 +435,3 @@ def invalid_answer(root: Path, session: str) -> None:
         matches[-1]["status"] = "failed"
         matches[-1]["failure"] = "ANSWER_INVALID"
         save(root, rows)
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["execute", "reconcile"])
-    parser.add_argument("--run-root", type=Path, required=True)
-    parser.add_argument("--session", required=True)
-    parser.add_argument("--retry", action="store_true")
-    args = parser.parse_args()
-    try:
-        if args.action == "execute":
-            execute(args.run_root, args.session, retry=args.retry)
-        else:
-            reconcile(args.run_root, args.session)
-    except JudgeBatchError as error:
-        print(error.code, file=sys.stderr)
-        return 3
-    except OSError:
-        print("REVIEW_IO_ERROR", file=sys.stderr)
-        return 3
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
