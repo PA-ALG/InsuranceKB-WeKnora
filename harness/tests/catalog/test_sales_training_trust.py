@@ -69,7 +69,10 @@ def test_the_scoped_rule_names_exactly_the_four_sales_fields() -> None:
     assert policy.restricted_fields("sales_training") == SALES_FIELDS
     assert policy.header_fields("sales_training") == frozenset()
     assert policy.header_roles() == frozenset({"rate_table"})
-    assert policy.restricted_fields("rate_table") == frozenset({"premium_payment_term"})
+    assert policy.restricted_fields("rate_table") == frozenset(
+        {"premium_payment_term", "premium_payment_frequency"}
+    )
+    assert policy.header_fields("rate_table") == frozenset({"premium_payment_term"})
     assert policy.restricted_fields("terms") == frozenset()
 
 
