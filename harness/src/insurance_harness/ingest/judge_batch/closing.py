@@ -22,13 +22,12 @@ from pydantic import ValidationError
 from insurance_harness.bundle.client import CandidateDetail, PlatformClient, PlatformError
 from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.ingest.judge_batch import records
+from insurance_harness.ingest.judge_batch.dual import verified
 from insurance_harness.ingest.judge_batch.manifest import check_run_root, write_json
 from insurance_harness.ingest.judge_batch.points import JudgeBatchError, content_of
 from insurance_harness.ingest.judge_batch.verdicts import (
     judged_points,
     load_plan,
-    load_summary,
-    load_verdicts,
 )
 
 
@@ -72,9 +71,9 @@ def close_points(
     live: bool = False,
 ) -> dict[str, Any]:
     check_run_root(run_root)
-    summary, space_id = load_summary(run_root), load_plan(run_root)["space_id"]
+    summary, space_id = verified(run_root)["summary"], load_plan(run_root)["space_id"]
     points = judged_points(run_root, product)
-    verdicts = {row["slug"]: row["verdict"] for row in load_verdicts(run_root, product)}
+    verdicts = {row["slug"]: row["verdict"] for row in verified(run_root)["verdicts"][product]}
     proposed, pending = _proposed(_detail(client, space_id, candidate), product)
     attempt = records.current(run_root, product)
     published = attempt if attempt is not None and attempt.status == "published" else None

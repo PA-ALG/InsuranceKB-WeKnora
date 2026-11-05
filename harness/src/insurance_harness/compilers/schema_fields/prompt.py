@@ -12,7 +12,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from insurance_harness.compilers.schema_fields.cards import card_payload
+from insurance_harness.compilers.schema_fields.cards import (
+    card_payload,
+    field_rules,
+    source_priority,
+)
 from insurance_harness.compilers.schema_fields.definitions import FieldDefinition
 from insurance_harness.compilers.schema_fields.profiles import field_extraction_profile
 from insurance_harness.evidence.segments import Segment
@@ -43,16 +47,8 @@ pitfalls 是该字段实测出现过的错误。
 # document's role to step two and the rule that the terms prevail over the brochure; 2026-10-29.3
 # (S12c-6b) marks the production pipeline back to one step-one draw; 2026-10-29.4 (S12c-8) shows a
 # recompile's step two the reviewed value of a carried field, which it keeps where still supported.
-VALUE_PROTOCOL_VERSION = "2026-10-29.4"
-
-# S12c-7: step two knows each document's role, and the terms prevail over the brochure.
-_TERMS_PREVAIL = (
-    "documents 给出每个材料序号（段落编号中的 D1、D2…）的材料角色：terms 是保险条款（合同正文），\n"
-    "brochure 是产品说明书，rate_table 是费率表表头。\n"
-    "条款已对某一事项作出规定时，以条款为准："
-    "说明书对同一事项给出的不同数值、起算点、比例或另加的例外，不写进 value。\n"
-    "条款没有涉及的事项，可以用说明书的内容。\n"
-)
+# S12c-12b changes trusted input ranges (bounded rate notes), not the prompt wording.
+VALUE_PROTOCOL_VERSION = "2026-11-05.1"
 
 VALUE_PROMPT = (
     """你是寿险产品知识字段撰写器。只输出一个 JSON 对象，不要 Markdown。
@@ -60,7 +56,7 @@ VALUE_PROMPT = (
 先逐段判断哪些段落含有本字段的内容（按字段卡 includes）；
 只含字段卡 excludes 内容或与本字段无关的段落不用。
 """
-    + _TERMS_PREVAIL
+    + source_priority()
     + """只用这些段落中的事实写出 value，不得用常识补充；数字、否定与期限不得改写。
 列全段落中该字段的全部数值、选项、条件、例外与适用对象，不得概括，不得用“等”省略；
 保留责任、计划、人群或年期之间的对应关系；表格保留行列关系与单位。
@@ -118,6 +114,8 @@ def _field(
     card = card_payload(definition, examples=examples, entity_id=entity_id)
     if card is not None:
         entry["card"] = card
+    else:
+        entry["rules"] = field_rules(definition)
     return entry
 
 

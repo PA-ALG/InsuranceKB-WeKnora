@@ -28,7 +28,6 @@ from insurance_harness.evidence.source_ref import SourceRevision
 from insurance_harness.ingest.judge_batch import (
     JudgeBatchError,
     close_points,
-    ingest,
     prepare,
     publish_batch,
 )
@@ -36,6 +35,7 @@ from tests.changes.test_claim_changes_publish import DeltaPlatform, active
 from tests.compilers.schema_fields.test_publish_cli import SOURCE, Reader
 from tests.compilers.schema_fields.test_publish_cli import platform as prepared_files  # noqa: F401
 from tests.compilers.schema_fields.test_publish_registry import registry_file
+from tests.ingest.dual_fixture import ingest
 
 POLICY = "rv-judge:test:2026-10-28"
 REVIEWER = "judge-test-xhigh"
@@ -235,7 +235,8 @@ def test_prepare_puts_only_changed_points_to_the_judge_and_never_calls_codex(
     assert (session / "AGENTS.md").read_text(encoding="utf-8").strip()
     assert any((session / "sources" / "1828").glob("*.txt"))
     script = (run / "run.sh").read_text(encoding="utf-8")
-    assert "codex exec" in script and "sessions/s01" in script and "judge-test" in script
+    assert "judge_batch execute" in script and "--session s01" in script
+    assert plan["model"] == "judge-test"
     with pytest.raises(JudgeBatchError) as again:
         prepared(world)
     assert again.value.code == "RUN_EXISTS"

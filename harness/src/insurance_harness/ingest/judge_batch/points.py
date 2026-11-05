@@ -27,7 +27,7 @@ from insurance_harness.changes.decision import decide_changes
 from insurance_harness.changes.options import registry_inputs
 from insurance_harness.changes.sources import publication_entries
 from insurance_harness.changes.types import ChangeSet, Verdict
-from insurance_harness.compilers.schema_fields.cards import card_payload, cards_version
+from insurance_harness.compilers.schema_fields.cards import card_payload, cards_version, field_rules
 from insurance_harness.compilers.schema_fields.claims import (
     claims_from,
     require_cards_version,
@@ -36,6 +36,7 @@ from insurance_harness.compilers.schema_fields.claims import (
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.contracts.knowledge import Claim
+from insurance_harness.eval.material_identity import effective_roles, material_identities
 from insurance_harness.eval.pdf_text import PageText
 from insurance_harness.evidence.segments import SegmentedSource
 from insurance_harness.ingest.source_map import PageReader, SourceEntry, load_trusted_pages
@@ -88,6 +89,7 @@ class Material(_Strict):
     document: str
     sha256: str
     file: str
+    role: str | None = None
 
 
 class ProductChanges(_Strict):
@@ -143,6 +145,7 @@ def basis_of(output: CompileOutput, pages: dict[tuple[str, int], list[PageText]]
             for (kid, attempt), rows in pages.items()
         ),
         "compiled_from": output.materials,
+        "material_roles": output.material_roles,
         "cards_version": output.cards_version,
         "value_protocol": output.value_protocol,
         "judge_cards": cards_version(),
@@ -170,6 +173,8 @@ def field_context(repo: Path, pack: str, field_keys: Iterable[str]) -> dict[str,
             "source_guidance": definition.source_guidance,
             "card": card_payload(definition, examples=False),
         }
+        if shown[key]["card"] is None:
+            shown[key]["rules"] = field_rules(definition)
     return shown
 
 
@@ -225,6 +230,10 @@ def rebuild(
     if basis is not None and found != basis:
         raise JudgeBatchError("INPUTS_CHANGED")
     pages, sources = load_trusted_pages(once, source_map.space_id, entries)
+    if output.material_roles is not None:
+        actual = material_identities(pages.evidence, pages.table_headers, sources)
+        if output.material_roles != effective_roles(actual, pages):
+            raise JudgeBatchError("INPUTS_CHANGED")
     incoming = claims_from(
         output, SegmentedSource(pages.evidence, table_headers=pages.table_headers), sources
     )
@@ -232,7 +241,11 @@ def rebuild(
     return Rebuilt(output, name, pack, source_map.space_id, entries, changes, once.read, found)
 
 
-def materials_of(product: str, pages: dict[tuple[str, int], list[PageText]]) -> list[Material]:
+def materials_of(
+    product: str,
+    pages: dict[tuple[str, int], list[PageText]],
+    roles: dict[str, str] | None = None,
+) -> list[Material]:
     return [
         Material(
             knowledge_id=kid,
@@ -240,6 +253,9 @@ def materials_of(product: str, pages: dict[tuple[str, int], list[PageText]]) -> 
             document=rows[0].document if rows else "",
             sha256=rows[0].document_sha256.lower() if rows else "",
             file=f"sources/{product}/{kid}-{attempt}.txt",
+            role=(roles or {}).get(f"{kid}:{attempt}:{rows[0].document_sha256.lower()}")
+            if rows
+            else None,
         )
         for (kid, attempt), rows in sorted(pages.items())
     ]
@@ -281,7 +297,7 @@ def live_claim(active: Release | None, slug: str | None) -> Claim | None:
 
 
 def product_changes(rebuilt: Rebuilt, active: Release | None) -> ProductChanges:
-    materials = materials_of(rebuilt.output.entity_id, rebuilt.pages)
+    materials = materials_of(rebuilt.output.entity_id, rebuilt.pages, rebuilt.output.material_roles)
     members = {claim.logical_key: claim for claim in rebuilt.changes.members}
     counts: dict[str, int] = {}
     points = []

@@ -12,8 +12,9 @@ from typing import Any
 
 import pytest
 
-from insurance_harness.ingest.judge_batch import JudgeBatchError, close_points, ingest
+from insurance_harness.ingest.judge_batch import JudgeBatchError, close_points
 from tests.compilers.schema_fields.test_publish_cli import platform as prepared_files  # noqa: F401
+from tests.ingest.dual_fixture import ingest
 from tests.ingest.test_judge_batch import (  # noqa: F401
     answer,
     approve_all,

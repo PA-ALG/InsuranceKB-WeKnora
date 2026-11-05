@@ -11,11 +11,12 @@ import httpx
 import pytest
 
 from insurance_harness.eval.judge_files import stored_requests
-from insurance_harness.ingest.judge_batch import JudgeBatchError, close_points, ingest, prepare
+from insurance_harness.ingest.judge_batch import JudgeBatchError, close_points, prepare
 from insurance_harness.ingest.judge_batch import cli as command
 from insurance_harness.ingest.judge_batch.sessions import prompt
 from tests.changes.test_claim_changes_publish import active
 from tests.compilers.schema_fields.test_publish_cli import platform as prepared_files  # noqa: F401
+from tests.ingest.dual_fixture import ingest
 from tests.ingest.test_judge_batch import (  # noqa: F401
     POLICY,
     REVIEWER,
@@ -85,6 +86,9 @@ def test_the_cli_ingests_and_reports_codes_only(
 ) -> None:
     prepared(world)
     answer(world, {key: ("approve", "通过") for key in world["keys"]})
+    from tests.ingest.dual_fixture import stage
+
+    stage(world["run_root"])
     assert command.main(["ingest", "--run-root", str(world["run_root"])]) == 0
     assert json.loads(capsys.readouterr().out)["products"]["1828"]["approve"] == 2
     monkeypatch.delenv("HARNESS_WEKNORA_BASE_URL", raising=False)

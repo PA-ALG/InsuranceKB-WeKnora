@@ -1,8 +1,8 @@
 """S12c-11 acceptance: two field boundaries the cards left open are settled (Spec §2, #473 ruling).
 
 Protected file: written by Claude. A non-payment condition written into one benefit's clause and
-applying only to that benefit belongs to the benefit's rule field and also to exclusions; who
-issues a disability assessment belongs to the disability criteria, while the document itself stays
+applying only to that benefit belongs only to its dedicated field (S12c-12a supersedes dual
+ownership); who issues a disability assessment belongs to disability criteria; the document stays
 a claim document. The wording is generic insurance language, never a product's code, name or
 answer.
 """
@@ -53,7 +53,7 @@ def definition(key: str) -> FieldDefinition:
 
 
 def test_the_cards_carry_the_s12c11_version() -> None:
-    assert cards_version() == "draft-2026-10-31b"
+    assert cards_version() == "draft-2026-11-05a"
 
 
 def test_each_benefit_card_keeps_its_own_non_payment_conditions() -> None:
@@ -61,7 +61,7 @@ def test_each_benefit_card_keeps_its_own_non_payment_conditions() -> None:
     for key in BENEFIT:
         includes = cards[key]["includes"]
         assert CONDITION in includes and "不承担本项保险金责任" in includes, key
-        assert "同时选入责任免除" in includes, key
+        assert "不重复写入责任免除" in includes, key
 
 
 def test_only_the_benefit_cards_carry_the_condition() -> None:
@@ -81,10 +81,11 @@ def test_no_benefit_card_sends_its_own_conditions_away() -> None:
         assert "免责" not in pitfalls, key
 
 
-def test_exclusions_keep_the_sentences_too() -> None:
+def test_exclusions_only_keeps_conditions_without_a_dedicated_field() -> None:
     includes = all_cards()["exclusions"]["includes"]
     assert "保险责任条文中夹带" in includes
-    assert "同时属于该项责任的给付规则字段" in includes
+    assert "没有专门给付字段" in includes
+    assert "同时属于该项责任的给付规则字段" not in includes
 
 
 def test_who_issues_a_disability_assessment_is_a_disability_criterion() -> None:

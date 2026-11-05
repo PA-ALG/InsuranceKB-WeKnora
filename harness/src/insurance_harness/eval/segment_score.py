@@ -140,7 +140,8 @@ def score_selection(
         if fingerprints.get((quote.document, quote.page)) != quote.document_sha256.lower():
             return set()
         recorded = quote.segment_id if isinstance(quote, GoldenV2Evidence) else None
-        return source.locate(quote.document, quote.page, quote.quote, recorded)
+        located = source.locate(quote.document, quote.page, quote.quote, recorded)
+        return located if all(source.permits(field_key, sid) for sid in located) else set()
 
     scored: list[FieldSelection] = []
     agree = unmapped = unmapped_predicted = copied_gold = copied_chosen = 0
@@ -205,6 +206,8 @@ def _recorded_selection(source: SegmentedSource, result: FieldResult) -> set[str
     wanted = [*result.segment_ids, *result.carried_segment_ids, *result.recalled_segment_ids]
     ids, dropped = source.resolve(wanted)
     if dropped or ids != wanted:
+        return None
+    if any(not source.permits(result.field_key, sid) for sid in ids):
         return None
     cut = source.evidence(ids)
     if len(cut) != len(result.evidence) or not all(

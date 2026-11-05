@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from insurance_harness.ingest.judge_batch.execution import command, probe
 from insurance_harness.ingest.judge_batch.launch import REFUSED, SANDBOX
 from tests.compilers.schema_fields.test_publish_cli import platform as prepared_files  # noqa: F401
 from tests.ingest.test_judge_batch import prepared, world  # noqa: F401
@@ -34,7 +35,19 @@ case "$1" in
     if [ "$FAKE_SANDBOX" = bounded ] && [ "$target" != "$PWD" ]; then exit 1; fi
     exec "$@" ;;
   exec)
-    printf '%s\\n' "$*" >> "$FAKE_CODEX_LOG" ;;
+    printf '%s\\n' "$*" >> "$FAKE_CODEX_LOG"
+    python3 - "$@" <<'PYCODE'
+import sys, pathlib, json
+args=sys.argv; root=pathlib.Path(args[args.index('-C')+1])
+for path in (root/'requests').glob('*.json'):
+    question=json.loads('\\n'.join(json.loads(path.read_text())['user_lines']))
+    points=[dict(slug=p['slug'],verdict='approve',category='通过',reason='合成')
+            for p in question['points']]
+    (root/'responses'/path.name).write_text(json.dumps({'points':points}))
+print(json.dumps({'type':'thread.started','thread_id':'fake-thread'}))
+print(json.dumps({'type':'turn.completed'}))
+PYCODE
+    ;;
 esac
 """
 
@@ -63,14 +76,26 @@ def test_every_judge_runs_with_temporary_and_extra_roots_removed(
     world: dict[str, Any],  # noqa: F811
 ) -> None:
     prepared(world)
-    script = (world["run_root"] / "run.sh").read_text(encoding="utf-8")
-    judges = [line for line in script.splitlines() if "codex exec" in line]
-    assert judges
-    for line in judges:
-        assert "-s workspace-write" in line and SANDBOX in line
-        assert "--add-dir" not in line and "danger" not in line
-    probe = next(line for line in script.splitlines() if "codex sandbox" in line)
-    assert SANDBOX in probe, "the probe runs under the judges' exact settings"
+    run = world["run_root"]
+    workspace = run / "attempts" / "s01-0001"
+    args = command(run, workspace)
+    assert args[:3] == ["codex", "exec", "--json"]
+    assert "workspace-write" in args and "--add-dir" not in args
+    expected = shlex.split(SANDBOX)
+    assert all(arg in args for arg in expected)
+    observed = []
+
+    def fake_probe(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        observed.append(args)
+        assert args[:2] == ["codex", "sandbox"]
+        assert all(arg in args for arg in expected)
+        return subprocess.CompletedProcess(args, int(args[-1] != str(workspace)))
+
+    from unittest.mock import patch
+
+    with patch("insurance_harness.ingest.judge_batch.execution.subprocess.run", fake_probe):
+        probe(run, workspace)
+    assert len(observed) == 6
     words = shlex.split(SANDBOX)
     assert "sandbox_workspace_write.exclude_tmpdir_env_var=true" in words
     assert "sandbox_workspace_write.exclude_slash_tmp=true" in words
@@ -109,5 +134,5 @@ def test_judges_start_when_only_their_own_session_is_writable(
     prepared(world)
     code, started = launch(world, tmp_path, "bounded")
     assert code == 0 and len(started) == 1
-    assert f"-C {world['run_root']}/sessions/s01" in started[0]
+    assert f"-C {world['run_root']}/attempts/s01-0001" in started[0]
     assert "sandbox_workspace_write.exclude_slash_tmp=true" in started[0]

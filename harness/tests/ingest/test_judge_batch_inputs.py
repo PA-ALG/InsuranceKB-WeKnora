@@ -16,9 +16,10 @@ import pytest
 
 from insurance_harness.eval.judge import JudgeRequest
 from insurance_harness.eval.pdf_text import PageText
-from insurance_harness.ingest.judge_batch import JudgeBatchError, ingest, prepare
+from insurance_harness.ingest.judge_batch import JudgeBatchError, prepare
 from tests.compilers.schema_fields.test_publish_cli import PAGES
 from tests.compilers.schema_fields.test_publish_cli import platform as prepared_files  # noqa: F401
+from tests.ingest.dual_fixture import ingest
 from tests.ingest.test_judge_batch import (  # noqa: F401
     POLICY,
     REVIEWER,
