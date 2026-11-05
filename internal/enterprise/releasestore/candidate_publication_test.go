@@ -32,6 +32,7 @@ func TestReviewPublicationTransactionFindsConcurrentCommitBeforeSourceOrHeadWrit
 	ctx := context.Background()
 	// No nonce or candidate was visible at the optimistic check. The transaction
 	// observes the first publisher's commit only AFTER acquiring its candidate lock.
+	expectValidationStart(mock)
 	expectNoNonce(mock)
 	expectCandidateLookup(mock, "bundle", "")
 	mock.ExpectBegin()
@@ -41,9 +42,6 @@ func TestReviewPublicationTransactionFindsConcurrentCommitBeforeSourceOrHeadWrit
 		WithArgs(`[7,"space-1","bundle"]`).WillReturnResult(sqlmock.NewResult(0, 1))
 	expectCandidateLookup(mock, "bundle", "original")
 	mock.ExpectCommit()
-	mock.ExpectExec(`WITH admission AS MATERIALIZED`).
-		WithArgs(sqlmock.AnyArg(), uint64(7), "space-1", "raw-1", "wiki-1", sqlmock.AnyArg()).
-		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`SELECT .* FROM "wiki_releases"`).
 		WithArgs(uint64(7), "space-1", "raw-1", "wiki-1", "original", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"release_id", "preparation_id", "base_activation_epoch"}).
@@ -55,9 +53,7 @@ func TestReviewPublicationTransactionFindsConcurrentCommitBeforeSourceOrHeadWrit
 	mock.ExpectQuery(`SELECT .* FROM "enterprise_release_retirements"`).
 		WithArgs(uint64(7), "space-1", "original", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"retired_at"}))
-	mock.ExpectExec(`DELETE FROM enterprise_member_validation_pending`).
-		WithArgs(uint64(7), "space-1", "raw-1", "wiki-1", sqlmock.AnyArg()).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectValidationFinish(mock, "")
 	store.members.put(memberKey{Tenant: 7, Space: "space-1", Release: "original"}, nil)
 	r, err := store.Activate(ctx, release.ActivationWrite{
 		TenantID: 7, SpaceID: "space-1", CandidateID: "candidate", BundleDigest: "bundle",
@@ -75,6 +71,7 @@ func TestReviewPublicationFailureRollsBackCandidateLock(t *testing.T) {
 	for _, lockFails := range []bool{false, true} {
 		t.Run(map[bool]string{false: "source invalid", true: "lock failed"}[lockFails], func(t *testing.T) {
 			store, mock := reviewSQL(t)
+			expectValidationStart(mock)
 			expectNoNonce(mock)
 			expectCandidateLookup(mock, "bundle", "")
 			mock.ExpectBegin()
@@ -94,6 +91,11 @@ func TestReviewPublicationFailureRollsBackCandidateLock(t *testing.T) {
 			mock.ExpectRollback()
 			expectNoNonce(mock)
 			expectCandidateLookup(mock, "bundle", "")
+			kind := ""
+			if lockFails {
+				kind = "gap"
+			}
+			expectValidationFinish(mock, kind)
 			_, err := store.Activate(context.Background(), release.ActivationWrite{
 				TenantID: 7, SpaceID: "space-1", CandidateID: "candidate",
 				BundleDigest: "bundle", Nonce: "second-decision",
