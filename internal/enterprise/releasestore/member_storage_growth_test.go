@@ -47,8 +47,8 @@ func referenceFixtureScope(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	// Controlled synthetic state; small operator acceptance tests lock the actual transition guard.
 	require.NoError(t, db.Exec("INSERT INTO enterprise_member_scopes\n (tenant_id,space_id,raw_kb_"+
-		"id,wiki_kb_id,mode,observation_started_at)\n VALUES(7,'space-1','r"+
-		"aw-1','wiki-1','reference',CURRENT_TIMESTAMP-INTERVAL '8 days')").Error)
+		"id,wiki_kb_id,mode,observation_started_at,observation_failure_since)\n VALUES(7,'space-1','r"+
+		"aw-1','wiki-1','reference',CURRENT_TIMESTAMP-INTERVAL '8 days',CURRENT_TIMESTAMP)").Error)
 }
 
 type storageBytes struct{ Contents, Chunks, Roots, Mappings, Control int64 }
@@ -67,7 +67,7 @@ func logicalStorageBytes(t *testing.T, db *gorm.DB) storageBytes {
 		{&b.Chunks, `SELECT COALESCE(sum(48+octet_length(refs)),0) FROM enterprise_member_chunks`},
 		{&b.Roots, "SELECT COALESCE(sum(56+octet_length(order_mode)+octet_length(bloc" +
 			"ks)),0) FROM enterprise_member_sets"},
-		{&b.Control, "SELECT COALESCE(sum(40+octet_length(space_id)+octet_length(raw_kb" +
+		{&b.Control, "SELECT COALESCE(sum(40+CASE WHEN observation_failure_since IS NULL THEN 0 ELSE 8 END+octet_length(space_id)+octet_length(raw_kb" +
 			"_id)+octet_length(wiki_kb_id)+octet_length(mode)),0) FROM enterpr" +
 			"ise_member_scopes"},
 	}
@@ -86,6 +86,15 @@ func logicalStorageBytes(t *testing.T, db *gorm.DB) storageBytes {
 	require.NoError(t, db.Raw("SELECT COALESCE(sum(48+octet_length(release_id)+octet_length(phas"+
 		"e)),0) FROM enterprise_member_progress").Scan(&n).Error)
 	b.Control += n
+	for _, table := range []string{"enterprise_member_validation_pending", "enterprise_member_validation_failures"} {
+		extra := ""
+		if table == "enterprise_member_validation_failures" {
+			extra = "+octet_length(kind)"
+		}
+		var bytes int64
+		require.NoError(t, db.Raw("SELECT COALESCE(sum(16+octet_length(space_id)+octet_length(raw_kb_id)+octet_length(wiki_kb_id)+octet_length(attempt_id)"+extra+"),0) FROM "+table).Scan(&bytes).Error)
+		b.Control += bytes
+	}
 	for _, table := range []string{"wiki_releases", "wiki_release_preparations"} {
 		var markerBytes int64
 		require.NoError(t, db.Raw("SELECT COALESCE(sum(octet_length(member_storage)),0) FROM "+table).
