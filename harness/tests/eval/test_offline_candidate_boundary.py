@@ -17,10 +17,11 @@ from insurance_harness.compilers.schema_fields.engine import CompileOutput
 from insurance_harness.compilers.schema_fields.page import product_page
 from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.evidence.source_ref import SourceRevision
-from insurance_harness.ingest.judge_batch import JudgeBatchError, ingest, records
+from insurance_harness.ingest.judge_batch import JudgeBatchError, records
 from insurance_harness.review.routing import HUMAN_DECISION
 from tests.compilers.schema_fields.test_publish_cli import CATALOG, SOURCE
 from tests.compilers.schema_fields.test_publish_cli import platform as prepared_files  # noqa: F401
+from tests.ingest.dual_fixture import ingest
 from tests.ingest.test_judge_batch import approve_all, prepared
 from tests.ingest.test_judge_batch import publish as publish_judged
 from tests.ingest.test_judge_batch import world as prepared_world  # noqa: F401
