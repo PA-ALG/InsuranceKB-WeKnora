@@ -1,7 +1,7 @@
 # ST-1 · Release 成员与准备记录存储
 
-> r2，基于 `ac1bb1a1e` 修订 M1–M3，**待 Claude 明确确认后才进 RED**。Refs #550。
-> Codex 文档修订/拟实施，Claude 审核；本轮仍只有文档。
+> r3，r2 已获确认；依 Claude [顺序裁定](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/550#issuecomment-6666799749) 澄清内部布局与 SQL 读序。Refs #550。
+> Codex 实现，Claude 审核；本提交独立修正文档事实，不含运行时修改。
 > 本提交不含 RED、运行时代码、迁移或合同变更，不是上线/清理许可。
 > 依据：蓝图 §5.1「成员内容寻址」、§6.2/6.5、§7.4/7.5、§12；S4c-2a/2b-1/2b-2、S3i、S8b。
 > 调查源码固定于 `76f06b695`；目录 `.worktrees/st1`，分支 `slice/st1`。
@@ -112,8 +112,11 @@ Space 或 KB 合并，即使字节相同。没有按 digest 直接读内容的�
 
 **冻结分块 codec v1：**
 
-- Release 列表按既有 UTF-8 slug 字节字典序；历史 preparation 保留其原数组顺序，根带 order_mode
-  `slug_asc` 或 `legacy_sequence`。边界 hash 只用 slug，不看 payload/storage_digest/类型/产品编号。
+- Release **内部布局**按 materialize 的 UTF-8 slug 字节字典序，根只用 `slug_asc`；它不是对外读序。
+  所有新旧 Release 对外均沿用旧 reader 的 SQL `ORDER BY logical_slug ASC` 及原列 collation，
+  在批量关联内容后由 SQL 排序；迁移将原列 collation 复制到内容列，部署不得另行改变其一致性。
+  历史 preparation 保留原数组顺序，必要时用 `legacy_sequence`，不由 Release 读序反写。
+  边界 hash 只用 slug，不看 payload/storage_digest/类型/产品编号。
 - 首建或历史回填从头扫描：`H=SHA256("enterprise-member-boundary.v1\0" + LP(slug))`，LP同§4.1；
   块满32项后，H首8字节 big-endian 的低6位为0则自然切开；到128项强制切开。全局末块可少于32。
   目标平均64–128；均匀 hash 下修尾前期望约81.11，不把真实输入分布当随机保证。
@@ -149,7 +152,7 @@ Space 或 KB 合并，即使字节相同。没有按 digest 直接读内容的�
    内容、块、根键冲突都核全部字段/有序数据，不一致失败关闭，不能盲目忽略冲突。
 
 新写 materialize 和既有 kind 默认处理**只做一次**，以最终同一有序七字段列表同时构造准备和Release，
-调用一次Put、共享同一根，不产生新“空kind/page”差异。只有历史数组顺序/字段确有差别时才保留
+调用一次Put、共享同一根；Release 读出时另作 SQL 排序，不产生新“空kind/page”差异。只有历史准备数组顺序/字段确有差别时才保留
 独立准备根；不能拿Release行反写历史准备。根、块只读即可完整还原，结构摘要不能取代业务摘要。
 
 保留原五表的头/manifest/身份。已验证准备members可置JSONB `[]`而非null，但只依明确格式映射读取；
@@ -214,7 +217,9 @@ legacy repository不得在ref-only生产scope服务。新模块不反向调用re
    准备快照的完整内容/行版本需核前后未变，不能仅信
    PreparationDigest（它不覆盖 members）。draft/无可信提交关联的行跳过并报计数。
 4. **核验/追平**：逐版本核四段 scope、全部字段、计数/唯一性、原数组顺序、manifest 对应、
-   原企业 payload digest 与封套字节。历史成员、引用、pins、retirements、receipt/决定总数和身份不变。
+   原企业 payload digest 与封套字节。Release 新 reader 与旧 reader 在**同一 DB**逐项/逐字段/逐序比较，
+   不拿 Go 排序代替旧 SQL 真值。两个 Release 业务等价按唯一 slug→完整成员内容比较，不能比较根摘要。
+   历史成员、引用、pins、retirements、receipt/决定总数和身份不变。
    校验进度持久化且可重复；增量新发布由桥接写保证，不只依赖 created_at 水位推断“没有漏行”。
 5. **cutover**：读方按已验证的格式标记切新，未标记只读 legacy；新写转为 reference-only 前确保
    所有运行实例支持新格式。默认观察窗**7天**，部署运维可事先调整；退出硬条件为**全部映射
@@ -306,3 +311,5 @@ VACUUM 可复用页与 OS/VM 真正可用空间分开报告；rewrite/VACUUM FUL
 完整重叠率/U0/目标物理大小是**线上迁移前门**，不是设计确认后RED/实现的前置；工程可先用合成
 数据做。但本轮用户只授权文档，不能用原审核末句自行开始RED。确认后后续业务另行接续。
 当前不测线上DB/Docker、不恢复541副本、不与549编译/摄取争资源。线上迁移/空间回收与部署仍另开运维。
+
+r2 阶段快照中的等待确认已由后续实施授权解除；r3 仅修正读序事实，不改变定量门槛或本轮线上禁令。
