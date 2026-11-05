@@ -68,7 +68,7 @@ def first(case: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> Path:
     fake_run(monkeypatch, "thread-first")
     module("execution").execute(case["run_root"], "s01")
     ingest(case["run_root"])
-    return case["run_root"]
+    return Path(case["run_root"])
 
 
 def second(
