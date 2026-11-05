@@ -85,7 +85,7 @@ def _answer(
                 "verdict": verdict,
                 "category": category,
                 "reason": reason.strip(),
-                "change": point["change"],
+                "change": point.get("change", "independent"),
             }
         )
     return rows
@@ -118,13 +118,30 @@ def ingest(run_root: Path) -> dict[str, Any]:
     check_run_root(run_root)
     plan = load_plan(run_root)
     check_sessions(run_root, sorted(plan["sessions"]))
+    from insurance_harness.ingest.judge_batch.execution import invalid_answer, proof, workspace
+
+    if plan.get("round") == 2:
+        from insurance_harness.ingest.judge_batch.dual import check_second
+
+        check_second(run_root.parent)
+    verified_sessions = proof(run_root)
     rules = prompt()
     categories, approve = set(rules["reject_categories"]), rules["approve_category"]
     by_product: dict[str, list[dict[str, Any]]] = {}
     for session, entry in sorted(plan["sessions"].items()):
-        answered = _session_rows(
-            run_root / "sessions" / session, plan["model"], categories, approve
-        )
+        try:
+            answered = _session_rows(
+                workspace(
+                    run_root, {"session": session, "attempt": verified_sessions[session]["attempt"]}
+                ),
+                plan["model"],
+                categories,
+                approve,
+            )
+        except JudgeBatchError as error:
+            if error.code in {"ANSWER_INVALID", "ANSWER_MISSING", "COVERAGE_MISMATCH"}:
+                invalid_answer(run_root, session)
+            raise
         seen = [row["slug"] for _, row in answered]
         if sorted(seen) != sorted(entry["slugs"]) or len(set(seen)) != len(seen):
             raise JudgeBatchError("COVERAGE_MISMATCH")
@@ -162,6 +179,9 @@ def ingest(run_root: Path) -> dict[str, Any]:
         "products": products,
     }
     write_json(run_root / "summary.json", summary)
+    from insurance_harness.ingest.judge_batch.dual import seal
+
+    seal(run_root)
     return summary
 
 
@@ -171,23 +191,6 @@ def _previous_summary(run_root: Path) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return data
-
-
-def load_verdicts(run_root: Path, product: str) -> list[dict[str, Any]]:
-    try:
-        rows: list[dict[str, Any]] = json.loads(
-            (run_root / "verdicts" / f"{product}.json").read_text(encoding="utf-8")
-        )
-    except (OSError, ValueError):
-        raise JudgeBatchError("VERDICTS_MISSING") from None
-    return rows
-
-
-def load_summary(run_root: Path) -> dict[str, Any]:
-    summary = _previous_summary(run_root)
-    if summary is None:
-        raise JudgeBatchError("VERDICTS_MISSING")
-    return summary
 
 
 def judged_points(run_root: Path, product: str) -> dict[str, dict[str, Any]]:

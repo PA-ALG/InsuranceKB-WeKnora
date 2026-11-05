@@ -3,6 +3,8 @@
     python -m insurance_harness.ingest.judge_batch prepare --registry R --compile-root C \\
         --run-root J --policy-ref P --reviewer NAME --model M [--products …]
     python -m insurance_harness.ingest.judge_batch ingest --run-root J
+    python -m insurance_harness.ingest.judge_batch second --run-root J
+    # Run J/second/run.sh, then ingest --run-root J/second before publish.
     python -m insurance_harness.ingest.judge_batch publish --registry R --compile-root C \\
         --run-root J --issue N [--live] [--products …]
     python -m insurance_harness.ingest.judge_batch close --run-root J --product P \\
@@ -24,6 +26,8 @@ from insurance_harness.bundle.client import PlatformClient, PlatformError
 from insurance_harness.compilers.schema_fields.publish import REPO
 from insurance_harness.evidence.weknora_pages import SourcePagesError
 from insurance_harness.ingest.judge_batch.closing import close_points
+from insurance_harness.ingest.judge_batch.dual import prepare_second
+from insurance_harness.ingest.judge_batch.execution import execute, reconcile
 from insurance_harness.ingest.judge_batch.points import JudgeBatchError
 from insurance_harness.ingest.judge_batch.publishing import publish_batch
 from insurance_harness.ingest.judge_batch.sessions import prepare
@@ -50,9 +54,17 @@ def _parser() -> argparse.ArgumentParser:
     first.add_argument("--policy-ref", required=True)
     first.add_argument("--reviewer", required=True)
     first.add_argument("--model", required=True)
+    first.add_argument("--session-budget", type=int)
     first.add_argument("--points-per-session", type=int, default=40)
     first.add_argument("--points-per-request", type=int, default=12)
     commands.add_parser("ingest").add_argument("--run-root", type=Path, required=True)
+    commands.add_parser("second").add_argument("--run-root", type=Path, required=True)
+    for action in ("execute", "reconcile"):
+        runner = commands.add_parser(action)
+        runner.add_argument("--run-root", type=Path, required=True)
+        runner.add_argument("--session", required=True)
+        if action == "execute":
+            runner.add_argument("--retry", action="store_true")
     publish = commands.choices["publish"]
     publish.add_argument("--issue", type=int, required=True)
     publish.add_argument("--spot-check-policy", type=Path)
@@ -69,6 +81,14 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if args.command == "second":
+            return _emit(prepare_second(args.run_root))
+        if args.command == "execute":
+            result = execute(args.run_root, args.session, retry=args.retry)
+            return _emit({"status": result["status"], "attempt": result["attempt"]})
+        if args.command == "reconcile":
+            result = reconcile(args.run_root, args.session)
+            return _emit({"status": result["status"], "attempt": result["attempt"]})
         if args.command == "ingest":
             return _emit(ingest(args.run_root))
         base_url, api_key = os.environ.get(BASE_URL_ENV, ""), os.environ.get(API_KEY_ENV, "")
@@ -103,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
                     model=args.model,
                     points_per_session=args.points_per_session,
                     points_per_request=args.points_per_request,
+                    session_budget=args.session_budget,
                     repo=args.repo,
                 )
             )
@@ -128,6 +149,9 @@ def main(argv: list[str] | None = None) -> int:
         SourcePagesError,
     ) as error:
         print(error.code, file=sys.stderr)
+        return 1
+    except OSError:
+        print("REVIEW_IO_ERROR", file=sys.stderr)
         return 1
 
 

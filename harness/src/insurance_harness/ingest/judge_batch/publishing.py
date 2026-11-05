@@ -32,6 +32,7 @@ from insurance_harness.compilers.schema_fields.publish_changes import delta_bund
 from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.contracts.enums import ReviewMode
 from insurance_harness.ingest.judge_batch import records
+from insurance_harness.ingest.judge_batch.dual import verified
 from insurance_harness.ingest.judge_batch.manifest import check_run_root, write_json
 from insurance_harness.ingest.judge_batch.points import (
     JUDGED,
@@ -44,8 +45,6 @@ from insurance_harness.ingest.judge_batch.points import (
 from insurance_harness.ingest.judge_batch.verdicts import (
     judged_points,
     load_plan,
-    load_summary,
-    load_verdicts,
 )
 from insurance_harness.ingest.source_map import PageReader
 from insurance_harness.ingest.version_metadata import registry_metadata
@@ -56,7 +55,9 @@ def _approved(run_root: Path, product: str) -> dict[str, dict[str, Any]]:
     """Approved slug -> the point as the judge saw it."""
     points = judged_points(run_root, product)
     approved = {
-        row["slug"] for row in load_verdicts(run_root, product) if row["verdict"] == "approve"
+        row["slug"]
+        for row in verified(run_root)["verdicts"][product]
+        if row["verdict"] == "approve"
     }
     if not approved <= set(points):
         raise JudgeBatchError("VERDICTS_MISMATCH")
@@ -82,7 +83,7 @@ def build(
     approved = _approved(run_root, product)
     if not approved:
         return None, {"status": "nothing_approved", "claims": 0}
-    summary = load_summary(run_root)
+    summary = verified(run_root)["summary"]
     plan = load_plan(run_root)
     try:
         basis, bound = plan["basis"][product], plan["fields"][product]
@@ -172,7 +173,7 @@ def _decision(summary: dict[str, Any], issue: int) -> DecisionInput:
         outcome="approve",
         mode="machine",
         policy_ref=summary["policy_ref"],
-        reason=f"模型评审（{summary['reviewer']}）批准，运维 Issue #{issue}",
+        reason=f"两次独立模型评审（{summary['reviewer']}；dual-v1）批准，运维 Issue #{issue}",
     )
 
 
@@ -214,7 +215,7 @@ def _product(
     contents = info.pop("contents", {})
     if bundle is None or not live or policy is None:
         return info
-    summary = load_summary(run_root)
+    summary = verified(run_root)["summary"]
     record = records.start(run_root, product, bundle, contents, _decision(summary, issue))
     done = records.advance(
         run_root, record, client=client, space_id=space_id, policy=policy, base=active
@@ -236,7 +237,7 @@ def publish_batch(
     products: list[str] | None = None,
 ) -> dict[str, Any]:
     check_run_root(run_root)
-    summary = load_summary(run_root)
+    summary = verified(run_root)["summary"]
     selected = sorted(products or summary["products"])
     out_path = run_root / f"publish-{'live' if live else 'dry'}.json"
     result: dict[str, Any] = {"live": live, "stopped": None, "products": {}}
