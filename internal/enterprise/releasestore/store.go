@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
+	"github.com/Tencent/WeKnora/internal/enterprise/memberstore"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 )
 
@@ -24,12 +25,15 @@ type Store struct {
 	spaces   Spaces
 	now      func() time.Time
 	members  memberCache
+	storage  *memberstore.Store
 }
 
 // New wires the adapter to the platform database and the configured Spaces.
 func New(db *gorm.DB, spaces Spaces) *Store {
+	storage := NewMemberStorage()
 	return &Store{
-		db: db, releases: repository.NewWikiReleaseRepository(db), spaces: spaces,
+		db: db, releases: repository.NewWikiReleaseRepository(db).WithMemberStorage(storage),
+		spaces: spaces, storage: storage,
 		now: func() time.Time { return time.Now().UTC() },
 	}
 }

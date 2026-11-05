@@ -79,20 +79,7 @@ func (s *Store) MembersOf(ctx context.Context, tenantID uint64, spaceID, release
 	if err != nil {
 		return nil, err
 	}
-	var members []struct {
-		LogicalSlug  string
-		MemberDigest string
-	}
-	if err := s.db.WithContext(ctx).Model(&types.WikiReleaseMember{}).
-		Select("logical_slug", "member_digest").Where("release_id = ?", header.ID).
-		Order("logical_slug ASC").Scan(&members).Error; err != nil {
-		return nil, err
-	}
-	out := make(map[string]string, len(members))
-	for _, m := range members {
-		out[m.LogicalSlug] = m.MemberDigest
-	}
-	return out, nil
+	return s.releases.GetReleaseMemberDigests(ctx, scope, header.ID)
 }
 
 // ReleaseByID reads a complete release (the active one for an empty ID) and verifies
@@ -132,6 +119,15 @@ func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 // Ready preparation, release, members, Head CAS and receipt. Identifiers derive from
 // the nonce, so a retry finds the committed receipt instead of activating twice.
 func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (release.Release, error) {
+	for i := 1; i < len(w.Members); i++ {
+		if w.Members[i-1].LogicalSlug >= w.Members[i].LogicalSlug {
+			return release.Release{}, &release.Error{
+				Code:   release.ErrorCandidateInvalid,
+				Detail: "activation members must have unique slugs in materialize order",
+			}
+		}
+	}
+
 	if len(w.Points) > 0 {
 		if err := validatePointRows(w.Points, "approve"); err != nil {
 			return release.Release{}, err
@@ -204,7 +200,7 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 		if err := lockSourceKnowledges(tx, w.TenantID, refs); err != nil {
 			return err
 		}
-		releases := repository.NewWikiReleaseRepository(tx)
+		releases := repository.NewWikiReleaseRepository(tx).WithMemberStorage(s.storage)
 		if _, err := releases.GetReceipt(ctx, scope, w.Nonce); err == nil {
 			return repository.ErrWikiReleaseConflict
 		} else if !errors.Is(err, repository.ErrWikiReleaseNotFound) {

@@ -13,6 +13,14 @@ type WikiReleaseScope struct {
 	WikiKBID string `json:"wiki_kb_id" gorm:"column:wiki_kb_id;not null"`
 }
 
+// WikiReleaseMemberSetWrite binds one final logical sequence to both immutable owners.
+// ParentReleaseID is the expected Head, never an independently discovered newer Head.
+type WikiReleaseMemberSetWrite struct {
+	Scope                                     WikiReleaseScope
+	PreparationID, ReleaseID, ParentReleaseID string
+	Members                                   []WikiReleaseMemberSnapshot
+}
+
 // WikiReleaseMemberSnapshot is the canonical immutable member captured by a
 // Ready preparation.
 type WikiReleaseMemberSnapshot struct {
@@ -33,7 +41,8 @@ const (
 // WikiReleasePreparation stores the complete canonical manifest and immutable
 // member snapshot before activation.
 type WikiReleasePreparation struct {
-	ID string `json:"preparation_id" gorm:"column:preparation_id;primaryKey"`
+	MemberStorage string `json:"-" gorm:"column:member_storage;->"`
+	ID            string `json:"preparation_id" gorm:"column:preparation_id;primaryKey"`
 	WikiReleaseScope
 	CandidateDigest         string                      `json:"candidate_digest" gorm:"column:candidate_digest;not null"`
 	ManifestDigest          string                      `json:"manifest_digest" gorm:"column:manifest_digest;not null"`
@@ -54,7 +63,8 @@ func (WikiReleasePreparation) TableName() string { return "wiki_release_preparat
 
 // WikiRelease is an immutable activated release.
 type WikiRelease struct {
-	ID string `json:"release_id" gorm:"column:release_id;primaryKey"`
+	MemberStorage string `json:"-" gorm:"column:member_storage;->"`
+	ID            string `json:"release_id" gorm:"column:release_id;primaryKey"`
 	WikiReleaseScope
 	CandidateDigest     string    `json:"candidate_digest" gorm:"column:candidate_digest;not null"`
 	ManifestDigest      string    `json:"manifest_digest" gorm:"column:manifest_digest;not null"`
