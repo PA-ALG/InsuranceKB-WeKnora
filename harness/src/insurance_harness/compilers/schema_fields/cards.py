@@ -41,6 +41,22 @@ def all_cards() -> dict[str, dict[str, Any]]:
     return dict(_data()["cards"])
 
 
+def source_priority() -> str:
+    """The same S12c-7 rule in the value prompt and independent review, owned by card data."""
+    return str(_data()["rules"]["source_priority"])
+
+
+def field_rules(definition: FieldDefinition) -> dict[str, Any]:
+    """Shared rules also accompany fields that do not yet have a dedicated card."""
+    return {
+        "authority": _data()["rules"]["authority"],
+        "source_priority": source_priority(),
+        "available_fields": None
+        if definition.pack_fields is None
+        else list(definition.pack_fields),
+    }
+
+
 # Examples teach step one which segments belong to a field; a long value adds little to
 # that and invites copying, so it is cut. Step two writes values from selected text only.
 EXAMPLE_VALUE_CHARS = 300
@@ -61,6 +77,7 @@ def card_payload(
         return None
     rules = _RULES if examples else tuple(key for key in _RULES if key != "good")
     payload: dict[str, Any] = {key: card[key] for key in rules if card.get(key)}
+    payload.update(field_rules(definition))
     payload["excludes"] = [f"{content}（归入 {target}）" for content, target in card["excludes"]]
     if not examples:
         # S12c-9: a writing rule says what the value leaves out of a passage it still uses. It
