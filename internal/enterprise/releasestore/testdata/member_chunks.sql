@@ -56,3 +56,19 @@ CREATE TABLE enterprise_member_progress (
  phase TEXT NOT NULL, source_bytes BIGINT NOT NULL, CHECK(octet_length(source_digest)=32),
  CHECK(phase IN ('staged','verified','restored')), CHECK(source_bytes>=0)
 );
+
+-- Independent operational journal: deliberately NO foreign keys to activation-locked rows.
+-- Pending reservations survive failed terminal writes and caller transaction rollback.
+CREATE TABLE enterprise_member_validation_pending (
+ tenant_id BIGINT NOT NULL, space_id TEXT NOT NULL, raw_kb_id TEXT NOT NULL, wiki_kb_id TEXT NOT NULL,
+ attempt_id TEXT PRIMARY KEY, started_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX enterprise_member_validation_pending_scope ON enterprise_member_validation_pending
+ (tenant_id,space_id,raw_kb_id,wiki_kb_id);
+CREATE TABLE enterprise_member_validation_failures (
+ tenant_id BIGINT NOT NULL, space_id TEXT NOT NULL, raw_kb_id TEXT NOT NULL, wiki_kb_id TEXT NOT NULL,
+ attempt_id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('integrity','gap','probe')),
+ recorded_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX enterprise_member_validation_failures_scope ON enterprise_member_validation_failures
+ (tenant_id,space_id,raw_kb_id,wiki_kb_id,recorded_at) WHERE kind<>'probe';
