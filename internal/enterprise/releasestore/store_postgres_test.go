@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -67,11 +68,20 @@ func openSchema(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	sqlDB.SetMaxOpenConns(8)
+	poolLimit := 8
+	if value := os.Getenv("WEKNORA_TEST_POSTGRES_POOL_LIMIT"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, parsed, 2)
+		require.LessOrEqual(t, parsed, 8)
+		poolLimit = parsed
+	}
+	sqlDB.SetMaxOpenConns(poolLimit)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 	for _, name := range []string{
 		"000002_release_falsification.up.sql", "000006_enterprise_candidates.up.sql",
 		"000011_enterprise_point_decisions.up.sql", // RV6b: Decide reads point decisions
+		"000013_enterprise_member_chunks.up.sql",   // ST-1 production storage port
 	} {
 		require.NoError(t, db.Exec(migrationSQL(t, name)).Error, name)
 	}

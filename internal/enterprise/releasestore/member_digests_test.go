@@ -20,6 +20,10 @@ func expectDigestHeader(mock sqlmock.Sqlmock) {
 	mock.ExpectQuery(`SELECT .* FROM "enterprise_release_retirements"`).
 		WithArgs(uint64(7), "space-1", "base", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"retired_at"}))
+	// The storage port rechecks the exact release scope before its legacy/index dispatch.
+	mock.ExpectQuery(`SELECT .* FROM "wiki_releases"`).
+		WithArgs(uint64(7), "space-1", "raw-1", "wiki-1", "base", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"release_id", "member_storage"}).AddRow("base", ""))
 }
 
 func TestMemberDigestsReadNoPayloadAfterScopedHeaderValidation(t *testing.T) {

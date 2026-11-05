@@ -155,6 +155,12 @@ func TestPostgresMemberCacheSeparatesIdenticalIDsByTenantAndSpace(t *testing.T) 
 			// identical-ID cache entries without weakening the real DB constraints.
 			var row types.WikiRelease
 			require.NoError(t, store.db.Where("release_id = ?", id).Take(&row).Error)
+			// Relocate an explicitly legacy fixture. New mapped owners have a four-scope FK
+			// and cannot be relocated; their fail-closed behavior has separate ST-1 coverage.
+			require.NoError(t, store.db.Exec("DELETE FROM enterprise_member_releases WHERE release_id = ?", id).Error)
+			require.NoError(t, store.db.Exec("DELETE FROM enterprise_member_preparations WHERE preparation_id = ?", row.PreparationID).Error)
+			require.NoError(t, store.db.Table("wiki_releases").Where("release_id = ?", id).Update("member_storage", "").Error)
+			require.NoError(t, store.db.Table("wiki_release_preparations").Where("preparation_id = ?", row.PreparationID).Update("member_storage", "").Error)
 			require.NoError(t, store.db.Model(&types.WikiRelease{}).Where("release_id = ?", id).Updates(updates).Error)
 			require.NoError(t, store.db.Model(&types.WikiReleasePreparation{}).
 				Where("preparation_id = ?", row.PreparationID).Updates(updates).Error)
