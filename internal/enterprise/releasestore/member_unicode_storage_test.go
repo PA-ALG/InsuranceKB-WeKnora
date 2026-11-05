@@ -20,7 +20,9 @@ func TestPostgresMemberStoragePreservesAstralCombiningAndWhitespaceBytes(t *test
 	}
 	repositoryStorageWrite(t, store.releases, mustStorageScope(t), "unicode", []types.WikiReleaseMemberSnapshot{input})
 	fixtureReferenceReads(t, db)
-	got, err := New(db, testSpaces(t)).releases.GetReleaseMembers(context.Background(), mustStorageScope(t), "rel-unicode")
+	got, err := New(db, testSpaces(t)).releases.GetReleaseMembers(
+		context.Background(), mustStorageScope(t), "rel-unicode",
+	)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, input.Kind, got[0].Kind)
