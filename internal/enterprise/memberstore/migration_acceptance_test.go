@@ -2,8 +2,12 @@ package memberstore_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Tencent/WeKnora/internal/enterprise/release"
+	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +15,6 @@ import (
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
-	"github.com/Tencent/WeKnora/internal/enterprise/memberstore"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
@@ -60,9 +63,32 @@ func historical(t *testing.T, db *gorm.DB, id string, kind string) []types.WikiR
 	t.Helper()
 	m := []types.WikiReleaseMemberSnapshot{{Kind: kind, LogicalSlug: "b", RevisionID: "rev", MemberDigest: strings.Repeat("b", 64), Title: "標題", Content: "原文\n𐐀", Payload: json.RawMessage(`{"n":9007199254740993}`)},
 		{Kind: "claim", LogicalSlug: "a", MemberDigest: strings.Repeat("a", 64), Content: "content", Payload: json.RawMessage(`{"n":2}`)}}
-	// Legacy preparation order and empty kind differ from release's sorted/defaulted rows.
-	p := types.WikiReleasePreparation{ID: "prep-" + id, WikiReleaseScope: scope(), Status: "ready", PreparationDigest: id, Manifest: json.RawMessage(`{}`), Members: m}
-	r := types.WikiRelease{ID: id, WikiReleaseScope: scope(), PreparationID: p.ID}
+	// Real enterprise v1 envelopes, digests and manifest; retain original order/empty kind.
+	pairs := make([][2]string, len(m))
+	for i := range m {
+		digest, err := release.MemberDigest(m[i].Payload)
+		require.NoError(t, err)
+		m[i].MemberDigest = digest
+		envelope, err := json.Marshal(struct {
+			Version int    `json:"v"`
+			Payload string `json:"payload"`
+		}{1, string(m[i].Payload)})
+		require.NoError(t, err)
+		m[i].Content = string(envelope)
+		pairs[i] = [2]string{m[i].LogicalSlug, digest}
+	}
+	manifest, err := json.Marshal(struct {
+		CandidateID    string      `json:"candidate_id"`
+		DecisionID     string      `json:"decision_id"`
+		DecisionDigest string      `json:"decision_digest"`
+		BundleDigest   string      `json:"bundle_digest"`
+		Members        [][2]string `json:"members"`
+	}{"candidate", "decision", "decision-digest", "bundle-digest", pairs})
+	require.NoError(t, err)
+	hash := func(raw []byte) string { d := sha256.Sum256(raw); return hex.EncodeToString(d[:]) }
+	p := types.WikiReleasePreparation{ID: "prep-" + id, WikiReleaseScope: scope(), Status: "ready", Manifest: manifest, Members: m, CandidateDigest: "bundle-digest", ManifestDigest: hash(manifest), ReviewDecisionDigest: "decision-digest", ReviewPolicyID: "decision"}
+	p.PreparationDigest = hash([]byte(fmt.Sprintf("%s|%s|%s||0", p.ID, p.ManifestDigest, p.ReviewDecisionDigest)))
+	r := types.WikiRelease{ID: id, WikiReleaseScope: scope(), PreparationID: p.ID, CandidateDigest: p.CandidateDigest, ManifestDigest: p.ManifestDigest}
 	require.NoError(t, db.Create(&p).Error)
 	require.NoError(t, db.Create(&r).Error)
 	for _, s := range m {
@@ -90,7 +116,7 @@ func TestPostgresMemberMigrationPreservesHistoricalOrderAndRestoresBeforeDown(t 
 	var originalPrep types.WikiReleasePreparation
 	require.NoError(t, db.Take(&originalPrep).Error)
 	originalRows := legacyRows(t, db, "historical")
-	store := memberstore.New()
+	store := releasestore.NewMemberStorage()
 	require.NoError(t, store.Backfill(ctx, db, scope(), "historical", 1<<20))
 	require.NoError(t, store.Backfill(ctx, db, scope(), "historical", 1<<20), "reentrant full snapshot equality")
 	var roots [][]byte
@@ -128,7 +154,7 @@ func TestPostgresMemberMigrationSourceDriftAndFaultResume(t *testing.T) {
 	db := migrationDB(t)
 	ctx := context.Background()
 	historical(t, db, "drift", "")
-	store := memberstore.New()
+	store := releasestore.NewMemberStorage()
 	require.NoError(t, db.Exec(`CREATE FUNCTION st1_fail_root() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic'; END $$;
  CREATE TRIGGER st1_fail_root BEFORE INSERT ON enterprise_member_sets FOR EACH ROW EXECUTE FUNCTION st1_fail_root()`).Error)
 	require.Error(t, store.Backfill(ctx, db, scope(), "drift", 1<<20))
@@ -149,7 +175,7 @@ func TestPostgresMemberMigrationSkipsUnassociatedAndRejectsBrokenObject(t *testi
 	db := migrationDB(t)
 	ctx := context.Background()
 	historical(t, db, "valid", "page")
-	store := memberstore.New()
+	store := releasestore.NewMemberStorage()
 	p := types.WikiReleasePreparation{ID: "unassociated", WikiReleaseScope: scope(), Status: "ready", PreparationDigest: "unassociated", Manifest: json.RawMessage(`{}`), Members: []types.WikiReleaseMemberSnapshot{}}
 	require.NoError(t, db.Create(&p).Error)
 	require.NoError(t, store.Backfill(ctx, db, scope(), "valid", 1<<20))
@@ -170,7 +196,7 @@ func TestPostgresMemberMigrationSkipsUnassociatedAndRejectsBrokenObject(t *testi
 func TestPostgresMemberStorageInjectedPortUsesOriginalTransaction(t *testing.T) {
 	db := migrationDB(t)
 	ctx := context.Background()
-	repo := repository.NewWikiReleaseRepository(db).WithMemberStorage(memberstore.New())
+	repo := repository.NewWikiReleaseRepository(db).WithMemberStorage(releasestore.NewMemberStorage())
 	input := []types.WikiReleaseMemberSnapshot{{Kind: "page", LogicalSlug: "value", Content: "content", MemberDigest: strings.Repeat("a", 64), Payload: json.RawMessage(`{}`)}}
 	p := types.WikiReleasePreparation{ID: "preparation", WikiReleaseScope: scope(), Status: "ready", PreparationDigest: "digest", Manifest: json.RawMessage(`{}`), Members: input}
 	r := types.WikiRelease{ID: "release", WikiReleaseScope: scope(), PreparationID: p.ID}
