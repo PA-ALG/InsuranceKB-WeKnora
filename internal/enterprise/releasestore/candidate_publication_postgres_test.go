@@ -38,7 +38,7 @@ func TestPostgresReviewConcurrentCandidatePublication(t *testing.T) {
 				unblock := func() { proceedOnce.Do(func() { close(proceed) }) }
 				defer unblock()
 				isLock := func(tx *gorm.DB) bool {
-					return strings.Contains(tx.Statement.SQL.String(), "pg_advisory_xact_lock")
+					return strings.HasPrefix(tx.Statement.SQL.String(), "SELECT pg_advisory_xact_lock(")
 				}
 				require.NoError(t, db.Callback().Raw().After("gorm:raw").
 					Register("test_candidate_held", func(tx *gorm.DB) {

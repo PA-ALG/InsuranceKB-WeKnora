@@ -66,6 +66,7 @@ func TestPointWholeDecisionRechecksPointsWhileHoldingModeLock(t *testing.T) {
 
 func TestPointActivationConflictWritesNeitherHeadNorDecision(t *testing.T) {
 	store, mock := reviewSQL(t)
+	expectValidationStart(mock)
 	expectNoNonce(mock)
 	expectCandidateLookup(mock, "batch", "")
 	mock.ExpectBegin()
@@ -79,6 +80,7 @@ func TestPointActivationConflictWritesNeitherHeadNorDecision(t *testing.T) {
 	mock.ExpectRollback()
 	expectNoNonce(mock)
 	expectCandidateLookup(mock, "batch", "")
+	expectValidationFinish(mock, "")
 	_, err := store.Activate(context.Background(), release.ActivationWrite{
 		TenantID: 7, SpaceID: "space-1", CandidateID: "candidate", BundleDigest: "batch", Nonce: "second-decision",
 		Subject: "user", Points: []release.PointDecision{ownPoint("a", "approve")},
