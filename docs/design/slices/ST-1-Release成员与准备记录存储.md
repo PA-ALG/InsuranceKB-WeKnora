@@ -330,3 +330,14 @@ r2 阶段快照中的等待确认已由后续实施授权解除；r3 仅修正�
 常规CI始终跑小层及完整迁移/回滚/CAS/安全保护；仅 workflow_dispatch 的独立90分钟job跑完整层。
 合并前必须在该手动作业或本机隔离PG完整通过一次全规模并附环境、全部字节、资源/时间与限制。
 此执行预算不改变线上迁移许可，不再把常规job延至60分钟。
+
+### 4.4 Publisher 的有序输入前提（后续明确裁定）
+
+依据 [Owner确认](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/550#issuecomment-6668635086)，
+`Publisher.Activate` 的成员必须按 materialize 的 Go UTF-8 slug 字节序严格递增；空集合仍合法。
+入口在任何 DB 读取/写入、pin、决定或幂等提交查询前检查；无序或重复 slug 返回既有
+`CANDIDATE_INVALID`，不悄悄排序，不改 manifest/准备数组以掩盖输入错误，所有写入0。
+合法有序输入仍走原完整校验/事务/CAS/幂等路径。此为明确的内部 Publisher 行为收紧，不能宣称
+所有旧调用行为不变；不改变外部 CandidateBundle 合同，真实 materialize 本已排序。
+旧 pointActivation 测试 helper 独立适配为生产顺序，保留原所有竞态/回滚/决定/Head/pin断言。
+新增独立反例锁住无序 typed 拒绝、无SQL/所有持久化状态不变及合法排序正控。
