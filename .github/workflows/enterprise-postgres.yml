@@ -215,6 +215,24 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      # Only this disposable CI service is configured. Keep WAL within the same
+      # full-scale resource budget as the local isolated acceptance environment.
+      - name: Bound synthetic WAL and record PostgreSQL settings
+        env:
+          PGPASSWORD: weknora
+        run: |
+          psql -h 127.0.0.1 -U weknora -d weknora -v ON_ERROR_STOP=1 <<'SQL'
+          ALTER SYSTEM SET max_wal_size = '128MB';
+          ALTER SYSTEM SET min_wal_size = '32MB';
+          ALTER SYSTEM SET checkpoint_timeout = '2min';
+          SELECT pg_reload_conf();
+          CHECKPOINT;
+          SELECT version();
+          SHOW shared_buffers;
+          SHOW work_mem;
+          SHOW max_wal_size;
+          SHOW checkpoint_timeout;
+          SQL
       - name: Full-scale storage properties (required once before ST-1 merge)
         run: |
           set -o pipefail
