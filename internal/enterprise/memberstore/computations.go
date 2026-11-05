@@ -1,7 +1,8 @@
 package memberstore
 
 import (
-	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"strings"
 
@@ -12,14 +13,32 @@ import (
 type writeMemo struct {
 	Scope     types.WikiReleaseScope
 	ReleaseID string
-	Raw       []types.WikiReleaseMemberSnapshot
-	Rows      []contentRow
+	Entries   []computationEntry
 }
 
-func snapshotBytesEqual(a, b types.WikiReleaseMemberSnapshot) bool {
-	return a.Kind == b.Kind && a.LogicalSlug == b.LogicalSlug && a.RevisionID == b.RevisionID &&
-		a.MemberDigest == b.MemberDigest && a.Title == b.Title && a.Content == b.Content &&
-		bytes.Equal(a.Payload, b.Payload)
+type computationEntry struct {
+	Slug        string
+	RawHash     [sha256.Size]byte
+	StorageHash [sha256.Size]byte
+}
+
+// Raw fingerprints bind the caller's exact seven fields, including raw JSON
+// bytes. They are distinct from storage digests over PostgreSQL's projection.
+func rawSnapshotHash(m types.WikiReleaseMemberSnapshot) [sha256.Size]byte {
+	digest := sha256.New()
+	digest.Write([]byte("enterprise-member-raw.v1\x00"))
+	var length [8]byte
+	for _, value := range []string{m.Kind, m.LogicalSlug, m.RevisionID, m.MemberDigest, m.Title, m.Content} {
+		binary.BigEndian.PutUint64(length[:], uint64(len(value)))
+		digest.Write(length[:])
+		digest.Write([]byte(value))
+	}
+	binary.BigEndian.PutUint64(length[:], uint64(len(m.Payload)))
+	digest.Write(length[:])
+	digest.Write(m.Payload)
+	var sum [sha256.Size]byte
+	digest.Sum(sum[:0])
+	return sum
 }
 
 // This single-entry memo stores normalization computations, never Head/commit/membership.
@@ -35,11 +54,11 @@ func (s *Store) computedContents(
 		rows, err := canonicalContents(db, scopeID, w.Members)
 		return rows, rows, err
 	}
-	bySlug := make(map[string]int, len(memo.Raw))
-	for i, m := range memo.Raw {
-		bySlug[m.LogicalSlug] = i
+	bySlug := make(map[string]int, len(memo.Entries))
+	for i, entry := range memo.Entries {
+		bySlug[entry.Slug] = i
 	}
-	parentRefs := make(map[string][]byte, len(memo.Raw))
+	parentRefs := make(map[string][]byte, len(memo.Entries))
 	for _, c := range parent {
 		for _, e := range c.Entries {
 			parentRefs[e.Slug] = e.Digest
@@ -51,10 +70,10 @@ func (s *Store) computedContents(
 	var reused [][]byte
 	for i, input := range w.Members {
 		j, found := bySlug[input.LogicalSlug]
-		if found && snapshotBytesEqual(input, memo.Raw[j]) &&
-			sameDigest(parentRefs[input.LogicalSlug], memo.Rows[j].Digest) {
-			r := memo.Rows[j]
-			r.ScopeID = scopeID
+		if found && rawSnapshotHash(input) == memo.Entries[j].RawHash &&
+			sameDigest(parentRefs[input.LogicalSlug], memo.Entries[j].StorageHash[:]) {
+			// Put persists only changed rows; reused rows carry the layout keys.
+			r := contentRow{ScopeID: scopeID, LogicalSlug: input.LogicalSlug, Digest: memo.Entries[j].StorageHash[:]}
 			all[i] = r
 			reused = append(reused, r.Digest)
 		} else {
@@ -77,13 +96,15 @@ func (s *Store) computedContents(
 
 func (s *Store) rememberComputations(w types.WikiReleaseMemberSetWrite, rows []contentRow) {
 	memo := &writeMemo{
-		Scope: w.Scope, ReleaseID: w.ReleaseID, Raw: make([]types.WikiReleaseMemberSnapshot, len(w.Members)),
-		Rows: append([]contentRow(nil), rows...),
+		Scope: types.WikiReleaseScope{
+			TenantID: w.Scope.TenantID, SpaceID: strings.Clone(w.Scope.SpaceID),
+			RawKBID: strings.Clone(w.Scope.RawKBID), WikiKBID: strings.Clone(w.Scope.WikiKBID),
+		},
+		ReleaseID: strings.Clone(w.ReleaseID), Entries: make([]computationEntry, len(w.Members)),
 	}
 	for i, m := range w.Members {
-		memo.Raw[i] = m
-		memo.Raw[i].Payload = append([]byte(nil), m.Payload...)
-		memo.Rows[i].Digest = append([]byte(nil), rows[i].Digest...)
+		memo.Entries[i] = computationEntry{Slug: strings.Clone(m.LogicalSlug), RawHash: rawSnapshotHash(m)}
+		copy(memo.Entries[i].StorageHash[:], rows[i].Digest)
 	}
 	s.memoMu.Lock()
 	s.memo = memo
