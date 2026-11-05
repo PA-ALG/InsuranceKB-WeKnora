@@ -30,7 +30,8 @@ func TestPostgresObservationRequiresFullIntegrityAndRestartsAfterFailure(t *test
 	_, err := store.Read(ctx, db, scope(), "integrity")
 	require.ErrorIs(t, err, memberstore.ErrIntegrity)
 	var failures int64
-	require.NoError(t, db.Table("enterprise_member_validation_failures").Where("kind = ?", "integrity").Count(&failures).Error)
+	require.NoError(t, db.Table("enterprise_member_validation_failures").
+		Where("kind = ?", "integrity").Count(&failures).Error)
 	require.Positive(t, failures)
 	require.Error(t, store.ReferenceOnly(ctx, db, scope()))
 	require.NoError(t, db.Exec(`UPDATE enterprise_member_contents SET title='' WHERE logical_slug='a'`).Error)

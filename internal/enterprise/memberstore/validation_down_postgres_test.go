@@ -19,7 +19,9 @@ func TestPostgresDowngradeRejectsUnresolvedValidationReservation(t *testing.T) {
 	require.NoError(t, s.RestoreLegacy(ctx, db, scope(), 1<<20))
 	require.NoError(t, db.Exec(`INSERT INTO enterprise_member_validation_pending
  (tenant_id,space_id,raw_kb_id,wiki_kb_id,attempt_id) VALUES(1,'space','raw','wiki','abandoned')`).Error)
-	down, err := os.ReadFile(filepath.Join("../../../migrations/enterprise/versioned", "000013_enterprise_member_chunks.down.sql"))
+	down, err := os.ReadFile(filepath.Join(
+		"../../../migrations/enterprise/versioned", "000013_enterprise_member_chunks.down.sql",
+	))
 	require.NoError(t, err)
 	require.Error(t, db.Exec(string(down)).Error, "offline downgrade must not drop unresolved integrity evidence")
 	require.Len(t, legacyRows(t, db, "down-observation"), 2)

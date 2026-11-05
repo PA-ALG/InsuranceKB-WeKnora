@@ -29,7 +29,8 @@ func observationFixture(t *testing.T) (*gorm.DB, *Store, string) {
 
 func ageObservation(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	require.NoError(t, db.Exec(`UPDATE enterprise_member_scopes SET observation_started_at=clock_timestamp()-INTERVAL '8 days'`).Error)
+	require.NoError(t, db.Exec(
+		`UPDATE enterprise_member_scopes SET observation_started_at=clock_timestamp()-INTERVAL '8 days'`).Error)
 }
 
 func TestPostgresObservationFailureSurvivesActivationScopeLock(t *testing.T) {
@@ -38,12 +39,13 @@ func TestPostgresObservationFailureSurvivesActivationScopeLock(t *testing.T) {
 	var once sync.Once
 	releaseLock := func() { once.Do(func() { close(resume) }) }
 	defer releaseLock()
-	require.NoError(t, db.Callback().Create().After("gorm:create").Register("observation-held-activation", func(tx *gorm.DB) {
-		if tx.Statement.Table == "enterprise_member_sets" {
-			close(locked)
-			<-resume
-		}
-	}))
+	require.NoError(t, db.Callback().Create().After("gorm:create").Register(
+		"observation-held-activation", func(tx *gorm.DB) {
+			if tx.Statement.Table == "enterprise_member_sets" {
+				close(locked)
+				<-resume
+			}
+		}))
 	w := activation(t, s, "concurrent-observed")
 	w.Members = storageMembers(t, 70, 1)
 	done := make(chan error, 1)
@@ -53,7 +55,8 @@ func TestPostgresObservationFailureSurvivesActivationScopeLock(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("activation did not reach locked Put")
 	}
-	require.NoError(t, db.Exec(`UPDATE enterprise_member_contents SET title='damaged' WHERE logical_slug='group/000001'`).Error)
+	require.NoError(t, db.Exec(
+		`UPDATE enterprise_member_contents SET title='damaged' WHERE logical_slug='group/000001'`).Error)
 	read := make(chan error, 1)
 	go func() {
 		_, err := New(db, testSpaces(t)).ReleaseByID(context.Background(), 7, "space-1", id)
@@ -68,13 +71,15 @@ func TestPostgresObservationFailureSurvivesActivationScopeLock(t *testing.T) {
 	releaseLock()
 	require.NoError(t, <-done)
 	require.NoError(t, db.Callback().Create().Remove("observation-held-activation"))
-	require.NoError(t, db.Exec(`UPDATE enterprise_member_contents SET title='' WHERE logical_slug='group/000001'`).Error)
+	require.NoError(t, db.Exec(
+		`UPDATE enterprise_member_contents SET title='' WHERE logical_slug='group/000001'`).Error)
 	sc, err := s.spaces.Scope(7, "space-1")
 	require.NoError(t, err)
 	require.Error(t, NewMemberStorage().ReferenceOnly(context.Background(), db, sc),
 		"an activation lock must not erase a failed read from the observation gate")
 	var failures int64
-	require.NoError(t, db.Table("enterprise_member_validation_failures").Where("kind='integrity'").Count(&failures).Error)
+	require.NoError(t, db.Table("enterprise_member_validation_failures").
+		Where("kind='integrity'").Count(&failures).Error)
 	require.Positive(t, failures)
 }
 
@@ -96,7 +101,8 @@ func TestPostgresObservationIncludesReleaseDecoderFailures(t *testing.T) {
 			if field == "content" {
 				original = before.Content
 			}
-			require.NoError(t, db.Model(&types.WikiReleaseMember{}).Where("id=?", before.ID).Update(field, original).Error)
+			require.NoError(t, db.Model(&types.WikiReleaseMember{}).
+				Where("id=?", before.ID).Update(field, original).Error)
 			sc, err := s.spaces.Scope(7, "space-1")
 			require.NoError(t, err)
 			require.Error(t, NewMemberStorage().ReferenceOnly(context.Background(), db, sc),
@@ -116,7 +122,8 @@ func failJournalTerminal(t *testing.T, db *gorm.DB) {
 func TestPostgresObservationRecordOutageIsDurableAndLogged(t *testing.T) {
 	db, s, id := observationFixture(t)
 	failJournalTerminal(t, db)
-	require.NoError(t, db.Exec(`UPDATE enterprise_member_contents SET title='damaged' WHERE logical_slug='group/000001'`).Error)
+	require.NoError(t, db.Exec(
+		`UPDATE enterprise_member_contents SET title='damaged' WHERE logical_slug='group/000001'`).Error)
 	var output bytes.Buffer
 	log := logrus.New()
 	log.SetOutput(&output)
@@ -126,11 +133,13 @@ func TestPostgresObservationRecordOutageIsDurableAndLogged(t *testing.T) {
 	require.Contains(t, output.String(), "level=error")
 	require.NotContains(t, output.String(), "synthetic private diagnostic")
 	require.NoError(t, db.Exec(`DROP TRIGGER reject_validation_record ON enterprise_member_validation_failures`).Error)
-	require.NoError(t, db.Exec(`UPDATE enterprise_member_contents SET title='' WHERE logical_slug='group/000001'`).Error)
+	require.NoError(t, db.Exec(
+		`UPDATE enterprise_member_contents SET title='' WHERE logical_slug='group/000001'`).Error)
 	sc, err := s.spaces.Scope(7, "space-1")
 	require.NoError(t, err)
 	fresh := NewMemberStorage()
-	require.Error(t, fresh.ReferenceOnly(context.Background(), db, sc), "new Store must see durable incomplete recording")
+	require.Error(t, fresh.ReferenceOnly(context.Background(), db, sc),
+		"new Store must see durable incomplete recording")
 	require.NoError(t, db.Exec(`UPDATE enterprise_member_scopes SET mode='reference'`).Error)
 	before := storageCount(t, db, "wiki_release_members")
 	require.Error(t, fresh.CompactLegacy(context.Background(), db, sc))
@@ -186,7 +195,8 @@ func TestPostgresObservationCancellationAndCallerRollbackCannotHideGap(t *testin
 				require.True(t, errors.Is(err, context.Canceled))
 			}
 			require.NoError(t, tx.Rollback().Error)
-			require.Error(t, NewMemberStorage().ReferenceOnly(context.Background(), db, sc), "gap survives caller rollback")
+			require.Error(t, NewMemberStorage().ReferenceOnly(context.Background(), db, sc),
+				"gap survives caller rollback")
 		})
 	}
 }

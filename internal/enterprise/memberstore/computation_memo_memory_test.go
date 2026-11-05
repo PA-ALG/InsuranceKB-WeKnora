@@ -69,7 +69,8 @@ func TestComputationMemoDoesNotRetainSnapshotBodiesOrInputBacking(t *testing.T) 
 		}
 	})
 	if bodies != 0 || aliases != 0 {
-		t.Fatalf("memo retained %d snapshot body fields and %d references into input slug backing; keep hashes and an owned slug only", bodies, aliases)
+		t.Fatalf("memo retained %d snapshot body fields and %d references into input slug backing; "+
+			"keep hashes and an owned slug only", bodies, aliases)
 	}
 	runtime.KeepAlive(backing)
 	runtime.KeepAlive(input)
@@ -109,9 +110,11 @@ func TestComputationMemoRetainedHeap37500(t *testing.T) {
 	runtime.ReadMemStats(&after)
 	retained := int64(after.HeapAlloc) - int64(before.HeapAlloc)
 	const limit = count*100 + 64*1024
-	t.Logf("members=%d width=%d retained_heap_bytes=%d bytes_per_member=%.2f limit_bytes=%d", count, 1024, retained, float64(retained)/count, limit)
+	t.Logf("members=%d width=%d retained_heap_bytes=%d bytes_per_member=%.2f limit_bytes=%d",
+		count, 1024, retained, float64(retained)/count, limit)
 	if retained > limit {
-		t.Errorf("memo retains %d bytes (%.2f B/member); budget is %d bytes, independent of content/payload width", retained, float64(retained)/count, limit)
+		t.Errorf("memo retains %d bytes (%.2f B/member); budget is %d bytes, independent of content/payload width",
+			retained, float64(retained)/count, limit)
 	}
 	runtime.KeepAlive(store)
 }

@@ -67,7 +67,8 @@ func logicalStorageBytes(t *testing.T, db *gorm.DB) storageBytes {
 		{&b.Chunks, `SELECT COALESCE(sum(48+octet_length(refs)),0) FROM enterprise_member_chunks`},
 		{&b.Roots, "SELECT COALESCE(sum(56+octet_length(order_mode)+octet_length(bloc" +
 			"ks)),0) FROM enterprise_member_sets"},
-		{&b.Control, "SELECT COALESCE(sum(40+CASE WHEN observation_failure_since IS NULL THEN 0 ELSE 8 END+octet_length(space_id)+octet_length(raw_kb" +
+		{&b.Control, "SELECT COALESCE(sum(40+CASE WHEN observation_failure_since IS NULL THEN 0 ELSE 8 END+" +
+			"octet_length(space_id)+octet_length(raw_kb" +
 			"_id)+octet_length(wiki_kb_id)+octet_length(mode)),0) FROM enterpr" +
 			"ise_member_scopes"},
 	}
@@ -92,7 +93,8 @@ func logicalStorageBytes(t *testing.T, db *gorm.DB) storageBytes {
 			extra = "+octet_length(kind)"
 		}
 		var bytes int64
-		require.NoError(t, db.Raw("SELECT COALESCE(sum(16+octet_length(space_id)+octet_length(raw_kb_id)+octet_length(wiki_kb_id)+octet_length(attempt_id)"+extra+"),0) FROM "+table).Scan(&bytes).Error)
+		require.NoError(t, db.Raw("SELECT COALESCE(sum(16+octet_length(space_id)+octet_length(raw_kb_id)+"+
+			"octet_length(wiki_kb_id)+octet_length(attempt_id)"+extra+"),0) FROM "+table).Scan(&bytes).Error)
 		b.Control += bytes
 	}
 	for _, table := range []string{"wiki_releases", "wiki_release_preparations"} {

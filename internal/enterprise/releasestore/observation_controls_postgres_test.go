@@ -38,14 +38,17 @@ func TestPostgresObservationFailureUsesAllFourScopeFields(t *testing.T) {
 			case "wiki":
 				other.WikiKBID += "-other"
 			}
-			err = NewMemberStorage().Validate(context.Background(), db, other, func(context.Context) error { return memberstore.ErrIntegrity })
+			err = NewMemberStorage().Validate(context.Background(), db, other, func(context.Context) error {
+				return memberstore.ErrIntegrity
+			})
 			require.ErrorIs(t, err, memberstore.ErrIntegrity)
 			require.NoError(t, NewMemberStorage().ReferenceOnly(context.Background(), db, sc))
 			var failure struct {
 				types.WikiReleaseScope
 				Kind string
 			}
-			require.NoError(t, db.Table("enterprise_member_validation_failures").Where("kind='integrity'").Take(&failure).Error)
+			require.NoError(t, db.Table("enterprise_member_validation_failures").
+				Where("kind='integrity'").Take(&failure).Error)
 			require.Equal(t, other, failure.WikiReleaseScope)
 		})
 	}

@@ -12,7 +12,7 @@ import (
 func TestJournalPoolNeverRebindsCallerTransaction(t *testing.T) {
 	sqlDB, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
 	require.NoError(t, err)
 	mock.ExpectBegin()
@@ -22,7 +22,7 @@ func TestJournalPoolNeverRebindsCallerTransaction(t *testing.T) {
 	root := journalPool(tx)
 	require.Same(t, callerPool, tx.Statement.ConnPool, "journal must not escape the caller's transaction")
 	require.NotSame(t, tx.Statement, root.Statement)
-	require.Same(t, db.Config.ConnPool, root.Statement.ConnPool)
+	require.Same(t, db.ConnPool, root.Statement.ConnPool)
 	mock.ExpectRollback()
 	require.NoError(t, tx.Rollback().Error)
 	require.NoError(t, mock.ExpectationsWereMet())

@@ -60,14 +60,17 @@ func TestPostgresObservationOutlivesCanceledSingleflightCaller(t *testing.T) {
 	require.Error(t, NewMemberStorage().StartObservation(context.Background(), db, sc),
 		"a loader still processing old corrupt bytes must retain its reservation")
 	releaseRead()
-	_, _, _ = reader.members.flights.Do(fmt.Sprintf("%d:%q:%q", 7, "space-1", id), func() (any, error) { return nil, nil })
+	_, _, _ = reader.members.flights.Do(fmt.Sprintf("%d:%q:%q", 7, "space-1", id), func() (any, error) {
+		return nil, nil
+	})
 	require.Eventually(t, func() bool {
 		var pending int64
 		err := db.Table("enterprise_member_validation_pending").Count(&pending).Error
 		return err == nil && pending == 0
 	}, 3*time.Second, 10*time.Millisecond)
 	var failures int64
-	require.NoError(t, db.Table("enterprise_member_validation_failures").Where("kind='integrity'").Count(&failures).Error)
+	require.NoError(t, db.Table("enterprise_member_validation_failures").
+		Where("kind='integrity'").Count(&failures).Error)
 	require.Positive(t, failures, "late decode failure remains durable")
 }
 
@@ -78,7 +81,9 @@ func TestPostgresObservationCannotValidateWhenAdmissionWriteFails(t *testing.T) 
  CREATE TRIGGER reject_validation_start BEFORE INSERT ON enterprise_member_validation_pending
  FOR EACH ROW EXECUTE FUNCTION reject_validation_start()`).Error)
 	var reads atomic.Int64
-	require.NoError(t, db.Callback().Query().Before("gorm:query").Register("count-validation-reads", func(*gorm.DB) { reads.Add(1) }))
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register("count-validation-reads", func(*gorm.DB) {
+		reads.Add(1)
+	}))
 	var output bytes.Buffer
 	log := logrus.New()
 	log.SetOutput(&output)
