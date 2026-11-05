@@ -28,18 +28,23 @@ func TestPublisherUnsortedInputFailsBeforeAnyDatabaseAccess(t *testing.T) {
 func TestPostgresPublisherUnsortedInputIsZeroWriteAndSortedInputPublishes(t *testing.T) {
 	for _, withPoints := range []bool{false, true} {
 		t.Run(map[bool]string{false: "whole", true: "points"}[withPoints], func(t *testing.T) {
-			db := memberStorageDB(t)
-			store := New(db, testSpaces(t))
-			w := activation(t, store, "order")
-			w.Members = storageMembers(t, 2, 0)
-			w.Members[0].EvidenceRefs = []string{seedSource(t, db, "order-source", 7, "raw-1", 1)}
+			var db *gorm.DB
+			var store *Store
+			var w release.ActivationWrite
+			sourceIndex := 0
 			if withPoints {
-				w.Points = []release.PointDecision{{
-					TenantID: 7, SpaceID: w.SpaceID,
-					CandidateID: w.CandidateID, Slug: w.Members[0].LogicalSlug,
-					Outcome: "approve", Subject: w.Subject,
-				}}
+				var base release.Release
+				var candidate release.Candidate
+				db, store, base, candidate = pointWorld(t)
+				w = pointActivation(t, store, base, candidate, "order", point(candidate, "b", "approve"))
+				sourceIndex = 1
+			} else {
+				db = memberStorageDB(t)
+				store = New(db, testSpaces(t))
+				w = activation(t, store, "order")
+				w.Members = storageMembers(t, 2, 0)
 			}
+			w.Members[sourceIndex].EvidenceRefs = []string{seedSource(t, db, "order-source", 7, "raw-1", 1)}
 			w.Members[0], w.Members[1] = w.Members[1], w.Members[0]
 			before := fullStorageCounts(t, db)
 			before["enterprise_point_decisions"] = storageCount(t, db, "enterprise_point_decisions")
@@ -56,7 +61,7 @@ func TestPostgresPublisherUnsortedInputIsZeroWriteAndSortedInputPublishes(t *tes
 			got, err := store.Activate(context.Background(), w)
 			require.NoError(t, err)
 			require.Equal(t, w.Members, got.Members)
-			require.EqualValues(t, 1, storageCount(t, db, "wiki_release_receipts"))
+			require.EqualValues(t, before["wiki_release_receipts"]+1, storageCount(t, db, "wiki_release_receipts"))
 		})
 	}
 }
