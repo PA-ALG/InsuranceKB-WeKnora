@@ -47,7 +47,8 @@ pitfalls 是该字段实测出现过的错误。
 # document's role to step two and the rule that the terms prevail over the brochure; 2026-10-29.3
 # (S12c-6b) marks the production pipeline back to one step-one draw; 2026-10-29.4 (S12c-8) shows a
 # recompile's step two the reviewed value of a carried field, which it keeps where still supported.
-VALUE_PROTOCOL_VERSION = "2026-10-29.4"
+# S12c-12b changes trusted input ranges (bounded rate notes), not the prompt wording.
+VALUE_PROTOCOL_VERSION = "2026-11-05.1"
 
 VALUE_PROMPT = (
     """你是寿险产品知识字段撰写器。只输出一个 JSON 对象，不要 Markdown。

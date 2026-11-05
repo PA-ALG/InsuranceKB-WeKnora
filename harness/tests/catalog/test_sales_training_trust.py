@@ -64,12 +64,15 @@ def test_sales_training_is_a_non_evidence_role_of_the_shipped_catalogue() -> Non
 
 def test_the_scoped_rule_names_exactly_the_four_sales_fields() -> None:
     policy = load_trust_policy()
-    assert policy.version == "2026-11-01.1"  # SK-1 added the sales_method scoped rule
+    assert policy.version == "2026-11-05.1"  # S12c-12b adds separately scoped rate notes
     assert policy.scoped_roles() == frozenset({"sales_training", "sales_method"})
     assert policy.restricted_fields("sales_training") == SALES_FIELDS
     assert policy.header_fields("sales_training") == frozenset()
     assert policy.header_roles() == frozenset({"rate_table"})
-    assert policy.restricted_fields("rate_table") == frozenset({"premium_payment_term"})
+    assert policy.restricted_fields("rate_table") == frozenset(
+        {"premium_payment_term", "premium_payment_frequency"}
+    )
+    assert policy.header_fields("rate_table") == frozenset({"premium_payment_term"})
     assert policy.restricted_fields("terms") == frozenset()
 
 

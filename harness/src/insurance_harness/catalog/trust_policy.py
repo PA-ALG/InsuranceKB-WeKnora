@@ -51,18 +51,27 @@ class HeaderRule(BaseModel):
         return self
 
 
+class NoteRule(HeaderRule):
+    markers: tuple[NonBlank, ...] = Field(min_length=1)
+    title_endings: tuple[NonBlank, ...] = Field(min_length=1)
+
+
 class TrustPolicy(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     version: NonBlank
     header_rules: tuple[HeaderRule, ...]
     scoped_rules: tuple[HeaderRule, ...] = ()
+    note_rules: tuple[NoteRule, ...] = ()
 
     @model_validator(mode="after")
     def _restricted_roles(self) -> "TrustPolicy":
         eligible = {r.role for r in load_material_roles().roles if not r.evidence}
-        roles = self.restricted_roles()
+        roles = tuple(r.role for r in (*self.header_rules, *self.scoped_rules))
         if len(set(roles)) != len(roles) or not set(roles) <= eligible:
             raise ValueError("restricted roles must be unique non-evidence roles")
+        notes = [r.role for r in self.note_rules]
+        if len(set(notes)) != len(notes) or not set(notes) <= self.header_roles():
+            raise ValueError("note rules must uniquely extend a header role")
         return self
 
     def header_fields(self, role: str) -> frozenset[str]:
@@ -70,6 +79,14 @@ class TrustPolicy(BaseModel):
 
     def header_roles(self) -> frozenset[str]:
         return frozenset(r.role for r in self.header_rules)
+
+    def note_fields(self, role: str) -> frozenset[str]:
+        return frozenset(f for r in self.note_rules if r.role == role for f in r.fields)
+
+    def note_layout(self, role: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        return next(
+            ((r.markers, r.title_endings) for r in self.note_rules if r.role == role), ((), ())
+        )
 
     def scoped_roles(self) -> frozenset[str]:
         return frozenset(r.role for r in self.scoped_rules)
@@ -80,7 +97,7 @@ class TrustPolicy(BaseModel):
 
     def restricted_fields(self, role: str) -> frozenset[str]:
         """The fields a restricted role may serve, by its header or its scoped rule."""
-        rules = (*self.header_rules, *self.scoped_rules)
+        rules = (*self.header_rules, *self.note_rules, *self.scoped_rules)
         return frozenset(f for r in rules if r.role == role for f in r.fields)
 
 
