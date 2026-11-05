@@ -134,6 +134,7 @@ def prepare(
     model: str,
     points_per_session: int = 40,
     points_per_request: int = 12,
+    session_budget: int | None = None,
     repo: Path = REPO,
 ) -> dict[str, Any]:
     """Read-only on the platform; refuses a run root that holds anything."""
@@ -170,12 +171,17 @@ def prepare(
             for request in _requests(changes, fields[changes.product], points_per_request, system)
         ]
         planned[session] = (requests, _session_texts(members, rebuilt, rules), members)
+    budget = 2 * len(planned) if session_budget is None else session_budget
+    if type(budget) is not int or budget < len(planned):
+        raise JudgeBatchError("INVALID_ARGUMENTS")
     targets = [
         run_root / "sessions" / session / name
         for session, (_, texts, _) in planned.items()
         for name in texts
     ]
     preflight(run_root, targets)
+    run_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    run_root.chmod(0o700)
     listed: dict[str, Any] = {}
     plan_sessions: dict[str, dict[str, list[str]]] = {}
     for session, (requests, texts, members) in planned.items():
@@ -196,11 +202,15 @@ def prepare(
         },
     )
     plan = {
+        "review_protocol": "dual-v1",
+        "round": 1,
+        "session_budget": budget,
         "products": first,
         "space_id": space_id,
         "active": None if active is None else {"release": active.id, "epoch": active.epoch},
         "cards_version": cards_version(),
         "prompt_version": rules["version"],
+        "operator_prompt": rules["operator_prompt"],
         "policy_ref": policy_ref,
         "reviewer": reviewer,
         "model": model,
@@ -210,7 +220,7 @@ def prepare(
     }
     script = run_root / "run.sh"
     script.write_text(
-        run_script(run_root, sorted(plan_sessions), model, rules["operator_prompt"]),
+        run_script(run_root, sorted(plan_sessions)),
         encoding="utf-8",
     )
     script.chmod(0o755)
