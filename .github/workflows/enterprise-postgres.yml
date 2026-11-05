@@ -186,3 +186,42 @@ jobs:
             TestKeywordScoreCatalogCompatibility; do
             grep -q -- "--- PASS: ${test} " paradedb.log || { echo "${test} did not pass" >&2; exit 1; }
           done
+
+  st1-full-scale:
+    name: ST-1 full-scale synthetic acceptance
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: weknora
+          POSTGRES_PASSWORD: weknora
+          POSTGRES_DB: weknora
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U weknora -d weknora"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      WEKNORA_TEST_POSTGRES_URL: postgres://weknora:weknora@127.0.0.1:5432/weknora?sslmode=disable
+      ST1_SCALE: "1"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Full-scale storage properties (required once before ST-1 merge)
+        run: |
+          set -o pipefail
+          go test -count=1 -v -timeout 80m -run '^TestPostgresMemberStorage' \
+            ./internal/enterprise/releasestore 2>&1 | tee st1-full-scale.log
+          if grep -q -- '--- SKIP' st1-full-scale.log; then
+            echo "Full-scale storage acceptance must execute, not skip." >&2
+            exit 1
+          fi
+          grep -q -- '--- PASS: TestPostgresMemberStorageColdHistoriesAndStructureBudget' st1-full-scale.log
