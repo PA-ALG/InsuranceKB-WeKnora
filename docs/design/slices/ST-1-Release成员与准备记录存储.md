@@ -1,6 +1,6 @@
 # ST-1 · Release 成员与准备记录存储
 
-> r3，r2 已获确认；依 Claude [顺序裁定](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/550#issuecomment-6666799749) 澄清内部布局与 SQL 读序。Refs #550。
+> r4，r2 已获确认并已进入实施；依 Claude [顺序裁定](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/550#issuecomment-6666799749) 澄清内部布局与 SQL 读序。Refs #550。
 > Codex 实现，Claude 审核；本提交独立修正文档事实，不含运行时修改。
 > 本提交不含 RED、运行时代码、迁移或合同变更，不是上线/清理许可。
 > 依据：蓝图 §5.1「成员内容寻址」、§6.2/6.5、§7.4/7.5、§12；S4c-2a/2b-1/2b-2、S3i、S8b。
@@ -86,7 +86,7 @@ r2 将集合改为**共享内容块 + 小型块列表**，取代 r1 全量逐成
 不改 CandidateBundle、Harness 输出/编译、审批策略、Source 生命周期或外部 REST/MCP 合同。
 保留候选 raw_bundle、决定/逐点决定、receipt 与 manifest；它们是审计/重放来源，不因大列优化被抹掉。
 
-## 4. 推荐的物理模型（待确认后才实施）
+## 4. 已确认的物理模型
 
 ### 4.1 作用域与两种内容身份
 
@@ -201,6 +201,17 @@ legacy repository不得在ref-only生产scope服务。新模块不反向调用re
 - manifest、原MemberDigest、全部ID/epoch、candidate/decision/source/exact3指纹不变；不改审核、
   业务时间、专家锁、来源生命周期，不重新评审/激活/pin。新写两映射必须同根，不各自重建一份。
 
+### 4.4 Publisher 的有序输入前提（后续明确裁定）
+
+依据 [Owner确认](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/550#issuecomment-6668635086)，
+`Publisher.Activate` 的成员必须按 materialize 的 Go UTF-8 slug 字节序严格递增；空集合仍合法。
+入口在任何 DB 读取/写入、pin、决定或幂等提交查询前检查；无序或重复 slug 返回既有
+`CANDIDATE_INVALID`，不悄悄排序，不改 manifest/准备数组以掩盖输入错误，所有写入0。
+合法有序输入仍走原完整校验/事务/CAS/幂等路径。此为明确的内部 Publisher 行为收紧，不能宣称
+所有旧调用行为不变；不改变外部 CandidateBundle 合同，真实 materialize 本已排序。
+旧 pointActivation 测试 helper 独立适配为生产顺序，保留原所有竞态/回滚/决定/Head/pin断言。
+新增独立反例锁住无序 typed 拒绝、无SQL/所有持久化状态不变及合法排序正控。
+
 ## 5. 迁移、并发与回滚
 
 线上升级/整理/备份/空间回收必须另开运维 Issue，本阶段无执行。本设计采用**有退出条件的过渡**，
@@ -233,7 +244,9 @@ legacy repository不得在ref-only生产scope服务。新模块不反向调用re
    可读版本改为报错来完成切换。原已损坏的行报阻塞并保留，不静默遗漏或自行修复。
 
 回滚：桥接阶段直接保留旧读写数据，但先停用新格式写入；reference-only 后须先用不可变对象/有序集合
-分批**完整重建**旧成员行和旧准备数组，核摘要/顺序/身份后才能换旧二进制。down 不得先 DROP 新表或
+分批**完整重建**旧成员行和旧准备数组，核摘要/顺序/企业身份后才能换旧二进制。
+最终 down 仅停服后使用：同一事务锁定原头/成员及新表，核双向映射、完整内容/块/根hash、
+旧成员七字段集合和准备数组原序，校验到DDL提交间阻止漂移。down 不得先 DROP 新表或
 声称“空旧表也能回滚”；验证失败拒绝 down。整个恢复不改 Head、epoch、决定或 pin。原件缺失/摘要不符
 仍报原 typed 错误，不能因数据重排恢复已失效来源。断点/结果未知先读进度和映射核对，不盲目重写。
 
@@ -292,30 +305,6 @@ VACUUM 可复用页与 OS/VM 真正可用空间分开报告；rewrite/VACUUM FUL
 完整PG适配入口和原公开合同均需覆盖；不改旧保护断言遮错、不新增skip/xfail。定量增长先按逻辑
 字节验收，不将其等同物理压缩或VM释放；线上迁移前测量另过M3门。
 
-## 7. 阶段与拟写域
-
-本阶段仅本 Spec、[附录A](ST-1-附录A-容量与测量.md)及仓库外必要调查脚本/私密证据。
-将来如确认设计：自有 `internal/enterprise/releasestore/` 及必要成员存储子包；既有
-`internal/application/repository/wiki_release.go`、`internal/types/wiki_release.go` 的存储接缝；
-`migrations/enterprise/versioned/000013_enterprise_member_chunks.{up,down}.sql` 与
-`internal/database/enterprise_migration.go` 迁移头；自身测试。
-三处既有扩展文件在固定上游 `f17ee8a8d` 不存在，不新增上游 patch 数；新模块只在自有 enterprise 路径、
-≤500行；端口与迁移号已在r2冻结。独立RED只在Claude确认M1–M3后写，原公开方法签名保持。
-
-不改 Harness、编译身份/值协议、contracts/前端/导航/领域规则、蓝图或守卫/基线；不删除审计或
-修改 Source 生命周期；不把未来存储实现混进本次 Spec 提交。
-
-### 本轮确认门（M3）
-
-既定a+b、完整身份/四段scope、唯一Head/同事务、历史与审计保留、不做年龄GC已获确认，不重新
-申请这些方向。本轮等待Claude明确确认M1结构共享/布局取舍、M2定量标准与新公式、M3测量门位置。
-
-完整重叠率/U0/目标物理大小是**线上迁移前门**，不是设计确认后RED/实现的前置；工程可先用合成
-数据做。但本轮用户只授权文档，不能用原审核末句自行开始RED。确认后后续业务另行接续。
-当前不测线上DB/Docker、不恢复541副本、不与549编译/摄取争资源。线上迁移/空间回收与部署仍另开运维。
-
-r2 阶段快照中的等待确认已由后续实施授权解除；r3 仅修正读序事实，不改变定量门槛或本轮线上禁令。
-
 ### 6.4 两层执行（Claude 后续裁定）
 
 依据 [两层CI裁定](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/550#issuecomment-6667872744)，
@@ -331,13 +320,26 @@ r2 阶段快照中的等待确认已由后续实施授权解除；r3 仅修正�
 合并前必须在该手动作业或本机隔离PG完整通过一次全规模并附环境、全部字节、资源/时间与限制。
 此执行预算不改变线上迁移许可，不再把常规job延至60分钟。
 
-### 4.4 Publisher 的有序输入前提（后续明确裁定）
+## 7. 阶段与拟写域
 
-依据 [Owner确认](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/550#issuecomment-6668635086)，
-`Publisher.Activate` 的成员必须按 materialize 的 Go UTF-8 slug 字节序严格递增；空集合仍合法。
-入口在任何 DB 读取/写入、pin、决定或幂等提交查询前检查；无序或重复 slug 返回既有
-`CANDIDATE_INVALID`，不悄悄排序，不改 manifest/准备数组以掩盖输入错误，所有写入0。
-合法有序输入仍走原完整校验/事务/CAS/幂等路径。此为明确的内部 Publisher 行为收紧，不能宣称
-所有旧调用行为不变；不改变外部 CandidateBundle 合同，真实 materialize 本已排序。
-旧 pointActivation 测试 helper 独立适配为生产顺序，保留原所有竞态/回滚/决定/Head/pin断言。
-新增独立反例锁住无序 typed 拒绝、无SQL/所有持久化状态不变及合法排序正控。
+调查/修订阶段只改本 Spec、[附录A](ST-1-附录A-容量与测量.md)及仓库外证据。
+r2 已获确认，当前 RED→实现→PR 的写域：自有 `internal/enterprise/releasestore/` 及必要成员存储子包；既有
+`internal/application/repository/wiki_release.go`、`internal/types/wiki_release.go` 的存储接缝；
+`migrations/enterprise/versioned/000013_enterprise_member_chunks.{up,down}.sql` 与
+`internal/database/enterprise_migration.go` 迁移头；自身测试。
+三处既有扩展文件在固定上游 `f17ee8a8d` 不存在，不新增上游 patch 数；新模块只在自有 enterprise 路径、
+≤500行；端口与迁移号已在r2冻结。独立RED在Claude确认M1–M3后写，原公开方法签名保持；Publisher 输入前提收紧见§4.4。
+
+不改 Harness、编译身份/值协议、contracts/前端/导航/领域规则、蓝图或守卫/基线；不删除审计或
+修改 Source 生命周期；不把未来存储实现混进本次 Spec 提交。
+
+### 已确认的阶段门（M3）
+
+既定a+b、完整身份/四段scope、唯一Head/同事务、历史与审计保留、不做年龄GC已获确认，不重新
+申请这些方向。Claude 已明确确认M1结构共享/布局取舍、M2定量标准与新公式、M3测量门位置。
+
+完整重叠率/U0/目标物理大小是**线上迁移前门**，不是设计确认后RED/实现的前置；工程可先用合成
+数据做。本轮 RED/实现另有明确授权；它不包含任何线上部署/回填/测量。
+当前不测线上DB/Docker、不恢复541副本、不与549编译/摄取争资源。线上迁移/空间回收与部署仍另开运维。
+
+r2 阶段快照中的等待确认已由后续实施授权解除；r3 仅修正读序事实，不改变定量门槛或本轮线上禁令。
