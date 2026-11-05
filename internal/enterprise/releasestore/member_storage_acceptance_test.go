@@ -29,7 +29,8 @@ func TestPostgresMemberStoragePublicTransactionSharesRootAndReplays(t *testing.T
 	require.NoError(t, err)
 	r, err := s.Activate(ctx, principal, "space-1", c.ID, d.ID)
 	require.NoError(t, err)
-	require.EqualValues(t, 1, storageCount(t, db, "enterprise_member_releases"), "production activation must write a member root")
+	require.EqualValues(t, 1, storageCount(t, db, "enterprise_member_releases"),
+		"production activation must write a member root")
 	root := storageRoot(t, db, r.ID)
 	var prep struct{ RootDigest []byte }
 	require.NoError(t, db.Table("enterprise_member_preparations").Take(&prep).Error)
@@ -51,14 +52,27 @@ func TestPostgresMemberStorageSevenFieldsAndScopeAreIdentity(t *testing.T) {
 	repo := New(db, testSpaces(t)).releases
 	scope, err := testSpaces(t).Scope(7, "space-1")
 	require.NoError(t, err)
-	original := types.WikiReleaseMemberSnapshot{Kind: "page", LogicalSlug: "generic/value", RevisionID: "v1", MemberDigest: fileSHA, Title: "title", Content: "正文原字節", Payload: json.RawMessage(`{"number":9007199254740993}`)}
+	original := types.WikiReleaseMemberSnapshot{
+		Kind:        "page",
+		LogicalSlug: "generic/value", RevisionID: "v1", MemberDigest: fileSHA,
+		Title: "title", Content: "正文原字節", Payload: json.RawMessage(`{"number":9007199254740993}`),
+	}
 	fields := []func(*types.WikiReleaseMemberSnapshot){
-		func(m *types.WikiReleaseMemberSnapshot) { m.Kind = "claim" }, func(m *types.WikiReleaseMemberSnapshot) { m.LogicalSlug = "generic/new" },
-		func(m *types.WikiReleaseMemberSnapshot) { m.RevisionID = "v2" }, func(m *types.WikiReleaseMemberSnapshot) { m.Title = "new title" },
-		func(m *types.WikiReleaseMemberSnapshot) { m.Content = "different envelope" }, func(m *types.WikiReleaseMemberSnapshot) { m.MemberDigest = strings.Repeat("a", 64) },
+		func(m *types.WikiReleaseMemberSnapshot) { m.Kind = "claim" },
+		func(m *types.WikiReleaseMemberSnapshot) { m.LogicalSlug = "generic/new" },
+
+		func(m *types.WikiReleaseMemberSnapshot) { m.RevisionID = "v2" },
+		func(m *types.WikiReleaseMemberSnapshot) { m.Title = "new title" },
+
+		func(m *types.WikiReleaseMemberSnapshot) { m.Content = "different envelope" },
+		func(m *types.WikiReleaseMemberSnapshot) {
+			m.MemberDigest = strings.Repeat("a",
+				64)
+		},
 		func(m *types.WikiReleaseMemberSnapshot) { m.Payload = json.RawMessage(`{"number":9007199254740994}`) },
 	}
-	for i, change := range append([]func(*types.WikiReleaseMemberSnapshot){func(*types.WikiReleaseMemberSnapshot) {}}, fields...) {
+	for i, change := range append([]func(*types.WikiReleaseMemberSnapshot){func(*types.WikiReleaseMemberSnapshot) {}},
+		fields...) {
 		m := original
 		change(&m)
 		repositoryStorageWrite(t, repo, scope, fmt.Sprintf("identity-%d", i), []types.WikiReleaseMemberSnapshot{m})
@@ -82,7 +96,8 @@ func TestPostgresMemberStorageNeverFallsBackFromCorruptReferences(t *testing.T) 
 			case "mapping":
 				require.NoError(t, db.Exec(`DELETE FROM enterprise_member_releases`).Error)
 			case "root":
-				require.NoError(t, db.Exec(`UPDATE enterprise_member_sets SET blocks=decode(repeat('00',octet_length(blocks)),'hex')`).Error)
+				require.NoError(t, db.Exec("UPDATE enterprise_member_sets SET blocks=decode(repeat('00',octet"+
+					"_length(blocks)),'hex')").Error)
 			case "chunk":
 				require.NoError(t, db.Exec(`DELETE FROM enterprise_member_chunks`).Error)
 			case "content":
@@ -96,7 +111,9 @@ func TestPostgresMemberStorageNeverFallsBackFromCorruptReferences(t *testing.T) 
 			spaces := testSpaces(t)
 			if target == "scope" {
 				var parseErr error
-				spaces, parseErr = ParseSpaces(`[{"tenant_id":7,"space_id":"space-1","raw_kb_id":"other-raw","wiki_kb_id":"wiki-1"}]`)
+				spaces, parseErr = ParseSpaces(
+					"[{\"tenant_id\":7,\"space_id\":\"space-1\",\"raw_kb_id\":\"other-raw\",\"wik" +
+						"i_kb_id\":\"wiki-1\"}]")
 				require.NoError(t, parseErr)
 			}
 			_, err := New(db, spaces).ReleaseByID(context.Background(), 7, "space-1", r.ID)
@@ -141,7 +158,11 @@ func TestPostgresMemberStorageDifferentLayoutsRemainLogicallyEqual(t *testing.T)
 	first := storagePublish(t, store, "layout-first", m)
 	root := storageRoot(t, db, first.ID)
 	// An insertion/deletion changes the internal layout but not the final logical sequence.
-	extra := release.Member{Kind: "claim", LogicalSlug: m[50].LogicalSlug + "a", Payload: json.RawMessage(`{"value":3}`), MemberDigest: memberDigest(t, `{"value":3}`)}
+	extra := release.Member{
+		Kind: "claim", LogicalSlug: m[50].LogicalSlug + "a",
+		Payload: json.RawMessage(`{"value":3}`), MemberDigest: memberDigest(t,
+			`{"value":3}`),
+	}
 	for storageNaturalCut(extra.LogicalSlug) {
 		extra.LogicalSlug += "a"
 	}

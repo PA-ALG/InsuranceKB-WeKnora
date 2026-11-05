@@ -18,12 +18,16 @@ func paddedStorageMember(t *testing.T, i, version int) release.Member {
 	t.Helper()
 	m := release.Member{Kind: "claim", LogicalSlug: fmt.Sprintf("group/%06d", i), AccessScope: "space"}
 	makePayload := func(padding int, space string) {
-		m.Payload = json.RawMessage(fmt.Sprintf(`{%s"value":"%06d/%06d%s"}`, space, i, version, strings.Repeat("x", padding)))
+		m.Payload = json.RawMessage(fmt.Sprintf(
+			`{%s"value":"%06d/%06d%s"}`, space, i, version, strings.Repeat("x", padding),
+		))
 		m.MemberDigest = memberDigest(t, string(m.Payload))
 	}
 	makePayload(0, "")
 	width := func() int {
-		envelope, err := json.Marshal(memberEnvelope{Version: 1, Payload: string(m.Payload), AccessScope: m.AccessScope})
+		envelope, err := json.Marshal(memberEnvelope{
+			Version: 1, Payload: string(m.Payload), AccessScope: m.AccessScope,
+		})
 		require.NoError(t, err)
 		// PostgreSQL strips input whitespace, then inserts one space after the only key's colon.
 		var compact bytes.Buffer
@@ -42,9 +46,9 @@ func paddedStorageMember(t *testing.T, i, version int) release.Member {
 func referenceFixtureScope(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	// Controlled synthetic state; small operator acceptance tests lock the actual transition guard.
-	require.NoError(t, db.Exec(`INSERT INTO enterprise_member_scopes
- (tenant_id,space_id,raw_kb_id,wiki_kb_id,mode,observation_started_at)
- VALUES(7,'space-1','raw-1','wiki-1','reference',CURRENT_TIMESTAMP-INTERVAL '8 days')`).Error)
+	require.NoError(t, db.Exec("INSERT INTO enterprise_member_scopes\n (tenant_id,space_id,raw_kb_"+
+		"id,wiki_kb_id,mode,observation_started_at)\n VALUES(7,'space-1','r"+
+		"aw-1','wiki-1','reference',CURRENT_TIMESTAMP-INTERVAL '8 days')").Error)
 }
 
 type storageBytes struct{ Contents, Chunks, Roots, Mappings, Control int64 }
@@ -56,25 +60,36 @@ func logicalStorageBytes(t *testing.T, db *gorm.DB) storageBytes {
 		out *int64
 		sql string
 	}{
-		{&b.Contents, `SELECT COALESCE(sum(44+octet_length(kind)+octet_length(logical_slug)+octet_length(revision_id)+octet_length(member_digest)+octet_length(title)+octet_length(content)+octet_length(payload_json)),0) FROM enterprise_member_contents`},
+		{&b.Contents, "SELECT COALESCE(sum(44+octet_length(kind)+octet_length(logical_sl" +
+			"ug)+octet_length(revision_id)+octet_length(member_digest)+octet_l" +
+			"ength(title)+octet_length(content)+octet_length(payload_json)),0)" +
+			" FROM enterprise_member_contents"},
 		{&b.Chunks, `SELECT COALESCE(sum(48+octet_length(refs)),0) FROM enterprise_member_chunks`},
-		{&b.Roots, `SELECT COALESCE(sum(56+octet_length(order_mode)+octet_length(blocks)),0) FROM enterprise_member_sets`},
-		{&b.Control, `SELECT COALESCE(sum(40+octet_length(space_id)+octet_length(raw_kb_id)+octet_length(wiki_kb_id)+octet_length(mode)),0) FROM enterprise_member_scopes`},
+		{&b.Roots, "SELECT COALESCE(sum(56+octet_length(order_mode)+octet_length(bloc" +
+			"ks)),0) FROM enterprise_member_sets"},
+		{&b.Control, "SELECT COALESCE(sum(40+octet_length(space_id)+octet_length(raw_kb" +
+			"_id)+octet_length(wiki_kb_id)+octet_length(mode)),0) FROM enterpr" +
+			"ise_member_scopes"},
 	}
 	for _, q := range queries {
 		require.NoError(t, db.Raw(q.sql).Scan(q.out).Error)
 	}
-	for _, pair := range [][2]string{{"enterprise_member_releases", "release_id"}, {"enterprise_member_preparations", "preparation_id"}} {
+	for _, pair := range [][2]string{
+		{"enterprise_member_releases", "release_id"}, {"enterprise_member_preparations", "preparation_id"},
+	} {
 		var n int64
-		require.NoError(t, db.Raw(fmt.Sprintf(`SELECT COALESCE(sum(49+octet_length(%s)+octet_length(space_id)+octet_length(raw_kb_id)+octet_length(wiki_kb_id)),0) FROM %s`, pair[1], pair[0])).Scan(&n).Error)
+		require.NoError(t, db.Raw(fmt.Sprintf("SELECT COALESCE(sum(49+octet_length(%s)+octet_length(space_id)+oc"+
+			"tet_length(raw_kb_id)+octet_length(wiki_kb_id)),0) FROM %s", pair[1], pair[0])).Scan(&n).Error)
 		b.Mappings += n
 	}
 	var n int64
-	require.NoError(t, db.Raw(`SELECT COALESCE(sum(48+octet_length(release_id)+octet_length(phase)),0) FROM enterprise_member_progress`).Scan(&n).Error)
+	require.NoError(t, db.Raw("SELECT COALESCE(sum(48+octet_length(release_id)+octet_length(phas"+
+		"e)),0) FROM enterprise_member_progress").Scan(&n).Error)
 	b.Control += n
 	for _, table := range []string{"wiki_releases", "wiki_release_preparations"} {
 		var markerBytes int64
-		require.NoError(t, db.Raw("SELECT COALESCE(sum(octet_length(member_storage)),0) FROM "+table).Scan(&markerBytes).Error)
+		require.NoError(t, db.Raw("SELECT COALESCE(sum(octet_length(member_storage)),0) FROM "+table).
+			Scan(&markerBytes).Error)
 		b.Control += markerBytes
 	}
 	return b
@@ -107,7 +122,9 @@ func TestPostgresMemberStorageGrowthIndependentOfRemotePopulation(t *testing.T) 
 			}
 			storagePublish(t, store, "same-local-change", base)
 			after := logicalStorageBytes(t, db)
-			measured = append(measured, delta{after.Contents - before.Contents, after.Chunks - before.Chunks, after.Roots - before.Roots})
+			measured = append(measured, delta{
+				after.Contents - before.Contents, after.Chunks - before.Chunks, after.Roots - before.Roots,
+			})
 			require.EqualValues(t, 125*5120, measured[len(measured)-1].content)
 		})
 	}
@@ -121,11 +138,13 @@ func TestPostgresMemberStorageGrowthIndependentOfRemotePopulation(t *testing.T) 
 func oldSerializedWidths(t *testing.T, db *gorm.DB) (memberColumns, prepItem int64) {
 	t.Helper()
 	var out struct{ Fields, Item int64 }
-	require.NoError(t, db.Raw(`SELECT
- octet_length(kind)+octet_length(logical_slug)+octet_length(revision_id)+octet_length(member_digest)+octet_length(title)+octet_length(content)+octet_length(payload_json) AS fields,
- octet_length(jsonb_build_object('kind',kind,'logical_slug',logical_slug,'revision_id',revision_id,
- 'member_digest',member_digest,'title',title,'content',content,'payload',payload_json::jsonb)::text) AS item
- FROM enterprise_member_contents LIMIT 1`).Scan(&out).Error)
+	require.NoError(t, db.Raw("SELECT\n octet_length(kind)+octet_length(logical_slug)+octet_lengt"+
+		"h(revision_id)+octet_length(member_digest)+octet_length(title)+oc"+
+		"tet_length(content)+octet_length(payload_json) AS fields,\n octet_"+
+		"length(jsonb_build_object('kind',kind,'logical_slug',logical_slug"+
+		",'revision_id',revision_id,\n 'member_digest',member_digest,'title"+
+		"',title,'content',content,'payload',payload_json::jsonb)::text) A"+
+		"S item\n FROM enterprise_member_contents LIMIT 1").Scan(&out).Error)
 	require.EqualValues(t, 5120-44, out.Fields)
 	// Original member IDs are release_id + ':' + slug; the original two ID columns are both counted.
 	return out.Fields + 2*int64(len("rel_"+strings.Repeat("x", 32))) + 1 + int64(len("group/000000")), out.Item
@@ -181,7 +200,8 @@ func TestPostgresMemberStorageSixHundredColdHistoriesAndStructureBudget(t *testi
 	require.LessOrEqual(t, 10*structure, b.Contents, "count every structural logical column, not only blobs")
 	require.Zero(t, storageCount(t, db, "wiki_release_members"), "large fixture cannot retain duplicate legacy bodies")
 	var duplicatedPreparations int64
-	require.NoError(t, db.Raw(`SELECT count(*) FROM wiki_release_preparations WHERE members <> '[]'::jsonb`).Scan(&duplicatedPreparations).Error)
+	require.NoError(t, db.Raw(`SELECT count(*) FROM wiki_release_preparations WHERE members <> '[]'::jsonb`).
+		Scan(&duplicatedPreparations).Error)
 	require.Zero(t, duplicatedPreparations, "reference-only must not retain a hidden second snapshot array")
 	for _, v := range versions {
 		// A fresh production adapter is an empty application/object cache for every history.
@@ -204,7 +224,9 @@ func TestPostgresMemberStorageSixHundredColdHistoriesAndStructureBudget(t *testi
 		require.Equal(t, expected, snapshots)
 	}
 	checkStorageResourceBudget(t, db)
-	t.Logf("600 releases: content=%d structural=%d (chunks=%d roots=%d mappings=%d control=%d); actual legacy columns=%d preparation-array-text=%d", b.Contents, structure, b.Chunks, b.Roots, b.Mappings, b.Control, oldMemberBytes, oldPreparationBytes)
+	t.Logf("600 releases: content=%d structural=%d (chunks=%d roots=%d mappin"+
+		"gs=%d control=%d); actual legacy columns=%d preparation-array-tex"+
+		"t=%d", b.Contents, structure, b.Chunks, b.Roots, b.Mappings, b.Control, oldMemberBytes, oldPreparationBytes)
 }
 
 func mustStorageScope(t *testing.T) types.WikiReleaseScope {
@@ -217,7 +239,8 @@ func mustStorageScope(t *testing.T) types.WikiReleaseScope {
 func checkStorageResourceBudget(t *testing.T, db *gorm.DB) {
 	t.Helper()
 	var bytes int64
-	require.NoError(t, db.Raw(`SELECT pg_database_size(current_database())+(SELECT COALESCE(sum(size),0) FROM pg_ls_waldir())`).Scan(&bytes).Error)
+	require.NoError(t, db.Raw("SELECT pg_database_size(current_database())+(SELECT COALESCE(sum("+
+		"size),0) FROM pg_ls_waldir())").Scan(&bytes).Error)
 	require.Less(t, bytes, int64(2<<30), "stop this owned local fixture if DB+WAL exceeds the agreed resource cap")
 	t.Logf("owned synthetic database+WAL=%d B", bytes)
 }

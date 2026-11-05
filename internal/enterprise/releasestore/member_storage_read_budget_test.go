@@ -49,8 +49,12 @@ func TestPostgresMemberStorageReadBudget(t *testing.T) {
 			require.NoError(t, err)
 			rows := make([]types.WikiReleaseMember, len(snapshots))
 			for i, s := range snapshots {
-				rows[i] = types.WikiReleaseMember{ID: r.ID + ":" + s.LogicalSlug, ReleaseID: r.ID, Kind: s.Kind,
-					LogicalSlug: s.LogicalSlug, RevisionID: s.RevisionID, MemberDigest: s.MemberDigest, Title: s.Title, Content: s.Content, Payload: s.Payload}
+				rows[i] = types.WikiReleaseMember{
+					ID: r.ID + ":" + s.LogicalSlug, ReleaseID: r.ID, Kind: s.Kind,
+					LogicalSlug: s.LogicalSlug, RevisionID: s.RevisionID,
+					MemberDigest: s.MemberDigest, Title: s.Title, Content: s.Content,
+					Payload: s.Payload,
+				}
 			}
 			require.NoError(t, db.CreateInBatches(rows, 500).Error)
 			counter := &storageQueryCounter{Interface: logger.Default.LogMode(logger.Silent)}
@@ -92,11 +96,17 @@ func TestPostgresMemberStorageReadBudget(t *testing.T) {
 					q = max(q, s.queries)
 				}
 				sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
-				return durations[(len(durations)-1)*50/100], durations[int(math.Ceil(float64(len(durations))*0.95))-1], q
+				return durations[(len(durations)-1)*50/100], durations[int(math.Ceil(float64(len(durations))*0.95))-1],
+					q
 			}
 			old50, old95, oldQ := summarize(oldSamples)
 			new50, new95, newQ := summarize(newSamples)
-			t.Logf("N=%d PG15/local or CI target, %s/%s cpus=%d GOMAXPROCS=%d samples=30each ABBA15; old p50=%s p95=%s queries=%d; new p50=%s p95=%s queries=%d; wire bytes included (per sample); all samples old=%v new=%v", n, runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.GOMAXPROCS(0), old50, old95, oldQ, new50, new95, newQ, oldSamples, newSamples)
+			t.Logf("N=%d PG15/local or CI target, %s/%s cpus=%d GOMAXPROCS=%d samples"+
+				"=30each ABBA15; old p50=%s p95=%s queries=%d; new p50=%s p95=%s q"+
+				"ueries=%d; wire bytes included (per sample); all samples old=%v n"+
+				"ew=%v",
+				n, runtime.GOOS, runtime.GOARCH, runtime.NumCPU(), runtime.GOMAXPROCS(0),
+				old50, old95, oldQ, new50, new95, newQ, oldSamples, newSamples)
 			require.LessOrEqual(t, newQ, 2*oldQ)
 			require.LessOrEqual(t, new50, 2*old50)
 			require.LessOrEqual(t, new95, 2*old95)
@@ -115,13 +125,21 @@ func frozenLegacyStorageRead(ctx context.Context, s *Store, id string) (release.
 	if err != nil {
 		return release.Release{}, err
 	}
-	header.Members, err = s.members.load(ctx, memberKey{Tenant: 7, Space: "space-1", Release: id}, func(ctx context.Context) ([]release.Member, error) {
+	header.Members, err = s.members.load(ctx, memberKey{
+		Tenant: 7,
+		Space:  "space-1", Release: id,
+	}, func(ctx context.Context) ([]release.Member,
+		error,
+	) {
 		var r types.WikiRelease
-		if err := s.db.WithContext(ctx).Where("tenant_id = ? AND space_id = ? AND raw_kb_id = ? AND wiki_kb_id = ?", scope.TenantID, scope.SpaceID, scope.RawKBID, scope.WikiKBID).Where("release_id = ?", id).Take(&r).Error; err != nil {
+		if err := s.db.WithContext(ctx).Where("tenant_id = ? AND space_id = ? AND raw_kb_id = ? AND wiki_kb_id = ?",
+			scope.TenantID, scope.SpaceID, scope.RawKBID, scope.WikiKBID).Where("release_id = ?",
+			id).Take(&r).Error; err != nil {
 			return nil, err
 		}
 		var rows []types.WikiReleaseMember
-		if err := s.db.WithContext(ctx).Where("release_id = ?", id).Order("logical_slug ASC").Find(&rows).Error; err != nil {
+		if err := s.db.WithContext(ctx).Where("release_id = ?",
+			id).Order("logical_slug ASC").Find(&rows).Error; err != nil {
 			return nil, err
 		}
 		snapshots := make([]types.WikiReleaseMemberSnapshot, 0, len(rows))

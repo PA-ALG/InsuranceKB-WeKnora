@@ -6,13 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/Tencent/WeKnora/internal/enterprise/release"
-	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Tencent/WeKnora/internal/enterprise/release"
+	"github.com/Tencent/WeKnora/internal/enterprise/releasestore"
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -36,7 +37,8 @@ func migrationDB(t *testing.T) *gorm.DB {
 	if strings.Contains(dsn, "?") {
 		separator = "&"
 	}
-	db, err := gorm.Open(postgres.Open(dsn+separator+"search_path="+schema), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(postgres.Open(dsn+separator+"search_path="+schema),
+		&gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
@@ -61,8 +63,16 @@ func scope() types.WikiReleaseScope {
 
 func historical(t *testing.T, db *gorm.DB, id string, kind string) []types.WikiReleaseMemberSnapshot {
 	t.Helper()
-	m := []types.WikiReleaseMemberSnapshot{{Kind: kind, LogicalSlug: "b", RevisionID: "rev", MemberDigest: strings.Repeat("b", 64), Title: "標題", Content: "原文\n𐐀", Payload: json.RawMessage(`{"n":9007199254740993}`)},
-		{Kind: "claim", LogicalSlug: "a", MemberDigest: strings.Repeat("a", 64), Content: "content", Payload: json.RawMessage(`{"n":2}`)}}
+	m := []types.WikiReleaseMemberSnapshot{
+		{
+			Kind: kind, LogicalSlug: "b",
+			RevisionID: "rev", MemberDigest: strings.Repeat("b", 64),
+			Title: "標題", Content: "原文\n𐐀", Payload: json.RawMessage(`{"n":9007199254740993}`),
+		},
+
+		{Kind: "claim", LogicalSlug: "a", MemberDigest: strings.Repeat("a",
+			64), Content: "content", Payload: json.RawMessage(`{"n":2}`)},
+	}
 	// Real enterprise v1 envelopes, digests and manifest; retain original order/empty kind.
 	pairs := make([][2]string, len(m))
 	for i := range m {
@@ -86,9 +96,18 @@ func historical(t *testing.T, db *gorm.DB, id string, kind string) []types.WikiR
 	}{"candidate", "decision", "decision-digest", "bundle-digest", pairs})
 	require.NoError(t, err)
 	hash := func(raw []byte) string { d := sha256.Sum256(raw); return hex.EncodeToString(d[:]) }
-	p := types.WikiReleasePreparation{ID: "prep-" + id, WikiReleaseScope: scope(), Status: "ready", Manifest: manifest, Members: m, CandidateDigest: "bundle-digest", ManifestDigest: hash(manifest), ReviewDecisionDigest: "decision-digest", ReviewPolicyID: "decision"}
+	p := types.WikiReleasePreparation{
+		ID: "prep-" + id, WikiReleaseScope: scope(),
+		Status: "ready", Manifest: manifest, Members: m, CandidateDigest: "bundle-digest",
+		ManifestDigest: hash(manifest), ReviewDecisionDigest: "decision-digest",
+		ReviewPolicyID: "decision",
+	}
 	p.PreparationDigest = hash([]byte(fmt.Sprintf("%s|%s|%s||0", p.ID, p.ManifestDigest, p.ReviewDecisionDigest)))
-	r := types.WikiRelease{ID: id, WikiReleaseScope: scope(), PreparationID: p.ID, CandidateDigest: p.CandidateDigest, ManifestDigest: p.ManifestDigest}
+	r := types.WikiRelease{
+		ID: id, WikiReleaseScope: scope(),
+		PreparationID: p.ID, CandidateDigest: p.CandidateDigest,
+		ManifestDigest: p.ManifestDigest,
+	}
 	require.NoError(t, db.Create(&p).Error)
 	require.NoError(t, db.Create(&r).Error)
 	for _, s := range m {
@@ -96,7 +115,12 @@ func historical(t *testing.T, db *gorm.DB, id string, kind string) []types.WikiR
 		if k == "" {
 			k = "page"
 		}
-		row := types.WikiReleaseMember{ID: id + ":" + s.LogicalSlug, ReleaseID: id, Kind: k, LogicalSlug: s.LogicalSlug, RevisionID: s.RevisionID, MemberDigest: s.MemberDigest, Title: s.Title, Content: s.Content, Payload: s.Payload}
+		row := types.WikiReleaseMember{
+			ID:        id + ":" + s.LogicalSlug,
+			ReleaseID: id, Kind: k, LogicalSlug: s.LogicalSlug, RevisionID: s.RevisionID,
+			MemberDigest: s.MemberDigest, Title: s.Title, Content: s.Content,
+			Payload: s.Payload,
+		}
 		require.NoError(t, db.Create(&row).Error)
 	}
 	return m
@@ -121,7 +145,8 @@ func TestPostgresMemberMigrationPreservesHistoricalOrderAndRestoresBeforeDown(t 
 	require.NoError(t, store.Backfill(ctx, db, scope(), "historical", 1<<20), "reentrant full snapshot equality")
 	var roots [][]byte
 	var rows []struct{ Root []byte }
-	require.NoError(t, db.Raw(`SELECT root_digest AS root FROM enterprise_member_releases UNION ALL SELECT root_digest FROM enterprise_member_preparations`).Scan(&rows).Error)
+	require.NoError(t, db.Raw("SELECT root_digest AS root FROM enterprise_member_releases UNION "+
+		"ALL SELECT root_digest FROM enterprise_member_preparations").Scan(&rows).Error)
 	for _, r := range rows {
 		roots = append(roots, r.Root)
 	}
@@ -129,13 +154,15 @@ func TestPostgresMemberMigrationPreservesHistoricalOrderAndRestoresBeforeDown(t 
 	require.NotEqual(t, roots[0], roots[1])
 	require.NoError(t, store.StartObservation(ctx, db, scope()))
 	require.Error(t, store.ReferenceOnly(ctx, db, scope()), "seven days cannot be bypassed")
-	require.NoError(t, db.Exec(`UPDATE enterprise_member_scopes SET observation_started_at=CURRENT_TIMESTAMP-INTERVAL '8 days',read_failures=1`).Error)
+	require.NoError(t, db.Exec("UPDATE enterprise_member_scopes SET observation_started_at=CURREN"+
+		"T_TIMESTAMP-INTERVAL '8 days',read_failures=1").Error)
 	require.Error(t, store.ReferenceOnly(ctx, db, scope()), "a validation error rejects transition")
 	require.NoError(t, db.Exec(`UPDATE enterprise_member_scopes SET read_failures=0`).Error)
 	require.NoError(t, store.ReferenceOnly(ctx, db, scope()))
 	require.NoError(t, store.CompactLegacy(ctx, db, scope()))
 	require.Empty(t, legacyRows(t, db, "historical"))
-	raw, err := os.ReadFile("../../../migrations/enterprise/versioned/000013_enterprise_member_chunks.down.sql")
+	raw, err := os.ReadFile("../../../migrations/enterprise/versioned/000013_enterprise_member" +
+		"_chunks.down.sql")
 	require.NoError(t, err)
 	require.Error(t, db.Exec(string(raw)).Error, "down before restoring old format is forbidden")
 	require.Error(t, store.RestoreLegacy(ctx, db, scope(), 1), "capacity budget rejects before restoring any bytes")
@@ -155,15 +182,18 @@ func TestPostgresMemberMigrationSourceDriftAndFaultResume(t *testing.T) {
 	ctx := context.Background()
 	historical(t, db, "drift", "")
 	store := releasestore.NewMemberStorage()
-	require.NoError(t, db.Exec(`CREATE FUNCTION st1_fail_root() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic'; END $$;
- CREATE TRIGGER st1_fail_root BEFORE INSERT ON enterprise_member_sets FOR EACH ROW EXECUTE FUNCTION st1_fail_root()`).Error)
+	require.NoError(t, db.Exec("CREATE FUNCTION st1_fail_root() RETURNS trigger LANGUAGE plpgsql "+
+		"AS $$ BEGIN RAISE EXCEPTION 'synthetic'; END $$;\n CREATE TRIGGER "+
+		"st1_fail_root BEFORE INSERT ON enterprise_member_sets FOR EACH RO"+
+		"W EXECUTE FUNCTION st1_fail_root()").Error)
 	require.Error(t, store.Backfill(ctx, db, scope(), "drift", 1<<20))
 	var count int64
 	require.NoError(t, db.Table("enterprise_member_releases").Count(&count).Error)
 	require.Zero(t, count)
 	require.NoError(t, db.Exec(`DROP TRIGGER st1_fail_root ON enterprise_member_sets`).Error)
 	require.NoError(t, db.Exec(`UPDATE wiki_release_members SET title='changed' WHERE logical_slug='a'`).Error)
-	require.Error(t, store.Backfill(ctx, db, scope(), "drift", 1<<20), "saved progress fingerprint cannot silently accept changed source")
+	require.Error(t, store.Backfill(ctx, db, scope(), "drift",
+		1<<20), "saved progress fingerprint cannot silently accept changed source")
 	require.NoError(t, db.Exec(`UPDATE wiki_release_members SET title='' WHERE logical_slug='a'`).Error)
 	require.NoError(t, store.Backfill(ctx, db, scope(), "drift", 1<<20))
 	require.NoError(t, store.Backfill(ctx, db, scope(), "drift", 1<<20))
@@ -176,11 +206,16 @@ func TestPostgresMemberMigrationSkipsUnassociatedAndRejectsBrokenObject(t *testi
 	ctx := context.Background()
 	historical(t, db, "valid", "page")
 	store := releasestore.NewMemberStorage()
-	p := types.WikiReleasePreparation{ID: "unassociated", WikiReleaseScope: scope(), Status: "ready", PreparationDigest: "unassociated", Manifest: json.RawMessage(`{}`), Members: []types.WikiReleaseMemberSnapshot{}}
+	p := types.WikiReleasePreparation{
+		ID: "unassociated", WikiReleaseScope: scope(),
+		Status: "ready", PreparationDigest: "unassociated", Manifest: json.RawMessage(`{}`),
+		Members: []types.WikiReleaseMemberSnapshot{},
+	}
 	require.NoError(t, db.Create(&p).Error)
 	require.NoError(t, store.Backfill(ctx, db, scope(), "valid", 1<<20))
 	require.NoError(t, store.StartObservation(ctx, db, scope()))
-	require.NoError(t, db.Exec(`UPDATE enterprise_member_scopes SET observation_started_at=CURRENT_TIMESTAMP-INTERVAL '8 days'`).Error)
+	require.NoError(t, db.Exec("UPDATE enterprise_member_scopes SET observation_started_at=CURREN"+
+		"T_TIMESTAMP-INTERVAL '8 days'").Error)
 	require.NoError(t, store.ReferenceOnly(ctx, db, scope()))
 	require.NoError(t, store.CompactLegacy(ctx, db, scope()))
 	require.NoError(t, db.Exec(`UPDATE enterprise_member_contents SET payload_json='{}'`).Error)
@@ -197,13 +232,32 @@ func TestPostgresMemberStorageInjectedPortUsesOriginalTransaction(t *testing.T) 
 	db := migrationDB(t)
 	ctx := context.Background()
 	repo := repository.NewWikiReleaseRepository(db).WithMemberStorage(releasestore.NewMemberStorage())
-	input := []types.WikiReleaseMemberSnapshot{{Kind: "page", LogicalSlug: "value", Content: "content", MemberDigest: strings.Repeat("a", 64), Payload: json.RawMessage(`{}`)}}
-	p := types.WikiReleasePreparation{ID: "preparation", WikiReleaseScope: scope(), Status: "ready", PreparationDigest: "digest", Manifest: json.RawMessage(`{}`), Members: input}
+	input := []types.WikiReleaseMemberSnapshot{{
+		Kind:        "page",
+		LogicalSlug: "value", Content: "content", MemberDigest: strings.Repeat("a",
+			64), Payload: json.RawMessage(`{}`),
+	}}
+	p := types.WikiReleasePreparation{
+		ID: "preparation", WikiReleaseScope: scope(),
+		Status: "ready", PreparationDigest: "digest", Manifest: json.RawMessage(`{}`),
+		Members: input,
+	}
 	r := types.WikiRelease{ID: "release", WikiReleaseScope: scope(), PreparationID: p.ID}
-	w := repository.WikiReleaseActivationWrite{Preparation: &p, Release: &r, Members: input, ExpectedPreparationID: p.ID, ExpectedPreparationDigest: p.PreparationDigest, Nonce: "nonce", ActivationReceiptID: "receipt", CASFault: func() error { return fmt.Errorf("synthetic CAS failure") }}
+	w := repository.WikiReleaseActivationWrite{
+		Preparation: &p,
+		Release:     &r, Members: input, ExpectedPreparationID: p.ID,
+		ExpectedPreparationDigest: p.PreparationDigest, Nonce: "nonce",
+		ActivationReceiptID: "receipt", CASFault: func() error { return fmt.Errorf("synthetic CAS failure") },
+	}
 	_, err := repo.Activate(ctx, w)
 	require.Error(t, err)
-	for _, table := range []string{"wiki_release_preparations", "wiki_releases", "wiki_release_receipts", "wiki_release_heads", "enterprise_member_contents", "enterprise_member_chunks", "enterprise_member_sets", "enterprise_member_scopes", "enterprise_member_releases", "enterprise_member_preparations", "enterprise_member_progress"} {
+	for _, table := range []string{
+		"wiki_release_preparations",
+		"wiki_releases", "wiki_release_receipts", "wiki_release_heads",
+		"enterprise_member_contents", "enterprise_member_chunks",
+		"enterprise_member_sets", "enterprise_member_scopes", "enterprise_member_releases",
+		"enterprise_member_preparations", "enterprise_member_progress",
+	} {
 		var n int64
 		require.NoError(t, db.Table(table).Count(&n).Error)
 		require.Zero(t, n, table)

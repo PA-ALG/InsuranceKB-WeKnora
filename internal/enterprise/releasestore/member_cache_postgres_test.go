@@ -133,10 +133,11 @@ func TestPostgresMemberCacheSeparatesIdenticalIDsByTenantAndSpace(t *testing.T) 
 	}{{8, "space-1"}, {7, "space-2"}} {
 		t.Run(fmt.Sprintf("%d-%s", target.tenant, target.space), func(t *testing.T) {
 			store, versions := cacheFixture(t)
-			spaces, err := ParseSpaces(`[
-				{"tenant_id":7,"space_id":"space-1","raw_kb_id":"raw-1","wiki_kb_id":"wiki-1"},
-				{"tenant_id":7,"space_id":"space-2","raw_kb_id":"raw-2","wiki_kb_id":"wiki-2"},
-				{"tenant_id":8,"space_id":"space-1","raw_kb_id":"raw-8","wiki_kb_id":"wiki-8"}]`)
+			spaces, err := ParseSpaces(
+				"[\n\t\t\t\t{\"tenant_id\":7,\"space_id\":\"space-1\",\"raw_kb_id\":\"raw-1\",\"wi" +
+					"ki_kb_id\":\"wiki-1\"},\n\t\t\t\t{\"tenant_id\":7,\"space_id\":\"space-2\",\"raw" +
+					"_kb_id\":\"raw-2\",\"wiki_kb_id\":\"wiki-2\"},\n\t\t\t\t{\"tenant_id\":8,\"space" +
+					"_id\":\"space-1\",\"raw_kb_id\":\"raw-8\",\"wiki_kb_id\":\"wiki-8\"}]")
 			require.NoError(t, err)
 			store.spaces = spaces
 			ctx, id := context.Background(), versions[0].ID
@@ -158,9 +159,12 @@ func TestPostgresMemberCacheSeparatesIdenticalIDsByTenantAndSpace(t *testing.T) 
 			// Relocate an explicitly legacy fixture. New mapped owners have a four-scope FK
 			// and cannot be relocated; their fail-closed behavior has separate ST-1 coverage.
 			require.NoError(t, store.db.Exec("DELETE FROM enterprise_member_releases WHERE release_id = ?", id).Error)
-			require.NoError(t, store.db.Exec("DELETE FROM enterprise_member_preparations WHERE preparation_id = ?", row.PreparationID).Error)
-			require.NoError(t, store.db.Table("wiki_releases").Where("release_id = ?", id).Update("member_storage", "").Error)
-			require.NoError(t, store.db.Table("wiki_release_preparations").Where("preparation_id = ?", row.PreparationID).Update("member_storage", "").Error)
+			require.NoError(t, store.db.Exec("DELETE FROM enterprise_member_preparations WHERE preparation_id = ?",
+				row.PreparationID).Error)
+			require.NoError(t, store.db.Table("wiki_releases").Where("release_id = ?",
+				id).Update("member_storage", "").Error)
+			require.NoError(t, store.db.Table("wiki_release_preparations").Where("preparation_id = ?",
+				row.PreparationID).Update("member_storage", "").Error)
 			require.NoError(t, store.db.Model(&types.WikiRelease{}).Where("release_id = ?", id).Updates(updates).Error)
 			require.NoError(t, store.db.Model(&types.WikiReleasePreparation{}).
 				Where("preparation_id = ?", row.PreparationID).Updates(updates).Error)

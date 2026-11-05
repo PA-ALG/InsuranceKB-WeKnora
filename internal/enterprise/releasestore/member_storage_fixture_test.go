@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Tencent/WeKnora/internal/application/repository"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/Tencent/WeKnora/internal/application/repository"
 
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -24,7 +25,8 @@ func memberStorageDB(t *testing.T) *gorm.DB {
 		return db
 	}
 	_, file, _, _ := runtime.Caller(0)
-	raw, err := os.ReadFile(filepath.Join(filepath.Dir(file), "../../../migrations/enterprise/versioned/000013_enterprise_member_chunks.up.sql"))
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(file),
+		"../../../migrations/enterprise/versioned/000013_enterprise_member_chunks.up.sql"))
 	if os.IsNotExist(err) {
 		raw, err = os.ReadFile("testdata/member_chunks.sql")
 	}
@@ -63,8 +65,10 @@ func storageMembers(t *testing.T, n, revision int) []release.Member {
 	members := make([]release.Member, n)
 	for i := range members {
 		p := fmt.Sprintf(`{"value":"項%d/%d","number":9007199254740993}`, i, revision)
-		members[i] = release.Member{Kind: "claim", LogicalSlug: fmt.Sprintf("group/%06d", i),
-			Payload: json.RawMessage(p), MemberDigest: memberDigest(t, p), AccessScope: "space"}
+		members[i] = release.Member{
+			Kind: "claim", LogicalSlug: fmt.Sprintf("group/%06d", i),
+			Payload: json.RawMessage(p), MemberDigest: memberDigest(t, p), AccessScope: "space",
+		}
 	}
 	return members
 }
@@ -89,7 +93,9 @@ func fixtureReferenceReads(t *testing.T, db *gorm.DB) {
 	require.NoError(t, db.Exec(`UPDATE wiki_release_preparations SET member_storage='chunks.v1'`).Error)
 }
 
-func repositoryStorageWrite(t *testing.T, repo *repository.WikiReleaseRepository, scope types.WikiReleaseScope, id string, m []types.WikiReleaseMemberSnapshot) {
+func repositoryStorageWrite(t *testing.T, repo *repository.WikiReleaseRepository,
+	scope types.WikiReleaseScope, id string, m []types.WikiReleaseMemberSnapshot,
+) {
 	t.Helper()
 	ctx := context.Background()
 	head, err := repo.GetHeadForSpace(ctx, scope.TenantID, scope.SpaceID)
@@ -101,16 +107,34 @@ func repositoryStorageWrite(t *testing.T, repo *repository.WikiReleaseRepository
 	} else {
 		require.ErrorIs(t, err, repository.ErrWikiReleaseNotFound)
 	}
-	p := types.WikiReleasePreparation{ID: "prep-" + id, WikiReleaseScope: scope, CandidateDigest: id, ManifestDigest: id, ExpectedReleaseID: expected, ExpectedActivationEpoch: epoch, Status: "ready", Manifest: json.RawMessage(`{}`), Members: m, PreparationDigest: id}
-	r := types.WikiRelease{ID: "rel-" + id, WikiReleaseScope: scope, CandidateDigest: id, ManifestDigest: id, PreparationID: p.ID}
-	_, err = repo.Activate(ctx, repository.WikiReleaseActivationWrite{Preparation: &p, Release: &r, Members: m, ExpectedReleaseID: expected, ExpectedActivationEpoch: epoch, Nonce: id, ActivationReceiptID: "receipt-" + id, ExpectedPreparationID: p.ID, ExpectedPreparationDigest: p.PreparationDigest})
+	p := types.WikiReleasePreparation{
+		ID: "prep-" + id, WikiReleaseScope: scope,
+		CandidateDigest: id, ManifestDigest: id, ExpectedReleaseID: expected,
+		ExpectedActivationEpoch: epoch, Status: "ready", Manifest: json.RawMessage(`{}`),
+		Members: m, PreparationDigest: id,
+	}
+	r := types.WikiRelease{
+		ID: "rel-" + id, WikiReleaseScope: scope,
+		CandidateDigest: id, ManifestDigest: id, PreparationID: p.ID,
+	}
+	_, err = repo.Activate(ctx, repository.WikiReleaseActivationWrite{
+		Preparation: &p,
+		Release:     &r, Members: m, ExpectedReleaseID: expected, ExpectedActivationEpoch: epoch,
+		Nonce: id, ActivationReceiptID: "receipt-" + id, ExpectedPreparationID: p.ID,
+		ExpectedPreparationDigest: p.PreparationDigest,
+	})
 	require.NoError(t, err)
 }
 
 func fullStorageCounts(t *testing.T, db *gorm.DB) map[string]int64 {
 	t.Helper()
 	out := rowCounts(t, db)
-	for _, table := range []string{"enterprise_member_scopes", "enterprise_member_contents", "enterprise_member_chunks", "enterprise_member_sets", "enterprise_member_releases", "enterprise_member_preparations", "enterprise_member_progress"} {
+	for _, table := range []string{
+		"enterprise_member_scopes",
+		"enterprise_member_contents", "enterprise_member_chunks",
+		"enterprise_member_sets", "enterprise_member_releases",
+		"enterprise_member_preparations", "enterprise_member_progress",
+	} {
 		out[table] = storageCount(t, db, table)
 	}
 	return out
