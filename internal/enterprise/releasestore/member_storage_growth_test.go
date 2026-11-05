@@ -231,7 +231,8 @@ func TestPostgresMemberStorageColdHistoriesAndStructureBudget(t *testing.T) {
 	checkStorageResourceBudget(t, db)
 	t.Logf("%d releases: content=%d structural=%d (chunks=%d roots=%d mappin"+
 		"gs=%d control=%d); actual legacy columns=%d preparation-array-tex"+
-		"t=%d", len(versions), b.Contents, structure, b.Chunks, b.Roots, b.Mappings, b.Control, oldMemberBytes, oldPreparationBytes)
+		"t=%d", len(versions), b.Contents, structure, b.Chunks,
+		b.Roots, b.Mappings, b.Control, oldMemberBytes, oldPreparationBytes)
 }
 
 func mustStorageScope(t *testing.T) types.WikiReleaseScope {
