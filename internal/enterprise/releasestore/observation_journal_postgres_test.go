@@ -87,22 +87,17 @@ func TestPostgresObservationIncludesReleaseDecoderFailures(t *testing.T) {
 	for _, field := range []string{"content", "member_digest"} {
 		t.Run(field, func(t *testing.T) {
 			db, s, id := observationFixture(t)
-			require.NoError(t, db.Exec(`UPDATE wiki_releases SET member_storage='bridge.v1'`).Error)
-			var before types.WikiReleaseMember
-			require.NoError(t, db.Where("release_id=?", id).Order("logical_slug ASC").First(&before).Error)
-			value := strings.Repeat("a", 64)
+			original := storedSnapshots(t, db, id)
+			broken := append([]types.WikiReleaseMemberSnapshot(nil), original...)
 			if field == "content" {
-				value = `{"v":99,"payload":"{}"}`
+				broken[0].Content = `{"v":99,"payload":"{}"}`
+			} else {
+				broken[0].MemberDigest = strings.Repeat("a", 64)
 			}
-			require.NoError(t, db.Model(&types.WikiReleaseMember{}).Where("id=?", before.ID).Update(field, value).Error)
+			replaceObservedSnapshots(t, db, s, id, broken)
 			_, err := New(db, testSpaces(t)).ReleaseByID(context.Background(), 7, "space-1", id)
 			require.Error(t, err)
-			original := before.MemberDigest
-			if field == "content" {
-				original = before.Content
-			}
-			require.NoError(t, db.Model(&types.WikiReleaseMember{}).
-				Where("id=?", before.ID).Update(field, original).Error)
+			replaceObservedSnapshots(t, db, s, id, original)
 			sc, err := s.spaces.Scope(7, "space-1")
 			require.NoError(t, err)
 			require.Error(t, NewMemberStorage().ReferenceOnly(context.Background(), db, sc),

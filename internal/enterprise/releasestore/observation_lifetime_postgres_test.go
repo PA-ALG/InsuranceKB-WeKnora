@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -19,17 +20,16 @@ import (
 // while the existing singleflight loader still owns untrusted decode work.
 func TestPostgresObservationOutlivesCanceledSingleflightCaller(t *testing.T) {
 	db, s, id := observationFixture(t)
-	require.NoError(t, db.Exec(`UPDATE wiki_releases SET member_storage='bridge.v1'`).Error)
-	var original types.WikiReleaseMember
-	require.NoError(t, db.Where("release_id=?", id).Order("logical_slug ASC").First(&original).Error)
-	originalContent := original.Content
-	require.NoError(t, db.Model(&original).Update("content", `{"v":99,"payload":"{}"}`).Error)
+	original := storedSnapshots(t, db, id)
+	broken := append([]types.WikiReleaseMemberSnapshot(nil), original...)
+	broken[0].Content = `{"v":99,"payload":"{}"}`
+	replaceObservedSnapshots(t, db, s, id, broken)
 	entered, resume := make(chan struct{}), make(chan struct{})
 	var once, finish sync.Once
 	releaseRead := func() { finish.Do(func() { close(resume) }) }
 	defer releaseRead()
 	require.NoError(t, db.Callback().Query().After("gorm:query").Register("canceled-validation", func(tx *gorm.DB) {
-		if tx.Statement.Table == "wiki_release_members" {
+		if tx.Statement.TableExpr != nil && strings.Contains(tx.Statement.TableExpr.SQL, "enterprise_member_contents") {
 			wait := false
 			once.Do(func() { close(entered); wait = true })
 			if wait {
@@ -54,7 +54,7 @@ func TestPostgresObservationOutlivesCanceledSingleflightCaller(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("caller cancellation no longer returns promptly")
 	}
-	require.NoError(t, db.Model(&original).Update("content", originalContent).Error)
+	replaceObservedSnapshots(t, db, s, id, original)
 	sc, err := s.spaces.Scope(7, "space-1")
 	require.NoError(t, err)
 	require.Error(t, NewMemberStorage().StartObservation(context.Background(), db, sc),
@@ -81,8 +81,11 @@ func TestPostgresObservationCannotValidateWhenAdmissionWriteFails(t *testing.T) 
  CREATE TRIGGER reject_validation_start BEFORE INSERT ON enterprise_member_validation_pending
  FOR EACH ROW EXECUTE FUNCTION reject_validation_start()`).Error)
 	var reads atomic.Int64
-	require.NoError(t, db.Callback().Query().Before("gorm:query").Register("count-validation-reads", func(*gorm.DB) {
-		reads.Add(1)
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register("count-validation-reads", func(tx *gorm.DB) {
+		// Format routing may read only the scoped release header before admission.
+		if tx.Statement.Table != "wiki_releases" {
+			reads.Add(1)
+		}
 	}))
 	var output bytes.Buffer
 	log := logrus.New()
