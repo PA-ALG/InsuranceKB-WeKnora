@@ -74,16 +74,17 @@ func TestPostgresUnobservedReadsAreReadOnlyWhenJournalCannotWrite(t *testing.T) 
 				t.Run(entry, func(t *testing.T) {
 					trace.writes.Store(0)
 					s := New(ro, testSpaces(t))
-					if entry == "Read" {
+					switch entry {
+					case "Read":
 						got, err := s.storage.Read(context.Background(), ro, scope, r.ID)
 						assert.NoError(t, err)
 						assert.Equal(t, want, got)
-					} else if entry == "repository" {
+					case "repository":
 						repo := repository.NewWikiReleaseRepository(ro).WithMemberStorage(s.storage)
 						got, err := repo.GetReleaseMembers(context.Background(), scope, r.ID)
 						assert.NoError(t, err)
 						assert.Equal(t, want, got)
-					} else {
+					default:
 						id := r.ID
 						if entry == "Active" {
 							id = ""

@@ -28,16 +28,18 @@ func TestPostgresObservedPublisherRoutingFailureRemainsVisible(t *testing.T) {
 				cancel()
 			} else {
 				var once atomic.Bool
-				require.NoError(t, db.Callback().Query().Before("gorm:query").Register("routing-failure", func(q *gorm.DB) {
-					if q.Statement.Table == "wiki_releases" && once.CompareAndSwap(false, true) {
-						q.AddError(errors.New("synthetic header unavailable"))
-					}
-				}))
+				require.NoError(t, db.Callback().Query().Before("gorm:query").Register(
+					"routing-failure", func(q *gorm.DB) {
+						if q.Statement.Table == "wiki_releases" && once.CompareAndSwap(false, true) {
+							_ = q.AddError(errors.New("synthetic header unavailable"))
+						}
+					}))
 			}
 			_, err := New(db, testSpaces(t)).ReleaseByID(ctx, 7, "space-1", id)
 			require.Error(t, err)
 			var failures int64
-			require.NoError(t, db.Table("enterprise_member_validation_failures").Where("kind='gap'").Count(&failures).Error)
+			require.NoError(t, db.Table("enterprise_member_validation_failures").
+				Where("kind='gap'").Count(&failures).Error)
 			assert.Positive(t, failures, "known observed routing failure cannot disappear")
 			sc, err := s.spaces.Scope(7, "space-1")
 			require.NoError(t, err)
@@ -85,7 +87,8 @@ func TestPostgresObservationTransitionCannotSplitReadAndDecode(t *testing.T) {
 	require.NoError(t, db.Callback().Query().Remove("pause-routing"))
 	replaceObservedSnapshots(t, db, s, r.ID, original)
 	var failures int64
-	require.NoError(t, db.Table("enterprise_member_validation_failures").Where("kind='integrity'").Count(&failures).Error)
+	require.NoError(t, db.Table("enterprise_member_validation_failures").
+		Where("kind='integrity'").Count(&failures).Error)
 	assert.Positive(t, failures, "producer decode must share the chosen new-format observation")
 	ageObservation(t, db)
 	assert.Error(t, NewMemberStorage().ReferenceOnly(context.Background(), db, sc))
@@ -119,7 +122,8 @@ func TestPostgresPublisherNotFoundDoesNotBecomeAnObservationGap(t *testing.T) {
 	require.ErrorAs(t, err, &missing)
 	require.Equal(t, release.ErrorReleaseNotFound, missing.Code)
 	var failures int64
-	require.NoError(t, db.Table("enterprise_member_validation_failures").Where("kind='gap'").Count(&failures).Error)
+	require.NoError(t, db.Table("enterprise_member_validation_failures").
+		Where("kind='gap'").Count(&failures).Error)
 	assert.Zero(t, failures, "the original normal 404 exemption must survive concurrent publication")
 	sc, err := s.spaces.Scope(7, "space-1")
 	require.NoError(t, err)
