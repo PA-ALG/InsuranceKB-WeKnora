@@ -81,6 +81,7 @@ TYPE_IDS = re.compile(r"[a-z][a-z0-9_]*(?:,[a-z][a-z0-9_]*)*")
 MANAGED_ENV = {
     # PV-4a: entity types published per product version (comma-separated type ids).
     "ENTERPRISE_VERSIONED_ENTITY_TYPES": TYPE_IDS,
+    "ENTERPRISE_MEMBER_JOURNAL_TIMEOUT_SECONDS": re.compile(r"(?:[1-9]|[1-5][0-9]|60)"),
 }
 
 

@@ -355,7 +355,15 @@ def test_missing_spaces_file_cannot_drop_current_spaces(world: World) -> None:
 
 def test_without_a_current_app_the_spaces_file_is_optional(world: World) -> None:
     # R3: with no current app and no intent record, every managed key is stated explicitly.
-    out = summary(world.run("--unset-env", "ENTERPRISE_VERSIONED_ENTITY_TYPES", spaces=False))
+    out = summary(
+        world.run(
+            "--unset-env",
+            "ENTERPRISE_VERSIONED_ENTITY_TYPES",
+            "--unset-env",
+            "ENTERPRISE_MEMBER_JOURNAL_TIMEOUT_SECONDS",
+            spaces=False,
+        )
+    )
     assert out["enterprise_spaces"] is False and "ENTERPRISE_SPACES" not in world.app_env()
 
 

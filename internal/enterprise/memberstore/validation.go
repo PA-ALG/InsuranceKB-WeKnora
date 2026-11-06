@@ -21,6 +21,7 @@ type validationAttempt struct {
 	scope     types.WikiReleaseScope
 	id        string
 	db        *gorm.DB
+	policy    journalPolicy
 	done      bool
 	integrity bool
 	mu        sync.Mutex
@@ -40,16 +41,29 @@ func (s *Store) Validate(
 	if parent, ok := ctx.Value(validationKey{}).(*validationAttempt); ok && parent.scope == scope {
 		return fn(ctx)
 	}
-	a := &validationAttempt{scope: scope, id: uuid.NewString(), db: journalPool(db), refs: 1}
+	if !s.journal.valid() {
+		return journalError(ctx)
+	}
+	a := &validationAttempt{scope: scope, id: uuid.NewString(), db: journalPool(db), policy: s.journal, refs: 1}
 	if err := a.begin(ctx); err != nil {
 		return err
 	}
 	observed := context.WithValue(ctx, validationKey{}, a)
-	err := fn(observed)
-	if endErr := a.finish(observed, err, false); endErr != nil && err == nil {
-		return endErr
+	err := ctx.Err()
+	if err == nil {
+		err = fn(observed)
 	}
-	return err
+	if err == nil {
+		err = ctx.Err()
+	}
+	endErr := a.finish(observed, err, false)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return endErr
 }
 
 // ValidationIntegrity marks producer protocol/digest failures without replacing its
@@ -99,28 +113,20 @@ func validationLock(scope types.WikiReleaseScope) int64 {
 	return int64(binary.BigEndian.Uint64(h.Sum(nil)[:8]))
 }
 
-func journalContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
-}
-
 func journalError(ctx context.Context) error {
 	logger.GetLogger(ctx).Error("member validation journal write failed")
 	return ErrState
 }
 
 func (a *validationAttempt) begin(ctx context.Context) error {
-	bounded, cancel := journalContext(ctx)
-	defer cancel()
 	// No FK or UPDATE of the scope row: Put's FOR UPDATE cannot block this INSERT.
-	result := a.db.WithContext(bounded).Exec(`WITH admission AS MATERIALIZED
+	return a.executeJournal(ctx, `WITH admission AS MATERIALIZED
  (SELECT pg_advisory_xact_lock_shared(?), set_config('synchronous_commit','on',true))
  INSERT INTO enterprise_member_validation_pending(tenant_id,space_id,raw_kb_id,wiki_kb_id,attempt_id)
- SELECT ?,?,?,?,? FROM admission`, validationLock(a.scope),
-		a.scope.TenantID, a.scope.SpaceID, a.scope.RawKBID, a.scope.WikiKBID, a.id)
-	if result.Error != nil || result.RowsAffected != 1 {
-		return journalError(ctx)
-	}
-	return nil
+ SELECT ?,?,?,?,? FROM admission`, []any{
+		validationLock(a.scope),
+		a.scope.TenantID, a.scope.SpaceID, a.scope.RawKBID, a.scope.WikiKBID, a.id,
+	}, true, "")
 }
 
 func (a *validationAttempt) finish(ctx context.Context, failure error, probe bool) error {
@@ -153,9 +159,6 @@ func (a *validationAttempt) finish(ctx context.Context, failure error, probe boo
 		kind = "probe"
 	}
 	a.mu.Unlock()
-	bounded, cancel := journalContext(ctx)
-	defer cancel()
-	q := a.db.WithContext(bounded)
 	args := []any{a.scope.TenantID, a.scope.SpaceID, a.scope.RawKBID, a.scope.WikiKBID, a.id}
 	// Only successful cleanup may acknowledge before WAL flush. Losing this DELETE
 	// after a crash resurrects a pending ticket and blocks maintenance conservatively.
@@ -174,11 +177,7 @@ func (a *validationAttempt) finish(ctx context.Context, failure error, probe boo
  AND p.tenant_id=r.tenant_id AND p.space_id=r.space_id AND p.raw_kb_id=r.raw_kb_id AND p.wiki_kb_id=r.wiki_kb_id`
 		args = append([]any{kind}, args...)
 	}
-	result := q.Exec(statement, args...)
-	if result.Error != nil || result.RowsAffected != 1 {
-		return journalError(ctx)
-	}
-	return nil
+	return a.executeJournal(ctx, statement, args, false, kind)
 }
 
 func (a *validationAttempt) completed() bool {
@@ -249,5 +248,8 @@ func confirmValidation(ctx context.Context) error {
 	if !ok {
 		return ErrState
 	}
-	return a.finish(ctx, nil, true)
+	if err := a.finish(ctx, nil, true); err != nil {
+		return err
+	}
+	return ctx.Err()
 }
