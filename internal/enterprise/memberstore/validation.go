@@ -123,8 +123,10 @@ func (a *validationAttempt) begin(ctx context.Context) error {
 	return a.executeJournal(ctx, `WITH admission AS MATERIALIZED
  (SELECT pg_advisory_xact_lock_shared(?), set_config('synchronous_commit','on',true))
  INSERT INTO enterprise_member_validation_pending(tenant_id,space_id,raw_kb_id,wiki_kb_id,attempt_id)
- SELECT ?,?,?,?,? FROM admission`, []any{validationLock(a.scope),
-		a.scope.TenantID, a.scope.SpaceID, a.scope.RawKBID, a.scope.WikiKBID, a.id}, true, "")
+ SELECT ?,?,?,?,? FROM admission`, []any{
+		validationLock(a.scope),
+		a.scope.TenantID, a.scope.SpaceID, a.scope.RawKBID, a.scope.WikiKBID, a.id,
+	}, true, "")
 }
 
 func (a *validationAttempt) finish(ctx context.Context, failure error, probe bool) error {
