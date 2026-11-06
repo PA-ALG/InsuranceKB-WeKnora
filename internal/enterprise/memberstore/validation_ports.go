@@ -2,23 +2,81 @@ package memberstore
 
 import (
 	"context"
+	"errors"
 
 	"github.com/Tencent/WeKnora/internal/types"
 	"gorm.io/gorm"
 )
 
-// Read verifies a complete snapshot within a durable validation reservation.
+type readSelectionKey struct{}
+
+type readSelection struct {
+	scope  types.WikiReleaseScope
+	header types.WikiRelease
+}
+
+// ValidateRead binds format selection to the complete producer read. A nested Read
+// reuses only this exact scope/release selection, so transitions cannot end the ticket
+// before producer decoding or cause a second format decision inside the same read.
+func (s *Store) ValidateRead(
+	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, id string, fn func(context.Context) error,
+) error {
+	if selected, ok := ctx.Value(readSelectionKey{}).(readSelection); ok &&
+		selected.scope == scope && selected.header.ID == id {
+		return fn(ctx)
+	}
+	header, err := releaseHeader(db.WithContext(ctx), scope, id)
+	if err != nil {
+		s.RecordReadFailure(ctx, db, scope, id, err)
+		return err
+	}
+	selected := context.WithValue(ctx, readSelectionKey{}, readSelection{scope, header})
+	switch header.MemberStorage {
+	case "", "bridge.v1":
+		return fn(selected)
+	case "chunks.v1":
+		return s.Validate(selected, db, scope, fn)
+	default:
+		return s.Validate(selected, db, scope, func(context.Context) error { return ErrIntegrity })
+	}
+}
+
+// Read preserves the legacy read-only path; observed reads retain a durable ticket.
 func (s *Store) Read(
 	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, id string,
 ) (out []types.WikiReleaseMemberSnapshot, err error) {
-	err = s.Validate(ctx, db, scope, func(ctx context.Context) error {
-		out, err = s.readValidated(ctx, db, scope, id)
+	err = s.ValidateRead(ctx, db, scope, id, func(ctx context.Context) error {
+		selected := ctx.Value(readSelectionKey{}).(readSelection)
+		out, err = s.readValidated(ctx, db, scope, selected.header)
 		return err
 	})
 	if err != nil {
 		out = nil
 	}
 	return
+}
+
+// RecordReadFailure preserves a gap when a canceled/aborted caller cannot read routing metadata. A bounded
+// root-pool lookup may identify the SAME release as observed and record that gap;
+// it never supplies member bytes, substitutes a Head or turns the original error into success.
+func (s *Store) RecordReadFailure(
+	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, id string, failure error,
+) {
+	if failure == nil || id == "" {
+		return
+	}
+	if a, ok := ctx.Value(validationKey{}).(*validationAttempt); ok && a.scope == scope {
+		return // The existing enclosing reservation records this error.
+	}
+	if errors.Is(failure, gorm.ErrRecordNotFound) {
+		return
+	}
+	bounded, cancel := journalContext(ctx)
+	defer cancel()
+	header, err := releaseHeader(journalPool(db).WithContext(bounded), scope, id)
+	if err == nil && header.MemberStorage != "" && header.MemberStorage != "bridge.v1" {
+		_ = s.Validate(ctx, db, scope, func(context.Context) error { return failure })
+	}
 }
 
 // Digests reserves observation only for formats whose index is integrity-checked.

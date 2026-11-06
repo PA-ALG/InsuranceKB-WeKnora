@@ -142,13 +142,10 @@ func readLayout(
 
 // Read preserves explicitly legacy/bridge reads; chunks.v1 never falls back to a retained copy.
 func (s *Store) readValidated(
-	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, id string,
+	ctx context.Context, db *gorm.DB, scope types.WikiReleaseScope, header types.WikiRelease,
 ) (out []types.WikiReleaseMemberSnapshot, failure error) {
 	tx := db.WithContext(ctx)
-	header, err := releaseHeader(tx, scope, id)
-	if err != nil {
-		return nil, err
-	}
+	id := header.ID
 	switch header.MemberStorage {
 	case "", "bridge.v1":
 		return legacyMembers(tx, id)

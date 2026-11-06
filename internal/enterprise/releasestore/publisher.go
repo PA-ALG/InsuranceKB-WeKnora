@@ -92,34 +92,34 @@ func (s *Store) ReleaseByID(
 	if err != nil {
 		return out, err
 	}
-	observedErr := s.storage.Validate(ctx, s.db, scope, func(ctx context.Context) error {
-		out, err = s.releaseByID(ctx, tenantID, spaceID, releaseID)
+	record, selectedID, err := s.releaseRecord(ctx, scope, releaseID)
+	if err != nil {
 		var missing *release.Error
-		if errors.As(err, &missing) && missing.Code == release.ErrorReleaseNotFound {
-			return nil
+		if !errors.As(err, &missing) || missing.Code != release.ErrorReleaseNotFound {
+			s.storage.RecordReadFailure(ctx, s.db, scope, selectedID, err)
 		}
+		return out, err
+	}
+	read := func(ctx context.Context) error {
+		header, err := s.releaseMetadata(ctx, scope, record)
+		if err != nil {
+			return err
+		}
+		out, err = s.releaseMembers(ctx, scope, header)
 		return err
-	})
+	}
+	err = s.storage.ValidateRead(ctx, s.db, scope, record.ID, read)
 	if err != nil {
 		return release.Release{}, err
-	}
-	if observedErr != nil {
-		return release.Release{}, observedErr
 	}
 	return out, nil
 }
 
-func (s *Store) releaseByID(ctx context.Context, tenantID uint64, spaceID, releaseID string) (release.Release, error) {
-	scope, err := s.spaces.Scope(tenantID, spaceID)
-	if err != nil {
-		return release.Release{}, err
-	}
-	header, err := s.releaseHeader(ctx, scope, releaseID)
-	if err != nil {
-		return release.Release{}, err
-	}
-	key := memberKey{Tenant: tenantID, Space: spaceID, Release: header.ID}
-	header.Members, err = s.members.load(ctx, key, func(ctx context.Context) ([]release.Member, error) {
+func (s *Store) releaseMembers(
+	ctx context.Context, scope types.WikiReleaseScope, header release.Release,
+) (release.Release, error) {
+	key := memberKey{Tenant: scope.TenantID, Space: scope.SpaceID, Release: header.ID}
+	members, err := s.members.load(ctx, key, func(ctx context.Context) ([]release.Member, error) {
 		snapshots, err := s.releases.GetReleaseMembers(ctx, scope, header.ID)
 		if err != nil {
 			return nil, err
@@ -138,6 +138,7 @@ func (s *Store) releaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 	if err != nil {
 		return release.Release{}, err
 	}
+	header.Members = members
 	return header, nil
 }
 
