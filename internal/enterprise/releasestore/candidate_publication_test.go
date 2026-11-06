@@ -46,6 +46,10 @@ func TestReviewPublicationTransactionFindsConcurrentCommitBeforeSourceOrHeadWrit
 		WithArgs(uint64(7), "space-1", "raw-1", "wiki-1", "original", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"release_id", "preparation_id", "base_activation_epoch"}).
 			AddRow("original", "prep", 3))
+	// Format selection still runs before a warm member-cache hit.
+	mock.ExpectQuery(`SELECT .* FROM "wiki_releases"`).
+		WithArgs(uint64(7), "space-1", "raw-1", "wiki-1", "original", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"release_id", "member_storage"}).AddRow("original", ""))
 	mock.ExpectQuery(`SELECT "manifest" FROM "wiki_release_preparations"`).
 		WithArgs("prep", uint64(7), "space-1", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"manifest"}).AddRow(
