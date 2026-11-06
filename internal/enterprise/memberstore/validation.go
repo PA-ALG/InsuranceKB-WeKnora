@@ -113,7 +113,7 @@ func (a *validationAttempt) begin(ctx context.Context) error {
 	defer cancel()
 	// No FK or UPDATE of the scope row: Put's FOR UPDATE cannot block this INSERT.
 	result := a.db.WithContext(bounded).Exec(`WITH admission AS MATERIALIZED
- (SELECT pg_advisory_xact_lock_shared(?))
+ (SELECT pg_advisory_xact_lock_shared(?), set_config('synchronous_commit','on',true))
  INSERT INTO enterprise_member_validation_pending(tenant_id,space_id,raw_kb_id,wiki_kb_id,attempt_id)
  SELECT ?,?,?,?,? FROM admission`, validationLock(a.scope),
 		a.scope.TenantID, a.scope.SpaceID, a.scope.RawKBID, a.scope.WikiKBID, a.id)
@@ -157,13 +157,18 @@ func (a *validationAttempt) finish(ctx context.Context, failure error, probe boo
 	defer cancel()
 	q := a.db.WithContext(bounded)
 	args := []any{a.scope.TenantID, a.scope.SpaceID, a.scope.RawKBID, a.scope.WikiKBID, a.id}
+	// Only successful cleanup may acknowledge before WAL flush. Losing this DELETE
+	// after a crash resurrects a pending ticket and blocks maintenance conservatively.
+	// Admission, failures and maintenance probes must remain synchronously durable.
 	statement := `DELETE FROM enterprise_member_validation_pending
- WHERE tenant_id=? AND space_id=? AND raw_kb_id=? AND wiki_kb_id=? AND attempt_id=?`
+ WHERE tenant_id=? AND space_id=? AND raw_kb_id=? AND wiki_kb_id=? AND attempt_id=?
+ AND set_config('synchronous_commit','off',true)='off'`
 	if kind != "" {
 		statement = `WITH recorded AS (
  INSERT INTO enterprise_member_validation_failures(tenant_id,space_id,raw_kb_id,wiki_kb_id,attempt_id,kind)
  SELECT tenant_id,space_id,raw_kb_id,wiki_kb_id,attempt_id,? FROM enterprise_member_validation_pending
- WHERE tenant_id=? AND space_id=? AND raw_kb_id=? AND wiki_kb_id=? AND attempt_id=? RETURNING ` +
+ WHERE tenant_id=? AND space_id=? AND raw_kb_id=? AND wiki_kb_id=? AND attempt_id=?
+ AND set_config('synchronous_commit','on',true)='on' RETURNING ` +
 			`tenant_id,space_id,raw_kb_id,wiki_kb_id,attempt_id)
  DELETE FROM enterprise_member_validation_pending p USING recorded r WHERE p.attempt_id=r.attempt_id
  AND p.tenant_id=r.tenant_id AND p.space_id=r.space_id AND p.raw_kb_id=r.raw_kb_id AND p.wiki_kb_id=r.wiki_kb_id`
