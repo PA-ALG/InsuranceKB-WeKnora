@@ -6,6 +6,7 @@ import (
 	"math"
 	"runtime"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,16 +20,22 @@ import (
 type storageQueryCounter struct {
 	logger.Interface
 	queries atomic.Int64
+	mu      sync.Mutex
+	steps   []time.Duration
 }
 
-func (l *storageQueryCounter) Trace(context.Context, time.Time, func() (string, int64), error) {
+func (l *storageQueryCounter) Trace(_ context.Context, begin time.Time, _ func() (string, int64), _ error) {
 	l.queries.Add(1)
+	l.mu.Lock()
+	l.steps = append(l.steps, time.Since(begin))
+	l.mu.Unlock()
 }
 
 type storageTiming struct {
 	duration  time.Duration
 	queries   int64
 	wireBytes int64
+	steps     []time.Duration
 }
 
 func TestPostgresMemberStorageReadBudget(t *testing.T) {
@@ -62,6 +69,9 @@ func TestPostgresMemberStorageReadBudget(t *testing.T) {
 			read := func(modern bool) storageTiming {
 				reader := New(measured, testSpaces(t))
 				counter.queries.Store(0)
+				counter.mu.Lock()
+				counter.steps = nil
+				counter.mu.Unlock()
 				wireBytes.Store(0)
 				start := time.Now()
 				var got release.Release
@@ -75,7 +85,10 @@ func TestPostgresMemberStorageReadBudget(t *testing.T) {
 				queries := counter.queries.Load()
 				require.NoError(t, err)
 				require.Equal(t, members, got.Members)
-				return storageTiming{elapsed, queries, wireBytes.Load()}
+				counter.mu.Lock()
+				steps := append([]time.Duration(nil), counter.steps...)
+				counter.mu.Unlock()
+				return storageTiming{elapsed, queries, wireBytes.Load(), steps}
 			}
 			// Matched database warm-up, but each timed read creates a cold application/object cache.
 			read(false)
