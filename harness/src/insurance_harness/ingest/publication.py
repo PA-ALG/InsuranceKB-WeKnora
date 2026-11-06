@@ -23,6 +23,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from insurance_harness.bundle.client import PlatformClient, PlatformError, Release
+from insurance_harness.catalog.additions import shipped_revisions
 from insurance_harness.compilers.schema_fields import publish, publish_changes
 from insurance_harness.compilers.schema_fields.carry import carry_for
 from insurance_harness.compilers.schema_fields.engine import CompileOutput, reusable
@@ -122,7 +123,8 @@ def _current(output: CompileOutput, entry: ProductEntry, product: str,
     identities = {f"{m.knowledge_id}:{m.parse_attempt}:{m.sha256}": m.role for m in entry.materials}
     materials = sorted(identities)
     # The release id is provenance only: every publication makes a new Active release.
-    return (reusable(output, materials, identities)
+    revision = shipped_revisions().get(entry.schema_pack_id)
+    return (reusable(output, materials, identities, catalog_revision=revision)
             and output.carry_digest == carried(product, materials))
 
 

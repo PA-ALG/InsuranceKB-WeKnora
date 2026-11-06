@@ -100,7 +100,8 @@ def compiler_version(output: CompileOutput) -> str:
     """
     cards = require_cards_version(output)
     protocol = (output.value_protocol or "").strip()
-    return f"{cards}+value:{protocol}" if protocol else cards
+    version = f"{cards}+value:{protocol}" if protocol else cards
+    return f"{version}+catalog:{output.catalog_revision}" if output.catalog_revision else version
 
 
 def claims_from(

@@ -55,6 +55,7 @@ def replay_context(
     materials: list[str] | None = None,
     *,
     trust_policy: TrustPolicy,
+    catalog_revision: str | None = None,
 ) -> str:
     """What a saved answer was produced for beyond the request text: product, pack, sources."""
 
@@ -66,6 +67,8 @@ def replay_context(
         return [{"document": d, "document_sha256": s, "pages": n} for (d, s), n in sources.items()]
 
     context: dict[str, object] = {"product": product, "pack_id": pack, "sources": documents(pages)}
+    if catalog_revision is not None:
+        context["catalog_revision"] = catalog_revision
     if materials is not None:
         context["materials"] = materials
     if table_headers is not None:

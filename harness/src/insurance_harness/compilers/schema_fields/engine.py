@@ -82,6 +82,8 @@ class CompileOutput(BaseModel):
     value_protocol: str | None = None
     # Each `materials` identity's effective role (S5b-6); None in outputs written earlier.
     material_roles: dict[str, str] | None = None
+    # None for a base-only pack and outputs written before catalog additions.
+    catalog_revision: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     # The Active release reviewed quotes were carried from, and their identity (S12c-4 §2.4);
     # None when nothing was carried, and in outputs written before S12c-4.
     carry_release: str | None = None
@@ -89,13 +91,15 @@ class CompileOutput(BaseModel):
 
 
 def reusable(
-    output: CompileOutput, materials: list[str], roles: Mapping[str, str] | None = None
+    output: CompileOutput, materials: list[str], roles: Mapping[str, str] | None = None,
+    *, catalog_revision: str | None = None,
 ) -> bool:
     """An output may stand in for a compile only if its materials, their effective roles (S5b-6),
-    the cards and the value protocol all match. Roles are part of the identity: an output written
-    without them matches only a caller that has none either, so role-aware callers recompile it."""
+    the effective pack revision, cards and value protocol all match. An output without roles
+    matches only a caller that also has none."""
     return (
-        output.materials is not None
+        output.catalog_revision == catalog_revision
+        and output.materials is not None
         and output.materials == materials
         and output.material_roles == (dict(roles) if roles is not None else None)
         and output.cards_version == cards_version()
@@ -203,7 +207,7 @@ class SchemaFieldsCompiler:
             a >= b for a, b in zip(ordinals[:-1], ordinals[1:], strict=True)
         ):
             raise CompileError("definitions must have unique keys and increasing ordinals")
-        if len({field.pack_id for field in fields}) > 1:
+        if len({(field.pack_id, field.catalog_revision) for field in fields}) > 1:
             raise CompileError("definitions must belong to one pack")
         try:
             source = SegmentedSource(pages, table_headers=table_headers)
@@ -360,6 +364,7 @@ class SchemaFieldsCompiler:
             )
         return CompileOutput(
             pack_id=fields[0].pack_id if fields else "",
+            catalog_revision=fields[0].catalog_revision if fields else None,
             entity_id=entity_id,
             model=self._completion.model,
             fields=results,

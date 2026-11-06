@@ -5,11 +5,12 @@ Pack identity and semantic digest travel with the definition so configuration
 cannot accidentally apply to a different pack or a changed field meaning.
 """
 
-import json
 from pathlib import Path
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+from insurance_harness.catalog.additions import effective_catalog
 
 NonBlank = Annotated[str, StringConstraints(pattern=r"\S")]
 
@@ -29,6 +30,7 @@ class FieldDefinition(BaseModel):
     # from an entity identifier: to_candidate then requires the explicit pack.
     pack_id: str = ""
     semantic_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    catalog_revision: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     # Complete catalog inventory, before extraction filtering or batching. None means unknown,
     # not "this pack has no dedicated sibling field" (S12c-12a).
     pack_fields: tuple[str, ...] | None = None
@@ -40,6 +42,7 @@ class _CatalogField(FieldDefinition):
 
 class _Pack(BaseModel):
     model_config = ConfigDict(strict=True, extra="ignore")
+    catalog_revision: str | None = None
     schema_pack_id: NonBlank
     fields: list[_CatalogField]
 
@@ -61,7 +64,7 @@ def pack_definitions(
     only_source_extractable: bool = True,
 ) -> list[FieldDefinition]:
     """Read explicit catalog order, filter formation methods, then assign ordinals."""
-    document = _Catalog.model_validate(json.loads(Path(catalog_path).read_text(encoding="utf-8")))
+    document = _Catalog.model_validate(effective_catalog(catalog_path))
     packs: dict[str, _Pack] = {}
     for entry in document.entries:
         pack = entry.pack
@@ -84,6 +87,7 @@ def pack_definitions(
                 **field.model_dump(),
                 "ordinal": index,
                 "pack_id": pack_id,
+                "catalog_revision": packs[pack_id].catalog_revision,
                 "pack_fields": tuple(item.field_key for item in packs[pack_id].fields),
             }
         )

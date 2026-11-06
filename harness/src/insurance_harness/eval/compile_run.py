@@ -218,15 +218,18 @@ def compile_products(
             carried = (carry_for(carry.release, product, materials)
                        if carry is not None else None)
             digest = carried.digest if carried is not None else None
-            if output is not None and reusable(output, materials, material_roles) and (
+            definitions = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack)
+            revision = definitions[0].catalog_revision if definitions else None
+            if output is not None and reusable(
+                output, materials, material_roles, catalog_revision=revision,
+            ) and (
                 carry is None or output.carry_digest == digest
             ):
                 runs.append(ProductRun(product, name, pack, True, 0, len(output.fields)))
                 continue
-            definitions = pack_definitions(repo / SCHEMA_PACK_CATALOG, pack)
             context = replay_context(product, pack, pages, headers,
                                       materials if revisions is not None else None,
-                                      trust_policy=load_trust_policy())
+                                      trust_policy=load_trust_policy(), catalog_revision=revision)
             port: CompletionPort
             if replay_from is not None:
                 port = Replay(replay_from, product, context)
