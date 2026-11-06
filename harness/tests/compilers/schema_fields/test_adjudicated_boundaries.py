@@ -18,7 +18,9 @@ from insurance_harness.ingest.judge_batch.points import field_context
 
 
 @pytest.mark.parametrize("has_sibling", [True, False])
-def test_compiler_and_judge_share_inventory_and_gap_policy(tmp_path: Path, has_sibling: bool) -> None:
+def test_compiler_and_judge_share_inventory_and_gap_policy(
+    tmp_path: Path, has_sibling: bool,
+) -> None:
     keys = ["coverage_and_renewal_terms", "claim_application_deadline_and_documents"]
     if has_sibling:
         keys += ["guaranteed_renewal_status", "beneficiary_rules"]
@@ -58,7 +60,9 @@ def test_overviews_share_only_their_minimum_facts() -> None:
     assert all(word in summary for word in ("名称", "一句", "核心给付", "关系"))
     for key in ("coverage_responsibilities", "coverage_summary"):
         boundary = cards[key]["writing_rule"]
-        assert all(word in boundary for word in ("等待期", "免赔", "分场景比例", "申请时效", "免责"))
+        assert all(
+            word in boundary for word in ("等待期", "免赔", "分场景比例", "申请时效", "免责")
+        )
         assert "专门字段" in boundary
         for example in cards[key]["examples"]:
             assert "年龄比例：" not in example["value"]
@@ -68,7 +72,9 @@ def test_overviews_share_only_their_minimum_facts() -> None:
 
 def test_occupation_needs_explicit_eligibility_not_pricing() -> None:
     card = all_cards()["eligible_occupation_classes"]
-    assert all(source in card["unknown_rule"] for source in ("条款", "说明书", "投保规则", "费率表"))
+    assert all(
+        source in card["unknown_rule"] for source in ("条款", "说明书", "投保规则", "费率表")
+    )
     assert "unknown" in card["unknown_rule"]
     assert "费率表" in card["bad"] and "不限职业" in card["absent_rule"]
 
