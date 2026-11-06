@@ -40,14 +40,29 @@ type WikiReleaseActivationWrite struct {
 	ReceiptFault                func() error
 }
 
+// WikiReleaseMemberStorage isolates persistence layout from logical member equality.
+type WikiReleaseMemberStorage interface {
+	Put(context.Context, *gorm.DB, types.WikiReleaseMemberSetWrite) error
+	Read(context.Context, *gorm.DB, types.WikiReleaseScope, string) ([]types.WikiReleaseMemberSnapshot, error)
+	Digests(context.Context, *gorm.DB, types.WikiReleaseScope, string) (map[string]string, error)
+}
+
 // WikiReleaseRepository owns the five experimental release tables.
 type WikiReleaseRepository struct {
-	db *gorm.DB
+	db      *gorm.DB
+	members WikiReleaseMemberStorage
 }
 
 // NewWikiReleaseRepository creates the bounded S0-R repository.
 func NewWikiReleaseRepository(db *gorm.DB) *WikiReleaseRepository {
 	return &WikiReleaseRepository{db: db}
+}
+
+// WithMemberStorage returns an independent adapter; it never changes a shared repository.
+func (r *WikiReleaseRepository) WithMemberStorage(storage WikiReleaseMemberStorage) *WikiReleaseRepository {
+	configured := *r
+	configured.members = storage
+	return &configured
 }
 
 func wikiReleaseJSONLogicalEqual(left []byte, right []byte) bool {
@@ -57,9 +72,37 @@ func wikiReleaseJSONLogicalEqual(left []byte, right []byte) bool {
 }
 
 func wikiReleaseJSONLogicalEqualValue(left any, right any) bool {
+	a, aOK := left.([]types.WikiReleaseMemberSnapshot)
+	b, bOK := right.([]types.WikiReleaseMemberSnapshot)
+	if aOK && bOK && identicalSnapshotValues(a, b) {
+		return true
+	}
+
 	leftRaw, leftErr := json.Marshal(left)
 	rightRaw, rightErr := json.Marshal(right)
 	return leftErr == nil && rightErr == nil && wikiReleaseJSONLogicalEqual(leftRaw, rightRaw)
+}
+
+// Identical seven-field values prove equality without encoding both complete bodies.
+// Any differing representation falls back to the original JSON logical comparison.
+func identicalSnapshotValues(a, b []types.WikiReleaseMemberSnapshot) bool {
+	if len(a) != len(b) || (a == nil) != (b == nil) {
+		return false
+	}
+	for i, x := range a {
+		y := b[i]
+		if x.Kind != y.Kind || x.LogicalSlug != y.LogicalSlug || x.RevisionID != y.RevisionID ||
+			x.MemberDigest != y.MemberDigest || x.Title != y.Title || x.Content != y.Content {
+			return false
+		}
+		if x.Payload == nil && y.Payload == nil {
+			continue
+		}
+		if !bytes.Equal(x.Payload, y.Payload) || !json.Valid(x.Payload) {
+			return false
+		}
+	}
+	return true
 }
 
 func wikiReleaseCanonicalJSONValue(raw []byte) ([]byte, bool) {
@@ -127,6 +170,10 @@ func (r *WikiReleaseRepository) Activate(
 				!wikiReleaseJSONLogicalEqualValue(preparation.Members, write.Members) {
 				return ErrWikiReleaseConflict
 			}
+			if r.members != nil {
+				// The port writes the bridge copy only when required, in this transaction.
+				preparation.Members = []types.WikiReleaseMemberSnapshot{}
+			}
 			if err := tx.Create(&preparation).Error; err != nil {
 				return err
 			}
@@ -135,10 +182,23 @@ func (r *WikiReleaseRepository) Activate(
 		if err := tx.Create(write.Release).Error; err != nil {
 			return err
 		}
-		members := materializeMembers(write.Release.ID, write.Members)
-		if len(members) > 0 {
-			if err := tx.Create(&members).Error; err != nil {
+		if r.members != nil {
+			if write.Preparation == nil {
+				return ErrWikiReleaseConflict
+			}
+			if err := r.members.Put(ctx, tx, types.WikiReleaseMemberSetWrite{
+				Scope: write.Release.WikiReleaseScope, PreparationID: write.Release.PreparationID,
+				ReleaseID: write.Release.ID, ParentReleaseID: write.ExpectedReleaseID,
+				Members: normalizedMemberKinds(write.Members),
+			}); err != nil {
 				return err
+			}
+		} else {
+			members := materializeMembers(write.Release.ID, write.Members)
+			if len(members) > 0 {
+				if err := tx.Create(&members).Error; err != nil {
+					return err
+				}
 			}
 		}
 		if write.CASFault != nil {
@@ -327,6 +387,13 @@ func (r *WikiReleaseRepository) GetReleaseMembers(
 	scope types.WikiReleaseScope,
 	releaseID string,
 ) ([]types.WikiReleaseMemberSnapshot, error) {
+	if r.members != nil {
+		snapshots, err := r.members.Read(ctx, r.db, scope, releaseID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrWikiReleaseNotFound
+		}
+		return snapshots, err
+	}
 	var release types.WikiRelease
 	err := scopeQuery(r.db.WithContext(ctx), scope).
 		Where("release_id = ?", releaseID).
@@ -336,6 +403,9 @@ func (r *WikiReleaseRepository) GetReleaseMembers(
 	}
 	if err != nil {
 		return nil, err
+	}
+	if release.MemberStorage != "" {
+		return nil, errors.New("member storage adapter required")
 	}
 	var rows []types.WikiReleaseMember
 	if err := r.db.WithContext(ctx).
@@ -349,4 +419,45 @@ func (r *WikiReleaseRepository) GetReleaseMembers(
 		members = append(members, row.Snapshot())
 	}
 	return members, nil
+}
+
+func normalizedMemberKinds(input []types.WikiReleaseMemberSnapshot) []types.WikiReleaseMemberSnapshot {
+	out := make([]types.WikiReleaseMemberSnapshot, len(input))
+	copy(out, input)
+	for i := range out {
+		if out[i].Kind == "" {
+			out[i].Kind = "page"
+		}
+	}
+	return out
+}
+
+// GetReleaseMemberDigests keeps the no-body path behind the same immutable storage boundary.
+func (r *WikiReleaseRepository) GetReleaseMemberDigests(
+	ctx context.Context, scope types.WikiReleaseScope, id string,
+) (map[string]string, error) {
+	if r.members != nil {
+		out, err := r.members.Digests(ctx, r.db, scope, id)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrWikiReleaseNotFound
+		}
+		return out, err
+	}
+	release, err := r.GetRelease(ctx, scope, id)
+	if err != nil {
+		return nil, err
+	}
+	if release.MemberStorage != "" {
+		return nil, errors.New("member storage adapter required")
+	}
+	var rows []struct{ LogicalSlug, MemberDigest string }
+	if err := r.db.WithContext(ctx).Model(&types.WikiReleaseMember{}).Select("logical_slug", "member_digest").
+		Where("release_id = ?", id).Order("logical_slug ASC").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(rows))
+	for _, row := range rows {
+		out[row.LogicalSlug] = row.MemberDigest
+	}
+	return out, nil
 }

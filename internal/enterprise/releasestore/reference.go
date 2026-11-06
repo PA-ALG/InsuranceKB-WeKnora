@@ -26,17 +26,35 @@ func (s *Store) ReleaseReference(ctx context.Context, tenantID uint64, spaceID, 
 func (s *Store) releaseHeader(
 	ctx context.Context, scope types.WikiReleaseScope, releaseID string,
 ) (release.Release, error) {
+	rel, _, err := s.releaseRecord(ctx, scope, releaseID)
+	if err != nil {
+		return release.Release{}, err
+	}
+	return s.releaseMetadata(ctx, scope, rel)
+}
+
+// Only routing metadata is read before deciding whether to reserve observation.
+// An empty ID is resolved once; subsequent reads retain this exact release.
+func (s *Store) releaseRecord(
+	ctx context.Context, scope types.WikiReleaseScope, releaseID string,
+) (*types.WikiRelease, string, error) {
 	if releaseID == "" {
 		head, err := s.activeHead(ctx, scope)
 		if err != nil {
-			return release.Release{}, notFound(err)
+			return nil, "", notFound(err)
 		}
 		releaseID = head.ActiveReleaseID
 	}
 	rel, err := s.releases.GetRelease(ctx, scope, releaseID)
 	if err != nil {
-		return release.Release{}, notFound(err)
+		return nil, releaseID, notFound(err)
 	}
+	return rel, releaseID, nil
+}
+
+func (s *Store) releaseMetadata(
+	ctx context.Context, scope types.WikiReleaseScope, rel *types.WikiRelease,
+) (release.Release, error) {
 	var preparation types.WikiReleasePreparation
 	// Preparations also contain the full member snapshot. Select only the
 	// manifest, otherwise even a 304 would fetch and deserialize that second copy.

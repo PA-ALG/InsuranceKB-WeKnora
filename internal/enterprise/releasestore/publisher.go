@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/Tencent/WeKnora/internal/application/repository"
+	"github.com/Tencent/WeKnora/internal/enterprise/memberstore"
 	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/types"
 )
@@ -79,35 +80,46 @@ func (s *Store) MembersOf(ctx context.Context, tenantID uint64, spaceID, release
 	if err != nil {
 		return nil, err
 	}
-	var members []struct {
-		LogicalSlug  string
-		MemberDigest string
-	}
-	if err := s.db.WithContext(ctx).Model(&types.WikiReleaseMember{}).
-		Select("logical_slug", "member_digest").Where("release_id = ?", header.ID).
-		Order("logical_slug ASC").Scan(&members).Error; err != nil {
-		return nil, err
-	}
-	out := make(map[string]string, len(members))
-	for _, m := range members {
-		out[m.LogicalSlug] = m.MemberDigest
-	}
-	return out, nil
+	return s.releases.GetReleaseMemberDigests(ctx, scope, header.ID)
 }
 
 // ReleaseByID reads a complete release (the active one for an empty ID) and verifies
 // every member's payload against its digest before returning it.
-func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, releaseID string) (release.Release, error) {
+func (s *Store) ReleaseByID(
+	ctx context.Context, tenantID uint64, spaceID, releaseID string,
+) (out release.Release, err error) {
 	scope, err := s.spaces.Scope(tenantID, spaceID)
 	if err != nil {
-		return release.Release{}, err
+		return out, err
 	}
-	header, err := s.releaseHeader(ctx, scope, releaseID)
+	record, selectedID, err := s.releaseRecord(ctx, scope, releaseID)
+	if err != nil {
+		var missing *release.Error
+		if !errors.As(err, &missing) || missing.Code != release.ErrorReleaseNotFound {
+			s.storage.RecordReadFailure(ctx, s.db, scope, selectedID, err)
+		}
+		return out, err
+	}
+	read := func(ctx context.Context) error {
+		header, err := s.releaseMetadata(ctx, scope, record)
+		if err != nil {
+			return err
+		}
+		out, err = s.releaseMembers(ctx, scope, header)
+		return err
+	}
+	err = s.storage.ValidateRead(ctx, s.db, scope, record.ID, read)
 	if err != nil {
 		return release.Release{}, err
 	}
-	key := memberKey{Tenant: tenantID, Space: spaceID, Release: header.ID}
-	header.Members, err = s.members.load(ctx, key, func(ctx context.Context) ([]release.Member, error) {
+	return out, nil
+}
+
+func (s *Store) releaseMembers(
+	ctx context.Context, scope types.WikiReleaseScope, header release.Release,
+) (release.Release, error) {
+	key := memberKey{Tenant: scope.TenantID, Space: scope.SpaceID, Release: header.ID}
+	members, err := s.members.load(ctx, key, func(ctx context.Context) ([]release.Member, error) {
 		snapshots, err := s.releases.GetReleaseMembers(ctx, scope, header.ID)
 		if err != nil {
 			return nil, err
@@ -116,6 +128,7 @@ func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 		for _, snapshot := range snapshots {
 			m, err := decodeMember(snapshot)
 			if err != nil {
+				memberstore.ValidationIntegrity(ctx)
 				return nil, fmt.Errorf("release %s member %s: %w", header.ID, snapshot.LogicalSlug, err)
 			}
 			members = append(members, m)
@@ -125,6 +138,7 @@ func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 	if err != nil {
 		return release.Release{}, err
 	}
+	header.Members = members
 	return header, nil
 }
 
@@ -132,6 +146,15 @@ func (s *Store) ReleaseByID(ctx context.Context, tenantID uint64, spaceID, relea
 // Ready preparation, release, members, Head CAS and receipt. Identifiers derive from
 // the nonce, so a retry finds the committed receipt instead of activating twice.
 func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (release.Release, error) {
+	for i := 1; i < len(w.Members); i++ {
+		if w.Members[i-1].LogicalSlug >= w.Members[i].LogicalSlug {
+			return release.Release{}, &release.Error{
+				Code:   release.ErrorCandidateInvalid,
+				Detail: "activation members must have unique slugs in materialize order",
+			}
+		}
+	}
+
 	if len(w.Points) > 0 {
 		if err := validatePointRows(w.Points, "approve"); err != nil {
 			return release.Release{}, err
@@ -148,6 +171,30 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 	if err != nil {
 		return release.Release{}, err
 	}
+	var result release.Release
+	var activationErr error
+	observedErr := s.storage.Validate(ctx, s.db, scope, func(ctx context.Context) error {
+		result, activationErr = s.activateValidated(ctx, scope, w)
+		var expected *release.Error
+		if errors.As(activationErr, &expected) {
+			return nil
+		}
+		return activationErr
+	})
+	if activationErr != nil {
+		return release.Release{}, activationErr
+	}
+	if observedErr != nil {
+		return release.Release{}, observedErr
+	}
+	return result, nil
+}
+
+// Admission precedes the transaction: Put must not borrow a second pool slot
+// while every slot is held by concurrent activation transactions waiting on Head.
+func (s *Store) activateValidated(
+	ctx context.Context, scope types.WikiReleaseScope, w release.ActivationWrite,
+) (release.Release, error) {
 	if committed, ok, err := s.committed(ctx, scope, w); ok || err != nil {
 		return committed, err
 	}
@@ -204,7 +251,7 @@ func (s *Store) Activate(ctx context.Context, w release.ActivationWrite) (releas
 		if err := lockSourceKnowledges(tx, w.TenantID, refs); err != nil {
 			return err
 		}
-		releases := repository.NewWikiReleaseRepository(tx)
+		releases := repository.NewWikiReleaseRepository(tx).WithMemberStorage(s.storage)
 		if _, err := releases.GetReceipt(ctx, scope, w.Nonce); err == nil {
 			return repository.ErrWikiReleaseConflict
 		} else if !errors.Is(err, repository.ErrWikiReleaseNotFound) {
