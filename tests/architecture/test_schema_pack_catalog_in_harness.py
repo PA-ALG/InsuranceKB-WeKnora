@@ -56,3 +56,32 @@ def test_nothing_reads_the_old_location() -> None:
 def test_only_the_catalog_package_names_the_file() -> None:
     named = [rel for rel in _mentions("harness/src", "schema_packs.json") if rel.endswith(".py")]
     assert named == [CONSTANT_HOME]
+
+
+def test_additions_conform_to_schema_and_reference_only_new_fields() -> None:
+    import json
+    import re
+
+    from jsonschema import Draft202012Validator
+
+    from insurance_harness.catalog.additions import SIDE_FILE, CatalogAdditions, effective_catalog
+
+    path = REPO_ROOT / NEW
+    overlay = json.loads(path.with_name(SIDE_FILE).read_bytes())
+    Draft202012Validator(CatalogAdditions.model_json_schema()).validate(overlay)
+    original = json.loads(path.read_bytes())
+    effective = effective_catalog(path)
+    declared = {(r["pack_id"], r["field_key"]) for r in overlay["additions"]}
+    assert len(declared) == len(overlay["additions"])
+    for row in overlay["additions"]:
+        assert re.fullmatch(r"https://github\.com/PA-ALG/InsuranceKB-WeKnora/issues/"
+                            r"[1-9][0-9]*#issuecomment-[1-9][0-9]*", row["ruling"])
+    added = set()
+    for old, new in zip(original["entries"], effective["entries"], strict=True):
+        pack_id = old["pack"]["schema_pack_id"]
+        fields = old["pack"]["fields"]
+        assert new["pack"]["fields"][:len(fields)] == fields
+        for field in new["pack"]["fields"][len(fields):]:
+            assert field["field_key"] not in {f["field_key"] for f in fields}
+            added.add((pack_id, field["field_key"]))
+    assert added == declared

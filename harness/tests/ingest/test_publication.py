@@ -14,6 +14,7 @@ import httpx
 import pytest
 
 from insurance_harness.bundle.client import PlatformClient
+from insurance_harness.catalog.additions import shipped_revisions
 from insurance_harness.compilers.schema_fields import prompt, publish, publish_changes
 from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
@@ -44,6 +45,7 @@ def write_output(
 ) -> None:
     output = CompileOutput(
         pack_id=pack or current.products[product].schema_pack_id,
+        catalog_revision=shipped_revisions().get(pack or current.products[product].schema_pack_id),
         entity_id=product,
         model="deepseek-flash",
         cards_version=version or cards_version(), value_protocol=prompt.VALUE_PROTOCOL_VERSION,

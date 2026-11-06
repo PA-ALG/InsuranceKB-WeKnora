@@ -19,6 +19,7 @@ import pytest
 from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.page import product_page
+from tests.catalog.expected_fields import expected_fields
 
 REPO = Path(__file__).resolve().parents[4]
 CATALOG = REPO / SCHEMA_PACK_CATALOG
@@ -120,7 +121,7 @@ def test_the_page_names_the_product_and_carries_its_packs_display_groups(tmp_pat
 
 
 def test_every_pack_of_the_catalog_yields_a_page_in_its_own_order() -> None:
-    document = json.loads(CATALOG.read_text(encoding="utf-8"))
+    document = expected_fields(CATALOG)
     contract = schema("presentation_profile.schema.json")
     assert len(document["entries"]) >= 2
     for item in document["entries"]:

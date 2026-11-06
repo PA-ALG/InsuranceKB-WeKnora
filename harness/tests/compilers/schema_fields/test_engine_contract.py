@@ -29,6 +29,7 @@ from insurance_harness.compilers.schema_fields.engine import (
 )
 from insurance_harness.eval.convert import predictions_from_candidate
 from insurance_harness.evidence.quote_verification import QuoteMatch, verify_quote
+from tests.catalog.expected_fields import expected_fields
 
 # Resolve from this file so the suite runs from harness/ or the repo root alike.
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -131,7 +132,7 @@ def test_pack_definitions_come_from_the_catalog_in_a_stable_order() -> None:
 
     # Count source-extractable fields straight from the catalog JSON: this slice
     # may not touch eval/, and the pack filter is the engine's own responsibility.
-    document = json.loads(REPO_CATALOG.read_text(encoding="utf-8"))
+    document = expected_fields(REPO_CATALOG)
     pack = next(
         entry["pack"] for entry in document["entries"] if entry["pack"]["schema_pack_id"] == PACK
     )

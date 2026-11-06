@@ -10,6 +10,7 @@ from insurance_harness.compilers.schema_fields.definitions import FieldDefinitio
 from insurance_harness.compilers.schema_fields.engine import SchemaFieldsCompiler
 from insurance_harness.compilers.schema_fields.profiles import field_extraction_profile
 from insurance_harness.evidence.quote_verification import PageText
+from tests.catalog.expected_fields import expected_fields
 
 ROOT = Path(__file__).resolve().parents[4]
 CATALOG = ROOT / SCHEMA_PACK_CATALOG
@@ -24,7 +25,7 @@ class NeverCall:
 
 @pytest.mark.parametrize("pack_index", [0, 3])
 def test_two_catalog_packs_keep_metadata_and_order(pack_index: int) -> None:
-    pack = json.loads(CATALOG.read_text())["entries"][pack_index]["pack"]
+    pack = expected_fields(CATALOG)["entries"][pack_index]["pack"]
     fields = pack_definitions(CATALOG, pack["schema_pack_id"], only_source_extractable=False)
     assert len(fields) == len(pack["fields"])
     assert [f.field_key for f in fields] == [f["field_key"] for f in pack["fields"]]
@@ -39,7 +40,8 @@ def test_two_catalog_packs_keep_metadata_and_order(pack_index: int) -> None:
 def test_unknown_or_duplicate_catalog_identity_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="pack"):
         pack_definitions(CATALOG, "not-a-pack")
-    catalog = json.loads(CATALOG.read_text())
+    # A standalone malformed catalog exercises duplicate detection without a workbook overlay.
+    catalog = {"entries": expected_fields(CATALOG)["entries"]}
     catalog["entries"].append(catalog["entries"][0])
     path = tmp_path / "catalog.json"
     path.write_text(json.dumps(catalog))
