@@ -104,7 +104,14 @@ def test_record_disagreeing_with_current_app_needs_an_explicit_key(world: World)
 
 def test_no_current_app_and_no_record_needs_explicit_keys(world: World) -> None:
     assert KEY in refused_before_any_write(world)
-    summary(world.run("--set-env", f"{KEY}={TYPES}"))
+    summary(
+        world.run(
+            "--set-env",
+            f"{KEY}={TYPES}",
+            "--unset-env",
+            "ENTERPRISE_MEMBER_JOURNAL_TIMEOUT_SECONDS",
+        )
+    )
     assert world.app_env()[KEY] == TYPES
 
 
@@ -225,7 +232,7 @@ def test_record_copied_from_another_environment_is_not_inherited(tmp_path: Path)
     record_path(b).write_text(copied)
     assert "intent_record_mismatch" in refused_before_any_write(b)
     assert record_path(b).read_text() == copied
-    summary(b.run("--unset-env", KEY))
+    summary(b.run("--unset-env", KEY, "--unset-env", "ENTERPRISE_MEMBER_JOURNAL_TIMEOUT_SECONDS"))
     assert KEY not in b.app_env()
     assert json.loads(record_path(b).read_text())["source_id"] == "9" * 64
 
@@ -243,5 +250,12 @@ def test_record_bound_elsewhere_needs_every_key_explicitly(
     if current:
         world.with_current(**{KEY: TYPES})
     assert "intent_record_mismatch" in refused_before_any_write(world)
-    summary(world.run("--set-env", f"{KEY}={TYPES}"))
+    summary(
+        world.run(
+            "--set-env",
+            f"{KEY}={TYPES}",
+            "--unset-env",
+            "ENTERPRISE_MEMBER_JOURNAL_TIMEOUT_SECONDS",
+        )
+    )
     assert world.app_env()[KEY] == TYPES
