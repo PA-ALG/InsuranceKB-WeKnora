@@ -6,11 +6,11 @@ concepts by schema category; both come from the catalog the page is built from, 
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.compilers.schema_fields.page import product_page
+from tests.catalog.expected_fields import expected_fields
 
 REPO = Path(__file__).resolve().parents[4]
 CATALOG = REPO / SCHEMA_PACK_CATALOG
@@ -19,7 +19,7 @@ PACK = "schemapack_critical_illness_insurance"
 
 def test_the_profile_names_the_pack_and_defines_each_field() -> None:
     page = product_page(CATALOG, PACK, entity_id="1828", name="演示")
-    catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+    catalog = expected_fields(CATALOG)
     pack = next(e["pack"] for e in catalog["entries"] if e["pack"]["schema_pack_id"] == PACK)
     assert page.profile.display_name == pack["display_name"] == "重疾险"
     definitions = {f["field_key"]: f for f in pack["fields"]}

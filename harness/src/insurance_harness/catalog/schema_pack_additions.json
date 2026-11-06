@@ -1,0 +1,71 @@
+{
+  "version": "2026-11-06.1",
+  "base_sha256": "0d5ed6a5789362f1c72ebad5bbc47a64e1d71bc122890da96d976ec01256a3f9",
+  "field_definitions": [
+    {
+      "field_key": "beneficiary_rules",
+      "short_title": "受益人规则",
+      "description": "记录各项保险金的受领对象，以及指定、变更受益人、顺序份额和作为遗产给付的实体规则。申请时限与继承权证明等申请文件归理赔申请字段。",
+      "schema_category": "08 理赔与给付规则",
+      "source_guidance": "产品条款、产品保全规则",
+      "formation_method": "原文抽取",
+      "knowledge_role": "事实 Fact"
+    }
+  ],
+  "additions": [
+    {
+      "pack_id": "schemapack_medical_insurance",
+      "field_key": "beneficiary_rules",
+      "display": {
+        "section_key": "claims-benefits",
+        "short_title": "受益人规则"
+      },
+      "ruling": "https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/560#issuecomment-6677850853"
+    },
+    {
+      "pack_id": "schemapack_accident_medical_insurance",
+      "field_key": "beneficiary_rules",
+      "display": {
+        "section_key": "claims-benefits",
+        "short_title": "受益人规则"
+      },
+      "ruling": "https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/560#issuecomment-6677850853"
+    },
+    {
+      "pack_id": "schemapack_accident_insurance",
+      "field_key": "beneficiary_rules",
+      "display": {
+        "section_key": "claims-benefits",
+        "short_title": "受益人规则"
+      },
+      "ruling": "https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/560#issuecomment-6677850853"
+    },
+    {
+      "pack_id": "schemapack_critical_illness_insurance",
+      "field_key": "beneficiary_rules",
+      "display": {
+        "section_key": "claims-benefits",
+        "short_title": "受益人规则"
+      },
+      "ruling": "https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/560#issuecomment-6677850853"
+    },
+    {
+      "pack_id": "schemapack_nursing_care_insurance",
+      "field_key": "beneficiary_rules",
+      "display": {
+        "section_key": "claims-benefits",
+        "short_title": "受益人规则"
+      },
+      "ruling": "https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/560#issuecomment-6677850853"
+    },
+    {
+      "pack_id": "schemapack_disability_income_insurance",
+      "field_key": "beneficiary_rules",
+      "display": {
+        "section_key": "claims-benefits",
+        "short_title": "受益人规则"
+      },
+      "ruling": "https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/560#issuecomment-6677850853"
+    }
+  ]
+}

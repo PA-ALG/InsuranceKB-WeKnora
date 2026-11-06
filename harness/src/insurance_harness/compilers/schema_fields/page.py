@@ -14,6 +14,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from insurance_harness.bundle.assemble import BundleError
+from insurance_harness.catalog.additions import effective_catalog
 from insurance_harness.contracts import Entity, PresentationProfile
 from insurance_harness.contracts.knowledge import ProductFamily, ProductLifecycle
 
@@ -90,8 +91,8 @@ class _Catalog(_Record):
 
 def _catalog(catalog_path: str | Path) -> _Catalog:
     try:
-        return _Catalog.model_validate_json(Path(catalog_path).read_bytes())
-    except (OSError, ValidationError):
+        return _Catalog.model_validate(effective_catalog(catalog_path))
+    except (OSError, ValueError):
         raise BundleError("CATALOG_UNREADABLE") from None
 
 

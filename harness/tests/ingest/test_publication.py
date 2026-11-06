@@ -1,9 +1,7 @@
-"""S5b-4b acceptance (protected, written by Claude): one run compiles what changed, scores what was
-recompiled and publishes what was not published yet, within per-run send caps.
+"""S5b-4b protected acceptance (Claude): compile, review and publish under per-run send caps.
 
-Spec docs/design/slices/S5b-4b-登记表产品的编译发布编排.md §3–§6. The compile, review and publish
-commands are replaced by fakes that record their arguments and write what the real ones write;
-the platform's Active release is a fake too.
+Spec docs/design/slices/S5b-4b-登记表产品的编译发布编排.md §3–§6.
+Synthetic commands record calls and persist their results; Active is a fake release.
 """
 
 import hashlib
@@ -14,6 +12,7 @@ import httpx
 import pytest
 
 from insurance_harness.bundle.client import PlatformClient
+from insurance_harness.catalog.additions import shipped_revisions
 from insurance_harness.compilers.schema_fields import prompt, publish, publish_changes
 from insurance_harness.compilers.schema_fields.cards import cards_version
 from insurance_harness.compilers.schema_fields.engine import CompileOutput
@@ -44,6 +43,7 @@ def write_output(
 ) -> None:
     output = CompileOutput(
         pack_id=pack or current.products[product].schema_pack_id,
+        catalog_revision=shipped_revisions().get(pack or current.products[product].schema_pack_id),
         entity_id=product,
         model="deepseek-flash",
         cards_version=version or cards_version(), value_protocol=prompt.VALUE_PROTOCOL_VERSION,

@@ -28,6 +28,7 @@ from typing import Any, NoReturn
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
+from insurance_harness.catalog.additions import SHIPPED_BASE, effective_catalog
 from insurance_harness.contracts import NavigationProfile
 
 _REPO = Path(__file__).resolve().parents[4]
@@ -70,8 +71,7 @@ def parse_navigation(text: str) -> NavigationProfile:
 def _catalog_field_keys() -> frozenset[str]:
     try:
         # The catalog ships beside this module; only the catalog package names its file (guard).
-        name = Path(SCHEMA_PACK_CATALOG).name
-        catalog = json.loads(files(__package__).joinpath(name).read_text(encoding="utf-8"))
+        catalog = effective_catalog(SHIPPED_BASE)
         return frozenset(
             field["field_key"] for entry in catalog["entries"] for field in entry["pack"]["fields"]
         )
@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None, *, navigation: Path = NAVIGATION) -> int
         parser.add_argument("--check", action="store_true")
         args = parser.parse_args(argv)
         try:
-            catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
+            catalog = effective_catalog(args.catalog)
         except (OSError, ValueError):
             raise NavigationError("CATALOG_INVALID") from None
         try:
