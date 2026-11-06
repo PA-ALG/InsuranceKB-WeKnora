@@ -44,7 +44,8 @@ func TestPostgresAdmissionFailureAndProbeAlwaysRequireSynchronousCommit(t *testi
 	_, err = New(db, testSpaces(t)).ReleaseByID(context.Background(), 7, "space-1", id)
 	require.Error(t, err)
 	var failures int64
-	require.NoError(t, db.Table("enterprise_member_validation_failures").Where("kind='integrity'").Count(&failures).Error)
+	require.NoError(t, db.Table("enterprise_member_validation_failures").
+		Where("kind='integrity'").Count(&failures).Error)
 	require.Positive(t, failures)
 	var setting string
 	require.NoError(t, db.Raw(`SHOW synchronous_commit`).Scan(&setting).Error)
@@ -54,5 +55,6 @@ func TestPostgresAdmissionFailureAndProbeAlwaysRequireSynchronousCommit(t *testi
 	pool.SetMaxOpenConns(3)
 	sc, err := s.spaces.Scope(7, "space-1")
 	require.NoError(t, err)
-	require.NoError(t, s.storage.StartObservation(context.Background(), db, sc), "maintenance probe remains synchronous")
+	require.NoError(t, s.storage.StartObservation(context.Background(), db, sc),
+		"maintenance probe remains synchronous")
 }
