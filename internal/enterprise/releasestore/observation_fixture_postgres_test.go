@@ -27,6 +27,9 @@ func replaceObservedSnapshots(t *testing.T, db *gorm.DB, s *Store, id string,
 			Error; err != nil {
 			return err
 		}
+		if err := tx.Exec("DELETE FROM wiki_release_members WHERE release_id=?", id).Error; err != nil {
+			return err
+		}
 		return s.storage.Put(context.Background(), tx, types.WikiReleaseMemberSetWrite{
 			Scope: sc, ReleaseID: id, PreparationID: r.PreparationID, Members: members,
 		})
