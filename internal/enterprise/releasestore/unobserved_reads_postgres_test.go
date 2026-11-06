@@ -22,7 +22,9 @@ type readonlyWriteTrace struct{ writes atomic.Int64 }
 
 var writeStatement = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP|TRUNCATE)\b`)
 
-func (w *readonlyWriteTrace) TraceQueryStart(ctx context.Context, _ *pgx.Conn, d pgx.TraceQueryStartData) context.Context {
+func (w *readonlyWriteTrace) TraceQueryStart(
+	ctx context.Context, _ *pgx.Conn, d pgx.TraceQueryStartData,
+) context.Context {
 	if writeStatement.MatchString(d.SQL) {
 		w.writes.Add(1)
 	}
