@@ -8,10 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Tencent/WeKnora/internal/enterprise/release"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Supplemental controls for the R3 draft: routing cannot lose an observed gap or
@@ -101,4 +103,25 @@ func TestPostgresUnknownReadFormatCannotReuseWarmMembers(t *testing.T) {
 	require.NoError(t, db.Table("enterprise_member_validation_failures").
 		Where("kind='integrity'").Count(&failures).Error)
 	assert.Positive(t, failures)
+}
+
+func TestPostgresPublisherNotFoundDoesNotBecomeAnObservationGap(t *testing.T) {
+	db, s, id := observationFixture(t)
+	var once atomic.Bool
+	require.NoError(t, db.Callback().Query().Before("gorm:query").Register("one-notfound", func(q *gorm.DB) {
+		if q.Statement.Table == "wiki_releases" && once.CompareAndSwap(false, true) {
+			// Real SQL sees no row once, while the subsequent fixed-id lookup can see it.
+			q.Statement.AddClause(clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "FALSE"}}})
+		}
+	}))
+	_, err := New(db, testSpaces(t)).ReleaseByID(context.Background(), 7, "space-1", id)
+	var missing *release.Error
+	require.ErrorAs(t, err, &missing)
+	require.Equal(t, release.ErrorReleaseNotFound, missing.Code)
+	var failures int64
+	require.NoError(t, db.Table("enterprise_member_validation_failures").Where("kind='gap'").Count(&failures).Error)
+	assert.Zero(t, failures, "the original normal 404 exemption must survive concurrent publication")
+	sc, err := s.spaces.Scope(7, "space-1")
+	require.NoError(t, err)
+	assert.NoError(t, NewMemberStorage().ReferenceOnly(context.Background(), db, sc))
 }
