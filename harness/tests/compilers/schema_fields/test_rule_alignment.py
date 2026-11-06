@@ -185,7 +185,7 @@ def test_generic_payment_date_is_not_a_product_frequency_option() -> None:
 
 
 def test_version_and_unchanged_example_separation() -> None:
-    assert cards_version() == "draft-2026-11-05a"
+    assert cards_version() == "draft-2026-11-06a"
     field = FieldDefinition(
         field_key="death_benefit_rules",
         short_title="身故",
