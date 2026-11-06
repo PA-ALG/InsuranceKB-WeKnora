@@ -71,11 +71,17 @@ func (s *Store) RecordReadFailure(
 	if errors.Is(failure, gorm.ErrRecordNotFound) {
 		return
 	}
-	bounded, cancel := journalContext(ctx)
+	if !s.journal.valid() {
+		_ = journalError(ctx)
+		return
+	}
+	bounded, cancel := s.journal.readContext(ctx)
 	defer cancel()
 	header, err := releaseHeader(journalPool(db).WithContext(bounded), scope, id)
 	if err == nil && header.MemberStorage != "" && header.MemberStorage != "bridge.v1" {
-		_ = s.Validate(ctx, db, scope, func(context.Context) error { return failure })
+		// This callback only records the original failure; it does no business work.
+		// An already-canceled request must not replace its classification with a gap.
+		_ = s.Validate(context.WithoutCancel(ctx), db, scope, func(context.Context) error { return failure })
 	}
 }
 

@@ -18,9 +18,10 @@ var (
 
 // Store implements the repository's member storage port. It owns no Head or serving authority.
 type Store struct {
-	memoMu sync.Mutex
-	memo   *writeMemo
-	verify HistoryVerifier
+	memoMu  sync.Mutex
+	memo    *writeMemo
+	verify  HistoryVerifier
+	journal journalPolicy
 }
 
 // HistoryVerifier validates the owner protocol without coupling storage to its producer.
@@ -28,7 +29,7 @@ type HistoryVerifier func(types.WikiRelease, types.WikiReleasePreparation, []typ
 
 // New constructs a storage adapter. A verifier is mandatory for certification/cleanup.
 func New(verifier ...HistoryVerifier) *Store {
-	s := &Store{}
+	s := &Store{journal: newJournalPolicy()}
 	if len(verifier) == 1 {
 		s.verify = verifier[0]
 	}
