@@ -68,7 +68,8 @@ UNITS = (
         "exclusions",
         "includes",
         "a1f2b80d1b0bf9b4fa23a1d3d95c2e62f8e8177ada1a547f4e39d49168d405a1",
-        "2994d5513c7d3af542c403ec4b0d4db724387662ce00108e081984521705402f",
+        # S12c-13a re-pins this exact S12c-12a unit; its mutation control is unchanged.
+        "9e8779f8b9c93701739bfe96accf8345abb33e512f3669b777a1357a8b49ffe1",
     ),
     (
         "income_loss_benefit_eligibility_conditions",
