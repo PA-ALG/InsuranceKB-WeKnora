@@ -215,9 +215,13 @@ legacy repository不得在ref-only生产scope服务。新模块不反向调用re
 ### 4.5 观察失败、记录缺口与计算缓存（PR557 R1/R2）
 
 R3明确：读取先按四段scope与固定Release的存储标记分派。空标记及`bridge.v1`沿用原只读
-成员路径，不预约；`chunks.v1`才走观察，未知非空标记失败关闭，不回退旧副本。Publisher从
-同次已授权header取标记，在预约内核准备manifest及成员decode/digest，不补读另一Head。
-路由元数据不包含成员正文；新格式的预约写失败仍ERROR并拒绝读取，不放宽R1记录/维护门。
+成员路径，不预约；`chunks.v1`才走观察，未知非空标记在暖缓存前失败关闭，不回退旧副本。
+具体Store的内部`ValidateRead`选择一次格式，以私有context绑定四段scope+固定Release ID；
+Publisher准备manifest、成员Read及decode复用该次选择与预约，内层Read不再重选格式。
+Publisher先固定Active ID，不补读另一Head；格式选择前只读无正文路由元数据。内部
+`RecordReadFailure`仅以同scope/固定ID的有界只读复查确认新格式，再记录取消/失败gap，
+不重试正文或把原错误变成功；正常404仍豁免。外部协议及既有三方法存储端口不变。
+新格式的预约写失败仍ERROR并拒绝读取，不放宽R1记录/维护门。
 
 读取完整性覆盖存储哈希与生产方 decode/MemberDigest，不能只记底层块损坏。迁移13增加独立的
 验证预约表和只追加失败表，两表均保存完整四段scope，**不引用/更新scope行**，不含正文或成员ID。
