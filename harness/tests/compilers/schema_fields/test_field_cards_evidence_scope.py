@@ -20,7 +20,7 @@ RECOVERY = "disability_recovery_and_benefit_termination_rules"
 AGE_BOUND = re.compile(r"出生满|\d+\s*(?:至\s*\d+\s*)?周岁")
 # R2 closed by withdrawing the coverage-card edits (Owner decision): pre-S12c-5 rules stay.
 COVERAGE = ("coverage_responsibilities", "coverage_summary")
-COVERAGE_RULES_DIGEST = "f4be54ebe98d7a463ff0ae619e030e6c4428db8e19c549c9d9a4972ca6f84b61"
+COVERAGE_RULES_DIGEST = "07b446579140e2a2efb11dfc114d01b52af610df6dcfb4a9146bca3cad103096"
 
 
 def _targets(key: str) -> dict[str, str]:
