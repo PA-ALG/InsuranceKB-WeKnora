@@ -25,11 +25,13 @@ func TestPostgresJournalUnknownResponsesRejectUnprovedStates(t *testing.T) {
 		{name: "admission-readback-fails", stage: "admission", readFails: true},
 		{name: "probe-readback-fails", stage: "terminal", readFails: true},
 		{name: "admission-other-scope", stage: "admission", mutate: func(t *testing.T, c *sql.Conn, id string) {
-			mutateReceipt(t, c, "UPDATE enterprise_member_validation_pending SET space_id='space-2' WHERE attempt_id=$1", id)
+			mutateReceipt(t, c,
+				"UPDATE enterprise_member_validation_pending SET space_id='space-2' WHERE attempt_id=$1", id)
 		}},
 		{name: "admission-other-attempt", stage: "admission", mutate: func(t *testing.T, c *sql.Conn, id string) {
 			_, err := c.ExecContext(context.Background(),
-				"UPDATE enterprise_member_validation_pending SET attempt_id=$2 WHERE attempt_id=$1", id, uuid.NewString())
+				"UPDATE enterprise_member_validation_pending SET attempt_id=$2 WHERE attempt_id=$1",
+				id, uuid.NewString())
 			require.NoError(t, err)
 		}},
 		{
@@ -53,7 +55,8 @@ func TestPostgresJournalUnknownResponsesRejectUnprovedStates(t *testing.T) {
 			mutateReceipt(t, c, "UPDATE enterprise_member_validation_failures SET kind='gap' WHERE attempt_id=$1", id)
 		}},
 		{name: "probe-other-scope", stage: "terminal", mutate: func(t *testing.T, c *sql.Conn, id string) {
-			mutateReceipt(t, c, "UPDATE enterprise_member_validation_failures SET space_id='space-2' WHERE attempt_id=$1", id)
+			mutateReceipt(t, c,
+				"UPDATE enterprise_member_validation_failures SET space_id='space-2' WHERE attempt_id=$1", id)
 		}},
 		{name: "probe-missing", stage: "terminal", mutate: func(t *testing.T, c *sql.Conn, id string) {
 			mutateReceipt(t, c, "DELETE FROM enterprise_member_validation_failures WHERE attempt_id=$1", id)

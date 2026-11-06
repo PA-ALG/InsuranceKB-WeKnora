@@ -68,7 +68,7 @@ func installReceiptFault(t *testing.T, db *gorm.DB, fault *receiptFault) {
 		if fault.beforeCommit && fault.injected.CompareAndSwap(false, true) {
 			fault.attempt = tx.Statement.Vars[len(tx.Statement.Vars)-1].(string)
 			tx.RowsAffected = 0
-			tx.AddError(fault.response)
+			_ = tx.AddError(fault.response)
 		}
 	}))
 	require.NoError(t, db.Callback().Raw().After("gorm:raw").Register(name+"-after", func(tx *gorm.DB) {
@@ -84,13 +84,15 @@ func installReceiptFault(t *testing.T, db *gorm.DB, fault *receiptFault) {
 			}
 			var committed int
 			require.NoError(t, proof.QueryRowContext(context.Background(), "SELECT count(*) FROM "+table+
-				" WHERE tenant_id=7 AND space_id='space-1' AND raw_kb_id='raw-1' AND wiki_kb_id='wiki-1' AND attempt_id=$1",
+				" WHERE tenant_id=7 AND space_id='space-1' AND raw_kb_id='raw-1'"+
+				" AND wiki_kb_id='wiki-1' AND attempt_id=$1",
 				fault.attempt).Scan(&committed))
 			require.Equal(t, 1, committed, "must prove actual committed data before returning a lost response")
 		} else {
 			var remaining int
 			require.NoError(t, proof.QueryRowContext(context.Background(),
-				"SELECT count(*) FROM enterprise_member_validation_pending WHERE attempt_id=$1", fault.attempt).Scan(&remaining))
+				"SELECT count(*) FROM enterprise_member_validation_pending WHERE attempt_id=$1",
+				fault.attempt).Scan(&remaining))
 			require.Zero(t, remaining)
 		}
 		fault.commitObserved.Store(true)
@@ -101,7 +103,7 @@ func installReceiptFault(t *testing.T, db *gorm.DB, fault *receiptFault) {
 			fault.afterCommit()
 		}
 		tx.RowsAffected = 0 // exactly the unknown-response shape observed during rehearsal
-		tx.AddError(fault.response)
+		_ = tx.AddError(fault.response)
 	}))
 	require.NoError(t, db.Callback().Row().Before("gorm:row").Register(name+"-read", func(tx *gorm.DB) {
 		query := tx.Statement.SQL.String()
@@ -116,7 +118,7 @@ func installReceiptFault(t *testing.T, db *gorm.DB, fault *receiptFault) {
 			require.Contains(t, tx.Statement.Vars, identity, "readback must bind the complete scope")
 		}
 		if fault.readbackFails {
-			tx.AddError(errors.New("synthetic private readback unavailable"))
+			_ = tx.AddError(errors.New("synthetic private readback unavailable"))
 		}
 	}))
 }

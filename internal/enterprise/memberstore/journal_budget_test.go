@@ -18,7 +18,9 @@ import (
 const journalBudgetEnv = "ENTERPRISE_MEMBER_JOURNAL_TIMEOUT_SECONDS"
 
 func budgetScope() types.WikiReleaseScope {
-	return types.WikiReleaseScope{TenantID: 7, SpaceID: "journal-space", RawKBID: "journal-raw", WikiKBID: "journal-wiki"}
+	return types.WikiReleaseScope{
+		TenantID: 7, SpaceID: "journal-space", RawKBID: "journal-raw", WikiKBID: "journal-wiki",
+	}
 }
 
 func budgetDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *[]time.Duration, *atomic.Int64) {
