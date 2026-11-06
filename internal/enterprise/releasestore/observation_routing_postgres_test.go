@@ -88,3 +88,17 @@ func TestPostgresObservationTransitionCannotSplitReadAndDecode(t *testing.T) {
 	ageObservation(t, db)
 	assert.Error(t, NewMemberStorage().ReferenceOnly(context.Background(), db, sc))
 }
+
+func TestPostgresUnknownReadFormatCannotReuseWarmMembers(t *testing.T) {
+	db, _, id := observationFixture(t)
+	reader := New(db, testSpaces(t))
+	_, err := reader.ReleaseByID(context.Background(), 7, "space-1", id)
+	require.NoError(t, err)
+	require.NoError(t, db.Exec("UPDATE wiki_releases SET member_storage='chunks.v99'").Error)
+	_, err = reader.ReleaseByID(context.Background(), 7, "space-1", id)
+	assert.Error(t, err, "a cache hit cannot bypass unknown storage format rejection")
+	var failures int64
+	require.NoError(t, db.Table("enterprise_member_validation_failures").
+		Where("kind='integrity'").Count(&failures).Error)
+	assert.Positive(t, failures)
+}
