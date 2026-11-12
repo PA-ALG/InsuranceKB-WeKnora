@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from insurance_harness.ingest.judge_batch import claude_session
 from insurance_harness.ingest.judge_batch.launch import SANDBOX
 from insurance_harness.ingest.judge_batch.manifest import check_run_root, check_sessions, write_json
 from insurance_harness.ingest.judge_batch.points import JudgeBatchError
@@ -217,6 +218,8 @@ def probe(root: Path, path: Path) -> None:
 
 def command(root: Path, path: Path) -> list[str]:
     plan = plan_of(root)
+    if claude_session.applies(plan["model"]):
+        return claude_session.command(plan["model"], plan["operator_prompt"])
     return [
         "codex",
         "exec",
@@ -258,13 +261,18 @@ def inspect(root: Path, row: dict[str, Any]) -> dict[str, Any]:
         raise JudgeBatchError("SESSION_FAILED")
     try:
         events = [json.loads(s) for s in events_path.read_text().splitlines() if s.strip()]
-        threads = [e["thread_id"] for e in events if e.get("type") == "thread.started"]
+        threads = [t for t in map(claude_session.thread, events) if t is not None]
+        if claude_session.applies(plan_of(root)["model"]):
+            done = claude_session.finished(events)
+        else:
+            done = sum(e.get("type") == "turn.completed" for e in events) == 1 and not any(
+                e.get("type") in {"turn.failed", "error"} for e in events
+            )
         if (
             len(threads) != 1
             or not isinstance(threads[0], str)
             or not threads[0].strip()
-            or sum(e.get("type") == "turn.completed" for e in events) != 1
-            or any(e.get("type") in {"turn.failed", "error"} for e in events)
+            or not done
         ):
             raise ValueError()
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
@@ -338,12 +346,7 @@ def settle(root: Path, session: str, rows: list[dict[str, Any]]) -> dict[str, An
                 except ValueError:
                     if old["status"] != "failed":
                         raise JudgeBatchError("SESSION_RESULT_UNKNOWN") from None
-            if any(
-                isinstance(e, dict)
-                and e.get("type") == "thread.started"
-                and e.get("thread_id") == verified["thread"]
-                for e in seen
-            ):
+            if any(claude_session.thread(e) == verified["thread"] for e in seen):
                 row.update(status="failed", failure="SESSION_NOT_INDEPENDENT")
                 save(root, rows)
                 raise JudgeBatchError("SESSION_NOT_INDEPENDENT")
@@ -394,7 +397,8 @@ def execute(root: Path, session: str, *, retry: bool = False) -> dict[str, Any]:
                 stream.write((root / "sessions" / session / relative).read_bytes())
         (path / "responses").mkdir()
         (root / "data").mkdir(exist_ok=True)
-        probe(root, path)
+        if not claude_session.applies(plan["model"]):
+            probe(root, path)  # Claude sessions are bounded by permission rules instead
         if binding(root) != bound or any(
             sha(path / p) != h for p, h in files(root, session).items()
         ):
@@ -409,6 +413,7 @@ def execute(root: Path, session: str, *, retry: bool = False) -> dict[str, Any]:
             ):
                 done = subprocess.run(
                     command(root, path),
+                    cwd=path,
                     stdout=output,
                     stderr=err,
                     stdin=subprocess.DEVNULL,
