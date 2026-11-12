@@ -67,7 +67,9 @@ def test_main_product_routes_remain_unchanged(suffix: str, family: str) -> None:
 
 def test_longest_suffix_still_wins_independent_of_policy_order() -> None:
     policy = load_attribution_policy()
-    reordered = policy.model_copy(update={"classifications": tuple(reversed(policy.classifications))})
+    reordered = policy.model_copy(
+        update={"classifications": tuple(reversed(policy.classifications))}
+    )
     for name in (
         "平安附加合成甲意外伤害医疗保险",
         "平安合成乙意外（Ｂ款）医疗保险",
