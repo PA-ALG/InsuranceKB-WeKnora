@@ -175,6 +175,7 @@ def test_a_rate_table_opening_with_an_attachment_label_attaches_it() -> None:
         (f"《{ACCIDENT}》客运列车意外基本部分费率表", ACCIDENT_ENTRY),
         (f"《{ACCIDENT}》航空意外可选部分费率表", ACCIDENT_ENTRY),
         (f"《{MEDICAL}》基本部分（基础）年交费率表", MEDICAL_ENTRY),
+        (f"《{MEDICAL}》费率表（年交）", MEDICAL_ENTRY),  # the payment mode after the document word
     ],
 )
 def test_a_rate_table_title_line_with_a_plan_part_attaches_it(
@@ -195,6 +196,7 @@ def test_a_rate_table_title_line_with_a_plan_part_attaches_it(
         f"《{ACCIDENT}》的保险金额按本合同约定的方式确定并适用于费率表",  # a sentence, too long
         f"《{ACCIDENT}》，详见费率表",  # punctuation and a reference
         f"《{ACCIDENT}》不适用本费率表",  # a negation
+        f"《{ACCIDENT}》费率表（详见附表）的说明",  # text after the bracketed part
     ],
 )
 def test_a_long_or_punctuated_tail_is_still_no_title_line(line: str) -> None:
