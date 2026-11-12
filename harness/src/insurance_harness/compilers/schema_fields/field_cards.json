@@ -1,5 +1,5 @@
 {
- "version": "draft-2026-11-06a",
+ "version": "draft-2026-11-12a",
  "source": "Claude 起草、用户审定中；示例来自留出产品并经独立评委复核（Issue #157）",
  "state_rules": {
   "present": "原文给出该字段的内容。",
@@ -3912,7 +3912,7 @@
    "sources": "产品条款、产品培训材料等其他业务材料",
    "source_scope": "含其他材料",
    "definition": "保险合同明确赋予投保人的各项合同权益（红利、现金价值、保单贷款、自动垫交、减额交清、减保、退保等）及每项权益的办理条件与限制。",
-   "includes": "条款明确约定的每一项保单权益：保单红利及领取方式选择、现金价值、保单贷款、自动垫交、减额交清、减保、部分领取、退保（犹豫期后解除合同退还现金价值）、转换权等；每项权益的办理前提、申请时间、额度或比例、期限、返还或给付内容、限制与不利后果；条款写明的权益适用范围（如“保险合同”包括附加险合同）。同一条款可同时被对应的具体规则字段引用；合同效力中止与恢复（复效）：效力中止的情形、中止期间不承担保险责任、申请恢复的期限与条件、补交保险费及利息、多项中止原因须同时满足的条件、主险中止期间附加险不得单独恢复、自中止之日起满2年未达成协议时解除合同并退还现金价值",
+   "includes": "条款明确约定的每一项保单权益：保单红利及领取方式选择、现金价值、保单贷款、自动垫交、减额交清、减保、部分领取、退保（犹豫期后解除合同退还现金价值）、转换权等；每项权益的办理前提、申请时间、额度或比例、期限、返还或给付内容、限制与不利后果；条款写明的权益适用范围（如“保险合同”包括附加险合同）。合同效力中止与恢复（复效）：效力中止的情形、中止期间不承担保险责任、申请恢复的期限与条件、补交保险费及利息、多项中止原因须同时满足的条件、主险中止期间附加险不得单独恢复、自中止之日起满2年未达成协议时解除合同并退还现金价值",
    "excludes": [
     [
      "健康管理、就医绿通等健康服务",
@@ -4005,7 +4005,8 @@
       "抽取不全：漏选适用主险条款引导句、净保险费定义及完整复效条件。"
      ]
     }
-   ]
+   ],
+   "writing_rule": "available_fields 中有专门字段的权益——现金价值（cash_value_rules）、保单贷款（policy_loan_rules）、退保与合同解除（surrender_and_cancellation_terms）、保单红利及红利领取方式、交清增额保险（dividend_rules）、减额交清与减保（sum_assured_reduction_rules）、部分领取（partial_withdrawal_rules）、万能账户相关规则——在 value 中只写权益名称和一句用途，不写其办理条件、比例、金额、计算公式、期限和交清增额保险的保险金；这些事实由专门字段承接。available_fields 中没有专门字段的权益（如自动垫交、转换权、合同效力中止与恢复）照常写全办理条件与限制。available_fields 为 null 时按原规则写全。"
   },
   "sum_assured_growth_rate": {
    "title": "产品利率",
@@ -4836,6 +4837,253 @@
    "absent_rule": "原文明确仅给付一次时记 absent_explicitly，引用该原句，value 为空。",
    "unknown_rule": "原文未提次数且没有明确多次给付安排时为 unknown；仅写给付后合同终止，不推断次数。",
    "bad": "将仅给付一次写成 present、次数1，或把未约定次数当成明确不存在。"
+  },
+  "annuity_start_time": {
+   "title": "年金开始领取时间",
+   "sources": "产品条款、产品说明书",
+   "source_scope": "条款与说明书",
+   "definition": "各项领取型保险金（年金、养老年金、生存保险金等）首次达到给付条件的时点及其确定方式。",
+   "includes": "每项领取型保险金首次给付的时点（如第5个保单周年日、约定领取年龄后的首个保单周年日）及其确定规则；不同计划、不同保险金首次给付时点不同时分别列示；条款写明的首次领取日与合同生效日、交费期满的关系",
+   "excludes": [
+    [
+     "可选或约定的开始领取年龄的列举",
+     "年金开始领取年龄（annuity_start_age）"
+    ],
+    [
+     "年领、月领等领取方式及其选择、变更",
+     "年金领取频率（annuity_payment_frequency）"
+    ],
+    [
+     "领取持续的期间、终止条件及领取期间的选择、变更",
+     "年金领取期间（annuity_payment_period）"
+    ],
+    [
+     "每次给付金额、比例，以及变更领取方式或领取期间后按现金价值等重新计算给付金额",
+     "年金领取金额规则（annuity_payment_amount_rules）"
+    ],
+    [
+     "保证领取的承诺、年限与剩余金额",
+     "保证领取规则（guaranteed_payment_rules）/保证领取期间（guaranteed_payment_period）/未领取保证利益规则（unpaid_guaranteed_benefit_rules）"
+    ],
+    [
+     "身故、满期保险金",
+     "身故保险金规则（death_benefit_rules）/满期保险金规则（maturity_benefit_rules）"
+    ]
+   ],
+   "absent_rule": "材料含完整的保险责任条款且其中没有任何领取型保险金时；引用该列举条款，理由“保险责任中无领取型保险金”。",
+   "unknown_rule": "材料没有写首次领取的时点或确定方式时为 unknown（材料未提及）；不得由投保年龄、交费期间或费率表数字格推算首次领取时点。",
+   "bad": "把领取方式、领取期间的变更规则或变更后按现金价值重算给付金额写进开始领取时间；只写“按合同约定开始领取”而不写具体时点。",
+   "writing_rule": "value 只写首次给付的时点及其确定方式；同一段落里的领取方式、领取期间、给付金额及其变更规则不写入 value（分别归 annuity_payment_frequency、annuity_payment_period、annuity_payment_amount_rules）。"
+  },
+  "annuity_start_age": {
+   "title": "年金开始领取年龄",
+   "sources": "产品条款、产品说明书、费率表表头",
+   "source_scope": "含其他材料",
+   "definition": "产品约定或允许投保人选择的开始领取年金（养老年金等）的年龄。",
+   "includes": "约定的开始领取年龄或可选年龄的完整列举（如55、60、65周岁）；不同性别、计划、交费期间对应的可选年龄差异；条款写明的领取年龄选择时间与能否变更",
+   "excludes": [
+    [
+     "达到领取年龄后首次给付的具体时点（如约定年龄后的首个保单周年日）",
+     "年金开始领取时间（annuity_start_time）"
+    ],
+    [
+     "投保年龄",
+     "投保年龄（entry_age_range）"
+    ],
+    [
+     "领取方式、领取期间与给付金额",
+     "年金领取频率（annuity_payment_frequency）/年金领取期间（annuity_payment_period）/年金领取金额规则（annuity_payment_amount_rules）"
+    ]
+   ],
+   "absent_rule": "原文明确写明本产品不按年龄、而按保单年度确定开始领取时间（如“自第5个保单周年日起领取，与被保险人年龄无关”）时；引用该句。",
+   "unknown_rule": "材料没有约定开始领取年龄（包括只按保单周年日确定首次领取时点、没有提到领取年龄）时为 unknown（材料未提及）；不得用投保年龄加交费期间推算领取年龄；费率表只认表头中写明的领取年龄，不从数字格推断。",
+   "bad": "用投保年龄加交费年限推算出领取年龄；把“首个保单周年日”这类给付时点写成领取年龄。"
+  },
+  "annuity_payment_frequency": {
+   "title": "年金领取频率",
+   "sources": "产品条款、产品说明书",
+   "source_scope": "条款与说明书",
+   "definition": "各项领取型保险金的给付频率或领取方式。",
+   "includes": "年领、月领、一次性领取等可选方式的完整列举；默认方式；选择与变更领取方式的时间、条件和次数限制；不同保险金或不同领取方案的差异",
+   "excludes": [
+    [
+     "年领与月领的金额换算、变更领取方式后给付金额的计算",
+     "年金领取金额规则（annuity_payment_amount_rules）"
+    ],
+    [
+     "领取持续的期间或终止条件",
+     "年金领取期间（annuity_payment_period）"
+    ],
+    [
+     "首次领取时点",
+     "年金开始领取时间（annuity_start_time）"
+    ]
+   ],
+   "absent_rule": "原文明确写明只能一次性领取或不提供其他领取方式时，仍为 present（写明唯一方式）；没有 absent_explicitly 情形。",
+   "unknown_rule": "材料没有写领取频率或方式时为 unknown（材料未提及）。",
+   "bad": "把月领金额等于年领金额乘以某系数的换算写进领取频率。"
+  },
+  "annuity_payment_period": {
+   "title": "年金领取期间",
+   "sources": "产品条款、产品说明书",
+   "source_scope": "条款与说明书",
+   "definition": "各项年金自首次领取起持续给付的期间，以及给付停止的条件。",
+   "includes": "自首次领取日起给付至何时（如领取10年、20年、至被保险人身故、至约定年龄的保单周年日）；可选领取期间的列举及选择、变更的时间与条件；领取期满或被保险人身故时停止给付；领取期间结束导致的合同终止",
+   "excludes": [
+    [
+     "保险合同的保险期间条款本身（如“保险期间自合同生效日起至被保险人106周岁的保单周年日”）",
+     "保险期间（coverage_period）"
+    ],
+    [
+     "年领、月领等领取方式",
+     "年金领取频率（annuity_payment_frequency）"
+    ],
+    [
+     "保证领取的年限",
+     "保证领取期间（guaranteed_payment_period）"
+    ],
+    [
+     "每次给付金额或比例",
+     "年金领取金额规则（annuity_payment_amount_rules）"
+    ]
+   ],
+   "absent_rule": "没有 absent_explicitly 情形；有领取型保险金就有领取期间。",
+   "unknown_rule": "材料没有写领取持续的期间或给付停止条件时为 unknown（材料未提及）；不得把保险期间直接当作领取期间。",
+   "bad": "照抄保险期间条款而不写“自首次领取日起”；把年领、月领选项混入领取期间。",
+   "writing_rule": "value 写清起点（自首次领取日起）和终点（期满、被保险人身故或约定年龄）；保险期间条款只在条款把它作为年金给付终止条件时引用其终点，不照抄整条保险期间。"
+  },
+  "annuity_payment_amount_rules": {
+   "title": "年金领取金额规则",
+   "sources": "产品条款、产品说明书",
+   "source_scope": "条款与说明书",
+   "definition": "各项领取型保险金每次给付的金额或计算方式。",
+   "includes": "每次给付金额或计算公式（基本保险金额比例、已交保险费比例、固定金额、账户价值相关方式）；不同保单年度或年龄段给付比例的变化；月领与年领的金额换算；变更领取方式或领取期间后按现金价值等重新计算给付金额的规则",
+   "excludes": [
+    [
+     "领取期满或被保险人身故时停止给付、合同终止",
+     "年金领取期间（annuity_payment_period）"
+    ],
+    [
+     "首次领取时点",
+     "年金开始领取时间（annuity_start_time）"
+    ],
+    [
+     "保证领取总额或次数",
+     "保证领取规则（guaranteed_payment_rules）"
+    ],
+    [
+     "保险金转入万能账户",
+     "年金转入万能账户规则（annuity_transfer_to_universal_account_rules）"
+    ],
+    [
+     "利益演示表中的逐年领取数值",
+     "不入本字段"
+    ]
+   ],
+   "absent_rule": "没有 absent_explicitly 情形；有领取型保险金就有给付金额规则。",
+   "unknown_rule": "材料没有写给付金额或计算方式时为 unknown（材料未提及）；不得用利益演示数值推算比例。",
+   "bad": "在金额规则后附加“领取期满或身故时停止给付，本合同终止”；照抄利益演示表的领取金额。",
+   "writing_rule": "value 只写给付金额与计算方式；同一段落中的给付终止条件、首次领取时点不写入 value（分别归 annuity_payment_period、annuity_start_time）。"
+  },
+  "guaranteed_payment_rules": {
+   "title": "保证领取规则",
+   "sources": "产品条款、产品说明书",
+   "source_scope": "条款与说明书",
+   "definition": "条款对年金保证领取的承诺及其给付方式。",
+   "includes": "条款是否承诺保证领取；保证领取的总额或次数；保证期内的给付方式",
+   "excludes": [
+    [
+     "保证领取的年限或保证至某年龄",
+     "保证领取期间（guaranteed_payment_period）"
+    ],
+    [
+     "保证期内被保险人身故后尚未领取的保证金额如何处理",
+     "未领取保证利益规则（unpaid_guaranteed_benefit_rules）"
+    ],
+    [
+     "非保证的红利或账户结算利益",
+     "非保证利益规则（non_guaranteed_benefit_rules）"
+    ]
+   ],
+   "absent_rule": "原文明确写明本产品不提供保证领取时；引用该句。",
+   "unknown_rule": "条款没有任何保证领取约定、也没有明确否定时为 unknown（材料未提及）；不得因年金产品常见保证领取而推断有，也不得因条款未写而判 absent_explicitly。",
+   "bad": "把非保证的红利或万能账户结算利益写成保证领取。"
+  },
+  "guaranteed_payment_period": {
+   "title": "保证领取期间",
+   "sources": "产品条款、产品说明书",
+   "source_scope": "条款与说明书",
+   "definition": "条款明确约定的保证领取年限或保证领取至某年龄。",
+   "includes": "保证领取的年限（如保证领取20年）或保证至某年龄；不同领取方式或计划的保证期间差异",
+   "excludes": [
+    [
+     "保证领取的承诺、总额或次数",
+     "保证领取规则（guaranteed_payment_rules）"
+    ],
+    [
+     "不含保证的领取期间",
+     "年金领取期间（annuity_payment_period）"
+    ],
+    [
+     "保证期内身故后剩余金额的处理",
+     "未领取保证利益规则（unpaid_guaranteed_benefit_rules）"
+    ]
+   ],
+   "absent_rule": "原文明确写明本产品不提供保证领取时；引用该句。",
+   "unknown_rule": "条款没有保证领取约定时为 unknown（材料未提及）。",
+   "bad": "把领取期间当作保证领取期间。"
+  },
+  "unpaid_guaranteed_benefit_rules": {
+   "title": "未领取保证利益规则",
+   "sources": "产品条款",
+   "source_scope": "条款与说明书",
+   "definition": "被保险人在保证领取期间或领取期内身故时，尚未领取的保证年金或剩余领取金额的处理。",
+   "includes": "未领取的保证金额或剩余领取金额的计算；一次性给付或继续按期给付；给付对象；给付后合同终止",
+   "excludes": [
+    [
+     "领取开始前的身故保险金",
+     "身故保险金规则（death_benefit_rules）"
+    ],
+    [
+     "受益人的指定与变更",
+     "受益人规则（beneficiary_rules）"
+    ],
+    [
+     "保证领取的承诺与年限",
+     "保证领取规则（guaranteed_payment_rules）/保证领取期间（guaranteed_payment_period）"
+    ]
+   ],
+   "absent_rule": "原文明确写明领取期内身故不再给付任何剩余金额时；引用该句。",
+   "unknown_rule": "产品没有保证领取、条款也没有写领取期内身故后剩余金额如何处理时为 unknown（材料未提及）。",
+   "bad": "把领取开始前的身故保险金写成未领取保证利益。"
+  },
+  "annuity_transfer_to_universal_account_rules": {
+   "title": "年金转入万能账户规则",
+   "sources": "产品条款、产品说明书",
+   "source_scope": "条款与说明书",
+   "definition": "各项领取型保险金是否可以或默认转入关联的万能账户及其条件。",
+   "includes": "可转入的保险金范围、默认转入或需申请、转入比例与时间、客户可否改为现金领取、转入的其他限制",
+   "excludes": [
+    [
+     "初始费用的比例",
+     "初始费用规则（initial_charge_rules）"
+    ],
+    [
+     "万能账户的结算与计息",
+     "万能账户结算规则（universal_account_settlement_rules）"
+    ],
+    [
+     "万能账户最低保证利率",
+     "万能账户最低保证利率（universal_account_guaranteed_interest_rate）"
+    ],
+    [
+     "主险与万能险的投保组合",
+     "万能账户关联规则（universal_account_linkage_rules）/产品搭配规则（product_bundle_rules）"
+    ]
+   ],
+   "absent_rule": "原文明确写明保险金不得转入万能账户时；引用该句。",
+   "unknown_rule": "材料没有写保险金转入万能账户时为 unknown（材料未提及）。",
+   "bad": "把万能账户的结算利率或初始费用比例写进转入规则。"
   }
  },
  "rules": {

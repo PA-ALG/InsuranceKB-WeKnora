@@ -16,6 +16,7 @@ from typing import Any
 
 from insurance_harness.compilers.schema_fields.cards import all_cards, cards_version
 from tests.compilers.schema_fields.adjudication_scope import normalize_adjudication
+from tests.compilers.schema_fields.annuity_cards_scope import normalize_annuity_cards
 from tests.compilers.schema_fields.rule_alignment_scope import neutralize
 
 # The four includes, back to their wording before rate tables became evidence (draft-2026-10-15g).
@@ -151,6 +152,8 @@ S12C11_PITFALL = (
 # S12c-12a: exact before/after units from rule_alignment_scope are neutralised first. Both
 # 7598d94db's cards and 18e902379's cards give this hash; every other property stays protected.
 # S12c-13a: exact adjudicated units are checked before the older masks.
+# #563 annuity cards: the nine payout cards and the policyholder_rights edit are checked first;
+# the digest is unchanged.
 UNTOUCHED_DIGEST = "a79a5eb140f24402b95f26f0a0808c5df721ea82fb198f636d45557a5336ac7e"
 
 
@@ -174,6 +177,7 @@ def _revert_s12c11(data: dict[str, Any]) -> None:
 
 def untouched(cards: dict[str, Any]) -> str:
     data = copy.deepcopy(cards)
+    normalize_annuity_cards(data)
     normalize_adjudication(data)
     neutralize(data)
     _revert_s12c11(data)
@@ -202,8 +206,9 @@ def untouched(cards: dict[str, Any]) -> str:
 def test_the_cards_carry_the_s4i_version() -> None:
     # S4j: the payment term may cite rate-table headers; S12c-5: nine field boundaries;
     # S12c-9: contamination hot spots (writing rules and four selection boundaries);
-    # S12c-10: universal-account writing rules; S12c-11: benefit conditions and assessment issuer
-    assert cards_version() == "draft-2026-11-06a"
+    # S12c-10: universal-account writing rules; S12c-11: benefit conditions and assessment issuer;
+    # #563: annuity payout cards
+    assert cards_version() == "draft-2026-11-12a"
 
 
 def test_the_changed_rules_read_exactly_as_specified() -> None:
