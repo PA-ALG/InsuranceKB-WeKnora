@@ -11,15 +11,23 @@ from collections.abc import Callable, Sequence
 
 _LINE_BREAKS = re.compile(r"[\r\n]+")
 _BRACKETED = re.compile(r"^《[^《》]+》$")
+# Folded sentence punctuation and quotes, and 的: a part that explains the product (《name》的续保…,
+# 《name》以外的…) is never its title (S5b-7 review R1).
+_NOT_IN_PART = ",.;:!?。、“”\"'的"
 
 
-def title_pattern(qualifiers: Sequence[str], documents: Sequence[str], max_name: int) -> str:
-    """《name》, then at most one qualifier and one document word, and nothing else."""
+def title_pattern(qualifier_chars: int, documents: Sequence[str], max_name: int) -> str:
+    """《name》, a short plan part (no brackets, sentence punctuation or 的), a document word.
 
-    def either(words: Sequence[str]) -> str:
-        return "|".join(re.escape(word) for word in sorted(words, key=len, reverse=True))
-
-    return f"^《([^《》]{{1,{max_name}}})》(?:{either(qualifiers)})?(?:{either(documents)})$"
+    PB-A1: the plan part was a closed list of qualifiers (年交, 基本保险, …); rate tables also
+    print parts such as 客运列车意外基本部分 or 基本部分(基础)年交, so only its length and
+    characters count.
+    The same kind of part may follow the document word in brackets: 费率表(年交).
+    """
+    words = "|".join(re.escape(word) for word in sorted(documents, key=len, reverse=True))
+    part = f"[^《》{re.escape(_NOT_IN_PART)}]{{0,{qualifier_chars}}}"
+    mode = rf"(?:\([^《》(){re.escape(_NOT_IN_PART)}]{{1,{qualifier_chars}}}\))?"
+    return f"^《([^《》]{{1,{max_name}}})》{part}(?:{words}){mode}$"
 
 
 def line_titles(

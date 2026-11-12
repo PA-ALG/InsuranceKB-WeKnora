@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from insurance_harness.identity.text import fold
+from insurance_harness.identity.versions import normal_clause_code
 
 if TYPE_CHECKING:  # the attribution module imports this one
     from insurance_harness.identity.attribution import AttributionPolicy, RegisteredProduct
@@ -37,7 +38,7 @@ def head_title(window: str, own_code: str | None, policy: "AttributionPolicy") -
     issuers = [fold(name) for name in policy.issuer_names]
     while (stripped := _strip_prefix(text, policy.title_prefix_pattern, issuers)) != text:
         text = stripped  # page numbers, labels and the insurer may come together, in any order
-    if own_code is not None and text.startswith(own_code):
+    if own_code is not None and normal_clause_code(text).startswith(own_code):
         text = text[len(own_code) :]
         text = text.removeprefix(fold(policy.own_code_marker))
     return title_of(text, policy)
@@ -49,16 +50,25 @@ def _strip_prefix(text: str, pattern: str, issuers: Sequence[str]) -> str:
 
 
 def guide_title(head: str, policy: "AttributionPolicy") -> str:
-    """The product the reader guide introduces ("阅读指引<name>产品提供…"), or "".
+    """The product the reader guide introduces ("阅读指引<name>产品提供…", "对“<name>合同”"), or "".
 
-    Only a fallback for terms whose start carries no title, and it fails closed (S5b-5 §2.2): one
-    guide must start near the start, every guide must name the same product, and the name must
-    carry no code, verification line or end word, which extraction mixes in when it garbles.
+    Only a fallback for terms whose start carries no title, and it fails closed (S5b-5 §2.2): per
+    written form, one guide must start near the start, every guide must name the same product, and
+    the name must carry no code, verification line or end word, which extraction mixes in when it
+    garbles. Dots are dropped from a name: extraction makes them of emphasis marks (PB-A1). The
+    forms that give a name must give the same one.
     """
-    matches = list(re.finditer(policy.guide_title_pattern, head))
+    names = {
+        name for pattern in policy.guide_title_patterns if (name := _guide(head, pattern, policy))
+    }
+    return names.pop() if len(names) == 1 else ""
+
+
+def _guide(head: str, pattern: str, policy: "AttributionPolicy") -> str:
+    matches = list(re.finditer(pattern, head))
     if not any(match.start() < policy.anchor_chars for match in matches):
         return ""
-    names = {match.group(1) for match in matches}
+    names = {match.group(1).replace(".", "") for match in matches}
     if len(names) != 1:
         return ""
     name = names.pop()
@@ -70,10 +80,20 @@ def guide_title(head: str, policy: "AttributionPolicy") -> str:
     return "" if polluted or not name or len(name) > policy.max_title_chars else name
 
 
-def own_codes(head: str, policy: "AttributionPolicy") -> set[str]:
-    """Codes printed with the verification line that follows a terms' own code (S5b-5)."""
+def code_title(head: str, own_code: str, policy: "AttributionPolicy") -> str:
+    """The title right after the terms' own code and its verification line (PB-A1), or ""."""
     marked = f"({policy.clause_code_pattern}){re.escape(fold(policy.own_code_marker))}"
-    return {match.group(1) for match in re.finditer(marked, head)}
+    for match in re.finditer(marked, head):
+        if normal_clause_code(match.group(1)) == own_code:
+            return title_of(head[match.end() :], policy)
+    return ""
+
+
+def own_codes(head: str, policy: "AttributionPolicy") -> set[str]:
+    """Codes printed with the verification line that follows a terms' own code (S5b-5), in the
+    compared form (PB-A1: some print ASCII brackets)."""
+    marked = f"({policy.clause_code_pattern}){re.escape(fold(policy.own_code_marker))}"
+    return {normal_clause_code(match.group(1)) for match in re.finditer(marked, head)}
 
 
 def named_inside(title: str, products: Sequence["RegisteredProduct"]) -> list["RegisteredProduct"]:
