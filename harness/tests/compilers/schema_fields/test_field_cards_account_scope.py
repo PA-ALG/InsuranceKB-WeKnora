@@ -22,6 +22,7 @@ from insurance_harness.compilers.schema_fields.prompt import (
     build_value_request,
 )
 from insurance_harness.evidence.segments import SegmentedSource
+from tests.compilers.schema_fields.annuity_cards_scope import WRITING_RULES as ANNUITY_WRITING_RULES
 
 PACK = "schemapack_supplementary_pension_insurance"
 ACCOUNT = (
@@ -41,7 +42,7 @@ def definition(key: str) -> FieldDefinition:
 
 
 def test_the_cards_carry_the_s12c10_version() -> None:
-    assert cards_version() == "draft-2026-11-06a"
+    assert cards_version() == "draft-2026-11-12a"
 
 
 def test_the_account_writing_rule_reaches_step_two_only() -> None:
@@ -81,7 +82,8 @@ def test_a_pension_portfolio_account_is_not_a_universal_account() -> None:
 
 def test_only_the_two_account_cards_gain_a_writing_rule() -> None:
     with_rule = {key for key, card in all_cards().items() if "writing_rule" in card}
-    assert with_rule == {*S4I.S12C9_WRITING_RULES, *ACCOUNT}
+    # #563 annuity cards add their own writing rules, pinned by annuity_cards_scope.
+    assert with_rule == {*S4I.S12C9_WRITING_RULES, *ACCOUNT, *ANNUITY_WRITING_RULES}
 
 
 def test_a_writing_rule_on_another_account_card_still_changes_the_digest() -> None:
