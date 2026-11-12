@@ -38,7 +38,9 @@ GUIDE_WITHOUT_NAME = (
 )
 
 
-def judged(head: str, file_name: str, registry: list[RegisteredProduct] | None = None) -> Attribution:
+def judged(
+    head: str, file_name: str, registry: list[RegisteredProduct] | None = None
+) -> Attribution:
     upload = Upload(knowledge_id="k-1", file_name=file_name, sha256="a" * 64, head=head)
     return attribute(upload, registry or [])
 
@@ -50,7 +52,9 @@ def registered(product_id: str, name: str, code: str, pack: str) -> RegisteredPr
 
 
 def terms(code_line: str, after: str) -> str:
-    return GUIDE_WITHOUT_NAME + "1.1 合同构成\r\n" + code_line + "\r\n请扫描以查询验证条款\r\n" + after
+    return (
+        GUIDE_WITHOUT_NAME + "1.1 合同构成\r\n" + code_line + "\r\n请扫描以查询验证条款\r\n" + after
+    )
 
 
 # 1. The title printed right after the terms' own code line ---------------------------------------
@@ -65,7 +69,10 @@ def test_a_terms_title_after_its_own_code_line_creates_the_product() -> None:
         ACCIDENT,
         "schemapack_accident_insurance",
     )
-    assert (result.clause_code, result.policy_ref) == ("平安人寿〔2024〕意外伤害保险050号", POLICY_REF)
+    assert (result.clause_code, result.policy_ref) == (
+        "平安人寿〔2024〕意外伤害保险050号",
+        POLICY_REF,
+    )
 
 
 def test_a_qualified_title_after_the_code_line_keeps_its_qualifier() -> None:
@@ -122,14 +129,19 @@ def test_an_ascii_bracketed_own_code_is_the_terms_own_code_in_the_compared_form(
 
 
 EMPHASISED_GUIDE = (
-    "阅 读 指 引 \r\n本阅读指引有助于您理解条款 ．．．．．．．．．．．．．，对．“．平安示例安行"
-    "（ ．．．．．．E\r\n．）意外伤害保险 ．．．．．．．合同” ．．．内容的解释以条款为准 ．．．．．．。\r\n"
+    "阅 读 指 引 \r\n本阅读指引有助于您理解条款 ．．．．．．．．．．．．．，"
+    "对．“．平安示例安行"
+    "（ ．．．．．．E\r\n．）意外伤害保险 ．．．．．．．合同” ．．．"
+    "内容的解释以条款为准 ．．．．．．。\r\n"
     " 您拥有的重要权益 \r\n 被保险人可以享受本主险合同提供的保障……………………2.3\r\n"
 )
 
 
 def test_an_emphasised_guide_name_creates_the_terms_product() -> None:
-    head = EMPHASISED_GUIDE + "平安人寿〔2023〕意外伤害保险010号\r\n请扫描以查询验证条款\r\n7.9 非处方药\r\n"
+    head = (
+        EMPHASISED_GUIDE
+        + "平安人寿〔2023〕意外伤害保险010号\r\n请扫描以查询验证条款\r\n7.9 非处方药\r\n"
+    )
     result = judged(head, "保险条款.pdf")
     assert (result.outcome, result.display_name, result.schema_pack_id) == (
         "CREATE",
