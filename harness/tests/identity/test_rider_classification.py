@@ -12,7 +12,7 @@ from insurance_harness.identity.attribution import (
 )
 from insurance_harness.identity.brands import brand_core
 
-NEW_POLICY = "attribution-policy@2026-11-12.1"
+NEW_POLICY = "attribution-policy@2026-11-12.2"
 CODE = "平安人寿〔2099〕医疗保险901号"
 
 
