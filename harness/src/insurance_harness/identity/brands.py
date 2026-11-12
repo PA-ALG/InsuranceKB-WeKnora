@@ -91,3 +91,10 @@ def brand_candidates(
     if len(chosen) > policy.brand_max_candidates:
         return []
     return sorted(p.product_id for p in chosen)
+
+
+def pack_of(name: str, policy: "AttributionPolicy") -> str | None:
+    """The pack of the type suffix the name ends with, qualifiers removed; the longest wins."""
+    base = unqualified(name)
+    hits = [entry for entry in policy.classifications if base.endswith(fold(entry.suffix))]
+    return max(hits, key=lambda entry: len(fold(entry.suffix))).schema_pack_id if hits else None

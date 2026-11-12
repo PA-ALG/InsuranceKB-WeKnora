@@ -29,17 +29,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from insurance_harness.identity.brands import brand_candidates, unqualified
+from insurance_harness.identity.brands import brand_candidates, pack_of
 from insurance_harness.identity.material_roles import load_material_roles, role_of
 from insurance_harness.identity.text import fold as _fold
 from insurance_harness.identity.title_lines import line_titles, title_pattern
-from insurance_harness.identity.titles import (
-    code_title,
-    guide_title,
-    head_title,
-    named_inside,
-    own_codes,
-)
+from insurance_harness.identity.titles import head_title, named_inside, own_codes, terms_title
 from insurance_harness.identity.training_versions import judge, training_role, versioned
 from insurance_harness.identity.version_basis import RegisteredVersion, VersionBasis
 from insurance_harness.identity.versions import VersionIndex, match_version, normal_clause_code
@@ -111,11 +105,11 @@ class AttributionPolicy(_Frozen):
     max_title_chars: int = Field(gt=0)
     title_prefix_pattern: str = Field(min_length=1)  # page numbers and labels before a title
     issuer_names: tuple[str, ...]  # the insurer's name, printed above a title (S5b-7)
-    # The written forms of the name in the reader guide, one group each (S5b-5, PB-A1).
-    guide_title_patterns: tuple[str, ...] = Field(min_length=1)
-    # A whole title line anywhere on the first pages (S5b-7): 《name》, then a plan part of at most
-    # title_line_qualifier_chars characters (PB-A1) and one listed document word, nothing else; a
-    # line with an exclusion is no title.
+    guide_title_patterns: tuple[str, ...] = Field(
+        min_length=1
+    )  # reader guide forms, one group each
+    # A whole title line anywhere on the first pages (S5b-7): 《name》, a plan part of at most this
+    # many characters (PB-A1), a document word; a line with an exclusion is no title.
     title_line_qualifier_chars: int = Field(gt=0)
     title_line_documents: tuple[str, ...] = Field(min_length=1)
     title_line_exclusions: tuple[str, ...]
@@ -253,12 +247,6 @@ def load_attribution_policy() -> AttributionPolicy:
         raise AttributionPolicyError("ATTRIBUTION_POLICY_INVALID") from error
 
 
-def _pack(name: str, policy: AttributionPolicy) -> str | None:
-    base = unqualified(name)
-    hits = [entry for entry in policy.classifications if base.endswith(_fold(entry.suffix))]
-    return max(hits, key=lambda entry: len(_fold(entry.suffix))).schema_pack_id if hits else None
-
-
 def attribute(
     upload: Upload,
     registry: Sequence[RegisteredProduct],
@@ -359,12 +347,8 @@ def attribute(
         return _existing(chosen, "confirmed_by_person", decided, role, code, own_code, version)
     # The start names the product; the reader guide only stands in when the start has no title.
     title = head_title(window, own_code, policy) or (
-        guide_title(head, policy) if role == TERMS else ""
+        terms_title(head, own_code, policy) if role == TERMS else ""
     )
-    if not title and role == TERMS and own_code is not None:
-        # PB-A1: the terms title right after its own code line, only when it names a product type.
-        after = code_title(head, own_code, policy)
-        title = after if _pack(after, policy) is not None else ""
     named = [p for p in products if title and title in {_fold(n) for n in p.names}]
     named = named or named_inside(title, products)
     if not named and lines and role != TERMS:  # confirms a registered product, never creates
@@ -399,7 +383,7 @@ def attribute(
     if role != TERMS or own_code is None or not title:
         return decided("QUARANTINE", "no_product_anchor", **anchors)
 
-    pack = _pack(title, policy) or pack
+    pack = pack_of(title, policy) or pack
     if pack is None:
         return decided("NEEDS_CONFIRM", "pack_unresolved", display_name=title, **anchors)
     if version[2]:  # the created ID is already registered

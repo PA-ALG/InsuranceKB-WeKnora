@@ -8,6 +8,7 @@ import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from insurance_harness.identity.brands import pack_of
 from insurance_harness.identity.text import fold
 from insurance_harness.identity.versions import normal_clause_code
 
@@ -80,12 +81,23 @@ def _guide(head: str, pattern: str, policy: "AttributionPolicy") -> str:
     return "" if polluted or not name or len(name) > policy.max_title_chars else name
 
 
-def code_title(head: str, own_code: str, policy: "AttributionPolicy") -> str:
-    """The title right after the terms' own code and its verification line (PB-A1), or ""."""
+def terms_title(head: str, own_code: str | None, policy: "AttributionPolicy") -> str:
+    """A terms' title when its start has none: the reader guide, else (PB-A1) the title right
+    after its own code line."""
+    return guide_title(head, policy) or (_code_title(head, own_code, policy) if own_code else "")
+
+
+def _code_title(head: str, own_code: str, policy: "AttributionPolicy") -> str:
+    """The title right after the terms' own code and its verification line (PB-A1), or "".
+
+    Only a title that ends with a listed type suffix counts: text after the line may also be a
+    table of contents, and then there is no title (fail closed, no question to a person).
+    """
     marked = f"({policy.clause_code_pattern}){re.escape(fold(policy.own_code_marker))}"
     for match in re.finditer(marked, head):
         if normal_clause_code(match.group(1)) == own_code:
-            return title_of(head[match.end() :], policy)
+            title = title_of(head[match.end() :], policy)
+            return title if pack_of(title, policy) is not None else ""
     return ""
 
 
