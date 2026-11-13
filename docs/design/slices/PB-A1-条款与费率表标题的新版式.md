@@ -16,6 +16,13 @@ Refs #563 第 5 批暂缓的 10 款主险。Claude 实现，按 AGENTS.md“简�
 | 指引以“对“<名称>合同”内容的解释以条款为准”写名称，名称加着重号，抽取后夹满全角点 | 1 | 指引只认“阅读指引…产品提供” |
 | 费率表标题为“附件3：《名称》基本保险金额表”，或标题行在 `》` 与“费率表”之间有一段方案部位（客运列车意外基本部分、基本部分（基础）年交），或文档词后带“（年交）” | 4+1 | 前缀不认“附件N：”；标题行限定语是封闭清单 |
 
+追加（选第 7 批时在其余在售主险上发现，同样与具体产品无关）：
+
+| 情况 | 款数 | 现行规则为何不对 |
+|---|---:|---|
+| 万能型产品的费率表文件实为“年保障成本表” | 2 | 材料类型“费率表”的开头信号只认“费率表/金额表”，名称与开头不一致，类型未定、需确认 |
+| “意外住院费用医疗保险”“意外门（急）诊医疗保险”等意外医疗产品 | 2 主险 + 2 类附加险 | 类型后缀只认“意外医疗保险/意外伤害医疗保险”，其余落到普通医疗 |
+
 ## 规则（attribution_policy.json 升到 `2026-11-12.2`）
 
 1. **编码括号**：`clause_code_pattern` 同时接受 `〔〕` 与 `[]`；读到的本条款编码一律按
@@ -32,14 +39,21 @@ Refs #563 第 5 批暂缓的 10 款主险。Claude 实现，按 AGENTS.md“简�
    不含书名号、句读标点（，。；：、引号）与“的”（S5b-7 审核 R1：解释性的“《名称》的续保…”“…以外的…”不是标题），
    排除词照旧生效；文档词之后可再带一段同样规则、加括号的方式说明（如“费率表（年交）”）；仍只确认已登记产品，从不新建。
 
+5. **成本表也是费率表**：材料类型 `rate_table` 的开头信号加“成本表”（`material_roles.json` 升到 `2026-11-12.1`）。
+   与标题行文档词已含“成本表”一致；文件名信号照旧必须同时满足，其他类型同时出现信号仍为未定。
+6. **意外医疗的类型后缀**：`classifications` 增加“意外住院费用医疗保险”“意外门诊医疗保险”（去括号限定语后，
+   “门（急）诊”即“门诊”）、“意外伤害住院日额医疗保险”“意外伤害津贴医疗保险”，归 `accident_medical`；
+   最长后缀优先不变，“住院费用医疗保险”等不含“意外”的仍归 `medical`。只影响新建，已登记产品不重判。
+
 原有决定保留各自 policy_ref；已登记产品不重判。
 
 ## 写域
 
-生产：`harness/src/insurance_harness/identity/{attribution.py,titles.py,title_lines.py,attribution_policy.json}`。
+生产：`harness/src/insurance_harness/identity/{attribution.py,titles.py,title_lines.py,attribution_policy.json,material_roles.json}`。
 测试：新增 `harness/tests/identity/test_attribution_deferred_layouts.py`；
 五处“当前版本”字面期望随版本升级（`test_attribution.py` 两处、`test_attribution_title_lines.py` 两处、
-`test_attribution_policy_versioning.py` 一处）以及 `test_rider_classification.py` 的当前版本常量，与 RED 同一提交。
+`test_attribution_policy_versioning.py` 一处）以及 `test_rider_classification.py` 的当前版本常量，与 RED 同一提交；
+规则 5 的材料类型版本字面期望（`tests/catalog/test_sales_training_trust.py` 一处）随之升级。
 
 ## 验收
 
@@ -49,6 +63,8 @@ Refs #563 第 5 批暂缓的 10 款主险。Claude 实现，按 AGENTS.md“简�
 3. 着重号指引新建产品；两处指引名称不同仍读不到标题。
 4. “附件3：”开头与带方案部位的标题行确认登记产品；过长、带句读或否定的尾巴仍隔离。
 5. 策略版本、basis 记录 PB-A1；非法长度与多组指引正则被拒绝。
-6. identity / ingest 回归、ruff、mypy、架构守卫；本地用第 5 批暂缓材料的抽取文本复核（不入库）。
+6. 文件名为费率表、开头或标题行为“年保障成本表”的材料确认为登记产品的费率表；说明书开头同时出现“成本表”仍为未定。
+7. 合成的“意外住院费用医疗保险”“意外门（急）诊医疗保险”等条款新建为意外医疗；不含“意外”的住院费用医疗仍为医疗。
+8. identity / ingest 回归、ruff、mypy、架构守卫；本地用第 5 批暂缓材料的抽取文本复核（不入库）。
 
 本片不 build、不部署、不连平台、不调用模型。
