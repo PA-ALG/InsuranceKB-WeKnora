@@ -232,3 +232,75 @@ def test_the_policy_version_and_rule_data() -> None:
         AttributionPolicy.model_validate_json(
             json.dumps(data | {"guide_title_patterns": ["阅读指引(.*)(产品)提供"]})
         )
+
+
+# 6. A universal product's rate table is its cost of insurance table ------------------------------
+
+
+UNIVERSAL = "平安示例招福（2026）终身寿险（万能型）"
+UNIVERSAL_ENTRY = registered(
+    "sc-uni", UNIVERSAL, "平安人寿〔2026〕终身寿险302号", "schemapack_whole_life_insurance"
+)
+COST_ROWS = "\r\n".join(f"{age} 0.{20 + age} 0.{10 + age}" for age in range(20))
+
+
+def test_a_cost_table_opening_with_its_title_is_the_products_rate_table() -> None:
+    head = f"《{UNIVERSAL}》年保障成本表\r\n（每千元危险保额）\r\n单位：人民币元\r\n{COST_ROWS}"
+    result = judged(head, "费率表.pdf", [UNIVERSAL_ENTRY])
+    assert (result.outcome, result.product_id, result.role) == (
+        "SUPPLEMENT",
+        "sc-uni",
+        "rate_table",
+    )
+
+
+def test_a_cost_table_titled_after_its_rows_is_the_products_rate_table() -> None:
+    head = (
+        f"保单年度初年龄 男性 女性\r\n{COST_ROWS}\r\n"
+        "注：（1）保单年度初年龄指保单年度第一日被保险人当时的年龄；"
+        f"\r\n《{UNIVERSAL}》年保障成本表\r\n（每千元危险保额）\r\n单位：人民币元"
+    )
+    result = judged(head, "费率表.pdf", [UNIVERSAL_ENTRY])
+    assert (result.outcome, result.product_id, result.role) == (
+        "SUPPLEMENT",
+        "sc-uni",
+        "rate_table",
+    )
+
+
+def test_a_cost_table_word_in_a_brochure_opening_still_leaves_the_role_open() -> None:
+    from insurance_harness.identity.material_roles import role_of
+
+    assert role_of("费率表.pdf", f"《{UNIVERSAL}》年保障成本表\n单位：人民币元") == "rate_table"
+    assert role_of("产品说明书.pdf", f"《{UNIVERSAL}》产品说明书\n附：年保障成本表") is None
+    assert (
+        role_of("附件.pdf", f"《{UNIVERSAL}》年保障成本表") is None
+    )  # the name signal is still needed
+
+
+# 7. Accident medical products whose type names the kind of cover --------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "平安示例少儿意外住院费用医疗保险",
+        "平安示例少儿意外门（急）诊医疗保险",
+        "平安附加示例意外伤害住院日额医疗保险（2008）",
+        "平安附加（2024）示例意外伤害津贴医疗保险",
+    ],
+)
+def test_an_accident_cover_type_creates_an_accident_medical_product(name: str) -> None:
+    head = terms("平安人寿〔2024〕医疗保险077号", f"{name}条款\r\n在本条款中")
+    result = judged(head, "保险条款.pdf")
+    assert (result.outcome, result.schema_pack_id) == (
+        "CREATE",
+        "schemapack_accident_medical_insurance",
+    )
+
+
+@pytest.mark.parametrize("name", ["平安示例住院费用医疗保险", "平安示例门（急）诊医疗保险"])
+def test_the_same_cover_without_accident_is_still_medical(name: str) -> None:
+    head = terms("平安人寿〔2024〕医疗保险078号", f"{name}条款\r\n在本条款中")
+    result = judged(head, "保险条款.pdf")
+    assert (result.outcome, result.schema_pack_id) == ("CREATE", "schemapack_medical_insurance")
