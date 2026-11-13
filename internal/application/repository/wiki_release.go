@@ -21,6 +21,12 @@ var (
 	ErrWikiReleaseConflict = errors.New("wiki release head conflict")
 )
 
+// releaseMemberInsertBatch keeps each member INSERT below the bind-parameter limits:
+// PostgreSQL allows 65535 per statement (SQLite 32766) and a member row binds nine, so a
+// release of more than 7281 members could not activate as one statement (#563, 2026-11-13).
+// The batches run inside the activation transaction, which stays all-or-nothing.
+const releaseMemberInsertBatch = 1000
+
 // WikiReleaseActivationWrite is the bounded repository transaction input.
 type WikiReleaseActivationWrite struct {
 	Preparation                 *types.WikiReleasePreparation
@@ -196,7 +202,7 @@ func (r *WikiReleaseRepository) Activate(
 		} else {
 			members := materializeMembers(write.Release.ID, write.Members)
 			if len(members) > 0 {
-				if err := tx.Create(&members).Error; err != nil {
+				if err := tx.CreateInBatches(&members, releaseMemberInsertBatch).Error; err != nil {
 					return err
 				}
 			}
