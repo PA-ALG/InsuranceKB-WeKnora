@@ -7,7 +7,7 @@
 
 在当前 Space 一次固定 Head。Judge Batch 按款发布走固定版本索引、按 slug 批读、小回执、固定版本核对和原抽检。新路径由 `publish --targeted-release-reads` 显式选择，对新尝试同时启用小回执；该选择随尝试冻结。旧尝试保持原恢复路径。旧 App 仍可用既有命令模式。固定读取失败时停止，保留未知激活尝试，禁止因接口错误降级或重发。
 
-`compile_run --carry-active` 固定一次 Release，并用索引的 Claim 归属选出所请求产品的旧 Claim；没有命中时不做正文批读。选择按 `subject_ref`，包含旧别名，沿原值、材料标识、parse attempt、SHA 及引用筛选。编译、候选变更判定、已有单 Head/激活事务、审核、CAS、撤回与证据契约照旧。
+`compile_run --carry-active --targeted-release-reads` 固定一次 Release，并用索引的 Claim 归属选出所请求产品的旧 Claim；没有命中时不做正文批读。选择按 `subject_ref`，包含旧别名，沿原值、材料标识、parse attempt、SHA 及引用筛选。使用与发布同名的显式开关，以便旧 App 在部署窗口前仍能运行已冻结的全读编译模式。编译、候选变更判定、已有单 Head/激活事务、审核、CAS、撤回与证据契约照旧。
 
 ## 2. REST 与存储
 
