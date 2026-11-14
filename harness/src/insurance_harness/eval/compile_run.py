@@ -25,6 +25,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from insurance_harness.bundle.client import PlatformError
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.trust_policy import TrustedPages, load_trust_policy
 from insurance_harness.changes.options import fixed_revision_pages, registry_inputs, source_options
@@ -336,7 +337,7 @@ def _summary(run_root: Path, runs: list[ProductRun]) -> dict[str, Any]:
 
 def _stop_reason(exc: BaseException) -> str:
     """Fixed, content-free diagnostics: stored files and model output may hold source text."""
-    if isinstance(exc, (RegistryError, IntegrityError)):
+    if isinstance(exc, (RegistryError, IntegrityError, PlatformError)):
         return exc.code
     if isinstance(exc, ValidationError):
         return "invalid_record_shape"
