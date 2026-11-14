@@ -51,3 +51,32 @@ func TestPostgresActivationReceiptFollowsExactCommitAfterHeadMoves(t *testing.T)
 	require.ErrorContains(t, err, "digest")
 	require.Equal(t, int64(2), storageCount(t, db, "wiki_release_receipts"))
 }
+
+func TestPostgresActivationReceiptRejectsMismatchedManifest(t *testing.T) {
+	for _, field := range []string{"decision_id", "bundle_digest"} {
+		t.Run(field, func(t *testing.T) {
+			db := openSchema(t)
+			ctx := context.Background()
+			s := service(New(db, testSpaces(t)))
+			c, err := s.Receive(ctx, principal, "space-1", rawBundle(t, "", "receipt/test", `{"value":1}`))
+			require.NoError(t, err)
+			d, err := s.Decide(ctx, principal, "space-1", c.ID, approve)
+			require.NoError(t, err)
+			r, err := s.ActivateReceipt(ctx, principal, "space-1", c.ID, d.ID)
+			require.NoError(t, err)
+			cold := service(New(db, testSpaces(t)))
+			read, err := cold.ActivationReceipt(ctx, principal, "space-1", c.ID, d.ID)
+			require.NoError(t, err)
+			require.Equal(t, r, read)
+
+			changed := db.Exec(`UPDATE wiki_release_preparations
+SET manifest = jsonb_set(manifest, ARRAY[?]::text[], '"unrelated"')
+WHERE preparation_id = (SELECT preparation_id FROM wiki_releases WHERE release_id = ?)`, field, r.ID)
+			require.NoError(t, changed.Error)
+			require.EqualValues(t, 1, changed.RowsAffected)
+			_, err = cold.ActivationReceipt(ctx, principal, "space-1", c.ID, d.ID)
+			require.Error(t, err)
+			require.Equal(t, int64(1), storageCount(t, db, "wiki_release_receipts"))
+		})
+	}
+}
