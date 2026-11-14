@@ -10,6 +10,7 @@ import httpx
 DEFAULT_TIMEOUT_SECONDS = 30
 MAX_RESPONSE_BYTES = 32 << 20
 RECEIPT_RESPONSE_BYTES = 64 << 10
+TARGETED_RESPONSE_BYTES = 8 << 20
 ACTIVATION_TIMEOUT_ENV = "HARNESS_WEKNORA_ACTIVATION_READ_TIMEOUT_SECONDS"
 RELEASE_LIMIT_ENV = "HARNESS_WEKNORA_RELEASE_MAX_RESPONSE_MIB"
 
@@ -20,6 +21,15 @@ class RequestType(Enum):
     ACTIVATE = auto()
     ACTIVATE_RECEIPT = auto()
     RECEIPT = auto()
+    RELEASE_SUMMARY = auto()
+    RELEASE_MEMBERS = auto()
+
+
+@dataclass
+class ReleaseReadBudget:
+    """One product's decoded release responses, including its activation receipt."""
+
+    remaining: int = TARGETED_RESPONSE_BYTES
 
 
 @dataclass(frozen=True)
@@ -43,10 +53,16 @@ class RequestBudgets:
         return httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, read=read)
 
     def response_limit(self, request_type: RequestType) -> int:
-        if request_type == RequestType.FULL_RELEASE:
+        if request_type in {RequestType.FULL_RELEASE, RequestType.ACTIVATE}:
             return self.release_max_bytes
-        if request_type in {RequestType.ACTIVATE_RECEIPT, RequestType.RECEIPT}:
+        if request_type in {
+            RequestType.ACTIVATE_RECEIPT,
+            RequestType.RECEIPT,
+            RequestType.RELEASE_SUMMARY,
+        }:
             return RECEIPT_RESPONSE_BYTES
+        if request_type == RequestType.RELEASE_MEMBERS:
+            return TARGETED_RESPONSE_BYTES
         return MAX_RESPONSE_BYTES
 
 

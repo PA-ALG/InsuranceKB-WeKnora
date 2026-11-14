@@ -8,7 +8,7 @@ never reach the exception. The client never approves anything on its own.
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
@@ -31,7 +31,17 @@ from insurance_harness.bundle.platform_response import (
     require_identifier,
     strict_json,
 )
-from insurance_harness.bundle.request_budget import RequestBudgets, RequestType
+from insurance_harness.bundle.release_reads import (
+    FixedHeader,
+    MemberIndex,
+    MemberLookup,
+    ReleaseHeader,
+)
+from insurance_harness.bundle.release_reads import ReleaseMember as ReleaseMember
+from insurance_harness.bundle.request_budget import ReleaseReadBudget, RequestBudgets, RequestType
+from insurance_harness.bundle.spot_check_responses import Sample as Sample
+from insurance_harness.bundle.spot_check_responses import Samples
+from insurance_harness.bundle.spot_check_responses import Verdict as Verdict
 from insurance_harness.contracts.bundle import CandidateBundle
 
 MAX_BUNDLE_BYTES = 2 << 20  # the platform's limit (release.MaxBundleBytes)
@@ -70,22 +80,7 @@ class Decision(_Response):
     digest: str
 
 
-class ReleaseMember(_Response):
-    kind: str
-    logical_slug: str
-    member_digest: str
-    payload: Any = None
-    evidence_refs: list[str] = Field(default_factory=list)
-    access_scope: str = ""
-
-
-class Release(_Response):
-    id: str = Field(min_length=1)
-    epoch: int = Field(ge=1)
-    base_release_id: str = ""
-    candidate_id: str = ""
-    decision_digest: str = ""
-    retired_at: str | None = None
+class Release(ReleaseHeader):
     members: list[ReleaseMember] = Field(default_factory=list)
 
     @property
@@ -101,33 +96,6 @@ class ActivationReceipt(BaseModel):
     candidate_id: str
     decision_id: str
     decision_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-
-
-class Verdict(_Response):
-    id: str = Field(min_length=1)
-    sample_id: str
-    outcome: Literal["correct", "incomplete", "wrong"]
-    note: str = ""
-    reviewer: str
-    decided_at: str
-
-
-class Sample(_Response):
-    """A spot-check sample of one release member (RV4), with its latest verdict if any."""
-
-    id: str = Field(min_length=1)
-    space_id: str = Field(min_length=1)
-    release_id: str = Field(min_length=1)
-    logical_slug: str = Field(min_length=1)
-    member_digest: str
-    stratum: str
-    created_by: str
-    created_at: str
-    verdict: Verdict | None = None
-
-
-class _Samples(_Response):
-    samples: list[Sample]
 
 
 class _Confirmations(_Response):
@@ -192,7 +160,13 @@ class PlatformClient:
         )
 
     def activate_receipt(
-        self, space_id: str, candidate_id: str, decision_id: str, decision_digest: str
+        self,
+        space_id: str,
+        candidate_id: str,
+        decision_id: str,
+        decision_digest: str,
+        *,
+        budget: ReleaseReadBudget | None = None,
     ) -> ActivationReceipt:
         require_identifier(decision_id)
         path = ["candidates", candidate_id, "activations"]
@@ -204,11 +178,18 @@ class PlatformClient:
             raw,
             {"response": "receipt"},
             request_type=RequestType.ACTIVATE_RECEIPT,
+            release_budget=budget,
         )
         return _checked_receipt(data, candidate_id, decision_id, decision_digest)
 
     def activation_receipt(
-        self, space_id: str, candidate_id: str, decision_id: str, decision_digest: str
+        self,
+        space_id: str,
+        candidate_id: str,
+        decision_id: str,
+        decision_digest: str,
+        *,
+        budget: ReleaseReadBudget | None = None,
     ) -> ActivationReceipt:
         require_identifier(decision_id)
         path = ["candidates", candidate_id, "activations"]
@@ -219,6 +200,7 @@ class PlatformClient:
             None,
             {"decision_id": decision_id},
             request_type=RequestType.RECEIPT,
+            release_budget=budget,
         )
         return _checked_receipt(data, candidate_id, decision_id, decision_digest)
 
@@ -230,7 +212,7 @@ class PlatformClient:
         body = {"samples": [{"slug": slug, "stratum": stratum} for slug, stratum in picks]}
         raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
         path = ["releases", release_id, "samples"]
-        return parse_response(_Samples, self._send("POST", space_id, path, raw)).samples
+        return parse_response(Samples, self._send("POST", space_id, path, raw)).samples
 
     def samples(
         self, space_id: str, *, status: str | None = None, release_id: str | None = None
@@ -243,7 +225,7 @@ class PlatformClient:
         for value in query.values():
             require_identifier(value)
         return parse_response(
-            _Samples, self._send("GET", space_id, ["samples"], None, query)
+            Samples, self._send("GET", space_id, ["samples"], None, query)
         ).samples
 
     def submit_confirmations(
@@ -337,6 +319,53 @@ class PlatformClient:
             Release, self._send("GET", space_id, path, None, request_type=RequestType.FULL_RELEASE)
         )
 
+    def active_summary(self, space: str, budget: ReleaseReadBudget) -> FixedHeader | None:
+        try:
+            data = self._send(
+                "GET",
+                space,
+                ["releases", "active", "summary"],
+                None,
+                request_type=RequestType.RELEASE_SUMMARY,
+                release_budget=budget,
+            )
+        except PlatformError as error:
+            if error.code == "RELEASE_NOT_FOUND":
+                return None
+            raise
+        return parse_response(FixedHeader, data)
+
+    def member_index(self, space: str, release_id: str, budget: ReleaseReadBudget) -> MemberIndex:
+        data = self._send(
+            "GET",
+            space,
+            ["releases", release_id, "member-index"],
+            None,
+            request_type=RequestType.RELEASE_MEMBERS,
+            release_budget=budget,
+        )
+        return parse_response(MemberIndex, data)
+
+    def member_lookup(
+        self,
+        space: str,
+        release_id: str,
+        slugs: list[str],
+        budget: ReleaseReadBudget,
+    ) -> MemberLookup:
+        raw = json.dumps({"slugs": slugs}, ensure_ascii=False).encode()
+        if len(raw) > 64 << 10:
+            raise PlatformError("RELEASE_READ_LIMIT")
+        data = self._send(
+            "POST",
+            space,
+            ["releases", release_id, "member-lookup"],
+            raw,
+            request_type=RequestType.RELEASE_MEMBERS,
+            release_budget=budget,
+        )
+        return parse_response(MemberLookup, data)
+
     def _send(
         self,
         method: str,
@@ -346,6 +375,7 @@ class PlatformClient:
         query: dict[str, str] | None = None,
         *,
         request_type: RequestType = RequestType.CONTROL,
+        release_budget: ReleaseReadBudget | None = None,
     ) -> object:
         for part in [space_id, *path]:
             require_identifier(part)
@@ -368,7 +398,13 @@ class PlatformClient:
             ):
                 content = bytearray()
                 for chunk in response.iter_bytes():
+                    if release_budget is not None:
+                        release_budget.remaining -= len(chunk)
+                        if release_budget.remaining < 0:
+                            raise PlatformError("RELEASE_READ_LIMIT")
                     if len(chunk) > limit - len(content):
+                        if request_type == RequestType.RELEASE_MEMBERS:
+                            raise PlatformError("RELEASE_READ_LIMIT")
                         raise PlatformError("INVALID_RESPONSE")
                     content.extend(chunk)
                 status = response.status_code

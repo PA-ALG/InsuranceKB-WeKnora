@@ -34,6 +34,7 @@ from insurance_harness.compilers.schema_fields.carry import (
     active_carry,
     carry_for,
     located,
+    targeted_carry,
 )
 from insurance_harness.compilers.schema_fields.definitions import pack_definitions
 from insurance_harness.compilers.schema_fields.engine import (
@@ -363,6 +364,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="recompile saved completions of an earlier run root; sends nothing")
     parser.add_argument("--carry-active", action="store_true",
                         help="hand step two the Active release's reviewed quotes (S12c-4)")
+    parser.add_argument("--targeted-release-reads", action="store_true",
+                        help="read only the requested products' published claims for carry")
     source_options(parser, required=False)
     args = parser.parse_args(argv)
     runs: list[ProductRun] = []
@@ -380,7 +383,15 @@ def main(argv: list[str] | None = None) -> int:
             revision_pages = fixed_revision_pages(source_map, reader_from_env())
         if args.carry_active and not args.registry:
             raise ValueError("--carry-active needs --registry")
-        carry = active_carry(source_map.space_id) if args.carry_active else None
+        if args.targeted_release_reads and not args.carry_active:
+            raise ValueError("--targeted-release-reads needs --carry-active")
+        carry = None
+        if args.carry_active:
+            carry = (
+                targeted_carry(source_map.space_id, args.products)
+                if args.targeted_release_reads
+                else active_carry(source_map.space_id)
+            )
 
         def factory(ledger: CallLedger) -> CompletionPort:
             clients.append(OpenAICompatibleCompletion(config, ledger=ledger))
