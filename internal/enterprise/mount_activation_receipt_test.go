@@ -50,7 +50,9 @@ func TestActivationReceiptResponseKeepsDefaultAndValidatesSelectionBeforeWrite(t
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &activationReceiptStore{
-				publishStore: newPublishStore(), failWrite: tc.failure == "write", failCommittedRead: tc.failure == "read",
+				publishStore:      newPublishStore(),
+				failWrite:         tc.failure == "write",
+				failCommittedRead: tc.failure == "read",
 			}
 			service := release.NewService(store, nil, nil, release.WithPublisher(store))
 			c, err := store.CreateCandidate(context.Background(), release.Candidate{
