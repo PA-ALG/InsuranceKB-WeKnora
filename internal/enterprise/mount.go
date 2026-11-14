@@ -71,6 +71,9 @@ func Mount(r gin.IRouter, deps Deps) {
 		deps.Authorizer.Register(http.MethodGet, prefix+"/candidates/:candidate_id/activations", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/active", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/:release_id", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/active/summary", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/:release_id/member-index", policy)
+		deps.Authorizer.Register(http.MethodPost, prefix+"/releases/:release_id/member-lookup", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/releases/:release_id/samples", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/samples", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/releases/:release_id/retirement", policy)
@@ -100,6 +103,7 @@ func Mount(r gin.IRouter, deps Deps) {
 	})
 	group.GET("/releases/active", func(c *gin.Context) { readRelease(c, deps.Candidates, "") })
 	group.GET("/releases/:release_id", func(c *gin.Context) { readRelease(c, deps.Candidates, c.Param("release_id")) })
+	mountMemberReads(group, deps.Candidates)
 	group.POST("/releases/:release_id/samples", func(c *gin.Context) { submitSamples(c, deps.SpotChecks) })
 	group.GET("/samples", func(c *gin.Context) { listSamples(c, deps.SpotChecks, false) })
 	group.GET("/sources/:knowledge_id/attempts/:attempt/pages", func(c *gin.Context) { pages(c, deps.Sources) })
@@ -339,6 +343,8 @@ func writeError(c *gin.Context, err error) {
 			status = http.StatusUnprocessableEntity
 		case release.ErrorReleaseAccessDenied:
 			status = http.StatusForbidden
+		case release.ErrorReleaseReadLimit:
+			status = http.StatusRequestEntityTooLarge
 		case release.ErrorCandidateNotApproved, release.ErrorNeedsRebase, release.ErrorReleaseConflict,
 			release.ErrorCandidateDecided, release.ErrorMemberDecided, release.ErrorMachineDecisionOnly:
 			status = http.StatusConflict

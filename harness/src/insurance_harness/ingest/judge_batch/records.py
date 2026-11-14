@@ -32,11 +32,14 @@ from insurance_harness.bundle.client import (
     PlatformError,
     Release,
 )
+from insurance_harness.bundle.fixed_release import FixedRelease
+from insurance_harness.bundle.request_budget import ReleaseReadBudget
 from insurance_harness.catalog.spot_check import SpotCheckPolicy
 from insurance_harness.compilers.schema_fields.claims import require_publishable_bundle
 from insurance_harness.contracts.bundle import CandidateBundle
 from insurance_harness.ingest.judge_batch.manifest import write_json
 from insurance_harness.ingest.judge_batch.points import JudgeBatchError
+from insurance_harness.ingest.judge_batch.targeted_release import sample_inputs, verified_release
 from insurance_harness.review.spot_check import sample
 
 Stage = Literal["built", "submitted", "decided", "activated", "verified", "sampled"]
@@ -67,6 +70,7 @@ class Attempt(BaseModel):
     activation_receipt: bool = False
     approval_digest: str | None = None
     receipt_base: str | None = None
+    targeted_release_reads: bool = False
 
     def summary(self) -> dict[str, Any]:
         keys = ("attempt", "stage", "candidate", "release", "epoch", "samples", "slugs")
@@ -120,6 +124,8 @@ def _save(run_root: Path, record: Attempt) -> None:
     if not record.activation_receipt:
         for key in ("activation_receipt", "approval_digest", "receipt_base"):
             del payload[key]
+    if not record.targeted_release_reads:
+        del payload["targeted_release_reads"]
     write_json(path, payload)
 
 
@@ -144,6 +150,7 @@ def start(
     decision: DecisionInput,
     *,
     activation_receipt: bool = False,
+    targeted_release_reads: bool = False,
 ) -> Attempt:
     """Freeze the candidate and the decision before anything is sent."""
     try:
@@ -161,7 +168,8 @@ def start(
         slugs=sorted(contents),
         contents=dict(sorted(contents.items())),
         decision=decision.model_dump(exclude_none=True),
-        activation_receipt=activation_receipt,
+        activation_receipt=activation_receipt or targeted_release_reads,
+        targeted_release_reads=targeted_release_reads,
     )
     _save(run_root, record)
     return record
@@ -229,7 +237,11 @@ def _reach_receipt(run_root: Path, record: Attempt, receipt: ActivationReceipt) 
 
 
 def _advance_activation(
-    run_root: Path, record: Attempt, client: PlatformClient, space_id: str
+    run_root: Path,
+    record: Attempt,
+    client: PlatformClient,
+    space_id: str,
+    budget: ReleaseReadBudget | None,
 ) -> None:
     if not record.candidate or not record.decision_id:
         raise JudgeBatchError("RECORD_INVALID")
@@ -238,12 +250,20 @@ def _advance_activation(
             raise JudgeBatchError("RECORD_INVALID")
         if record.pending == "activate":
             receipt = client.activation_receipt(
-                space_id, record.candidate, record.decision_id, record.approval_digest
+                space_id,
+                record.candidate,
+                record.decision_id,
+                record.approval_digest,
+                budget=budget,
             )
         else:
             _begin(run_root, record, "activate")
             receipt = client.activate_receipt(
-                space_id, record.candidate, record.decision_id, record.approval_digest
+                space_id,
+                record.candidate,
+                record.decision_id,
+                record.approval_digest,
+                budget=budget,
             )
         _reach_receipt(run_root, record, receipt)
         return
@@ -260,9 +280,15 @@ def advance(
     space_id: str,
     policy: SpotCheckPolicy,
     base: Release | None = None,
+    fixed_base: FixedRelease | None = None,
+    budget: ReleaseReadBudget | None = None,
 ) -> Attempt:
     """Take the attempt to its last stage; `base` is the Active it was built on, when known."""
     bundle = _frozen(run_root, record)
+    if record.targeted_release_reads:
+        if not record.activation_receipt:
+            raise JudgeBatchError("RECORD_INVALID")
+        budget = budget or ReleaseReadBudget()
     if record.pending is not None:
         record.reconciled = [*record.reconciled, record.pending]
     if (
@@ -299,7 +325,7 @@ def advance(
     if record.stage == "decided":
         lookup_only = record.activation_receipt and record.pending == "activate"
         try:
-            _advance_activation(run_root, record, client, space_id)
+            _advance_activation(run_root, record, client, space_id, budget)
         except PlatformError as error:
             # Only an activation refusal settles the attempt; a read error cannot.
             if not lookup_only and error.code == "NEEDS_REBASE":
@@ -307,6 +333,11 @@ def advance(
                 _save(run_root, record)
             raise
     published: Release | None = None
+    if record.targeted_release_reads:
+        assert budget is not None
+        return _finish_targeted(
+            run_root, record, client, space_id, bundle, policy, budget, fixed_base
+        )
     if record.stage == "activated":
         _begin(run_root, record, "read_back")
         published = client.release(space_id, str(record.release))
@@ -321,11 +352,69 @@ def advance(
             base = client.release(space_id, record.base_release)
             if base.id != record.base_release:
                 raise PlatformError("RELEASE_MISMATCH")
-        picks = [(pick.slug, pick.stratum) for pick in sample(published, base, policy)]
-        count = 0
-        for at in range(0, len(picks), _SAMPLE_BATCH):
-            chunk = picks[at : at + _SAMPLE_BATCH]
-            count += len(client.submit_samples(space_id, published.id, chunk))
-        record.status = "published"
-        _reach(run_root, record, "sampled", samples=count)
+        _save_samples(run_root, record, client, space_id, policy, published, base)
     return record
+
+
+def _finish_targeted(
+    run_root: Path,
+    record: Attempt,
+    client: PlatformClient,
+    space: str,
+    bundle: CandidateBundle,
+    policy: SpotCheckPolicy,
+    budget: ReleaseReadBudget,
+    prior: FixedRelease | None,
+) -> Attempt:
+    if record.stage == "sampled":
+        return record
+    if (
+        record.stage not in {"activated", "verified"}
+        or not record.release
+        or not record.epoch
+        or record.receipt_base is None
+        or not record.candidate
+        or not record.approval_digest
+    ):
+        raise JudgeBatchError("RECORD_INVALID")
+    if record.stage == "activated":
+        _begin(run_root, record, "read_back")
+    identity = (
+        record.release,
+        record.epoch,
+        record.receipt_base,
+        record.candidate,
+        record.approval_digest,
+    )
+    current = verified_release(client, space, budget, identity, bundle)
+    if record.stage == "activated":
+        _reach(run_root, record, "verified")
+    _begin(run_root, record, "samples")
+    if not record.receipt_base:
+        if record.epoch != 1:
+            raise PlatformError("RELEASE_MISMATCH")
+        prior = None
+    elif prior is None or prior.header.id != record.receipt_base:
+        prior = FixedRelease(client, space, budget, record.receipt_base)
+    if prior is not None and prior.header.epoch + 1 != record.epoch:
+        raise PlatformError("RELEASE_MISMATCH")
+    published, base = sample_inputs(current, prior)
+    _save_samples(run_root, record, client, space, policy, published, base)
+    return record
+
+
+def _save_samples(
+    run_root: Path,
+    record: Attempt,
+    client: PlatformClient,
+    space: str,
+    policy: SpotCheckPolicy,
+    published: Release,
+    base: Release | None,
+) -> None:
+    picks = [(pick.slug, pick.stratum) for pick in sample(published, base, policy)]
+    count = 0
+    for at in range(0, len(picks), _SAMPLE_BATCH):
+        count += len(client.submit_samples(space, published.id, picks[at : at + _SAMPLE_BATCH]))
+    record.status = "published"
+    _reach(run_root, record, "sampled", samples=count)

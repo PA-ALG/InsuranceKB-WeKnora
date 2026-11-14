@@ -20,6 +20,8 @@ from insurance_harness.bundle.client import (
     PlatformError,
     Release,
 )
+from insurance_harness.bundle.fixed_release import FixedRelease
+from insurance_harness.bundle.request_budget import ReleaseReadBudget
 from insurance_harness.catalog import SCHEMA_PACK_CATALOG
 from insurance_harness.catalog.navigation import load_navigation
 from insurance_harness.catalog.spot_check import SpotCheckPolicy, load_spot_check_policy
@@ -79,8 +81,9 @@ def build(
     reader: PageReader,
     active: Release | None,
     repo: Path = REPO,
+    approved_points: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[CandidateBundle | None, dict[str, Any]]:
-    approved = _approved(run_root, product)
+    approved = _approved(run_root, product) if approved_points is None else approved_points
     if not approved:
         return None, {"status": "nothing_approved", "claims": 0}
     summary = verified(run_root)["summary"]
@@ -191,10 +194,16 @@ def _product(
     policy: SpotCheckPolicy | None,
     repo: Path,
     activation_receipt: bool,
+    targeted_release_reads: bool,
 ) -> dict[str, Any]:
     record = records.current(run_root, product)
     if record is not None and record.status == "published":
-        now = live_contents(client.active(space_id), record.slugs)
+        if record.targeted_release_reads:
+            fixed = FixedRelease.active(client, space_id, ReleaseReadBudget())
+            active = fixed.body_view(record.slugs) if fixed else None
+        else:
+            active = client.active(space_id)
+        now = live_contents(active, record.slugs)
         if now != record.contents:
             raise JudgeBatchError("CONTENT_CHANGED")
         return {"status": "already_published", "claims": len(record.slugs), **record.summary()}
@@ -203,7 +212,19 @@ def _product(
             return {"status": "in_progress", "pending": record.pending, **record.summary()}
         done = records.advance(run_root, record, client=client, space_id=space_id, policy=policy)
         return {"status": "published", "claims": len(done.slugs), **done.summary()}
-    active = client.active(space_id)
+    fixed = None
+    budget = None
+    approved = None
+    if targeted_release_reads:
+        budget = ReleaseReadBudget()
+        approved = _approved(run_root, product)
+        if not approved:
+            return {"status": "nothing_approved", "claims": 0}
+        fixed = FixedRelease.active(client, space_id, budget)
+        body_slugs = [*fixed.claims_for([product]), *approved] if fixed else []
+        active = fixed.complete_view(body_slugs) if fixed else None
+    else:
+        active = client.active(space_id)
     bundle, info = build(
         run_root,
         product,
@@ -212,6 +233,7 @@ def _product(
         reader=reader,
         active=active,
         repo=repo,
+        approved_points=approved,
     )
     contents = info.pop("contents", {})
     if bundle is None or not live or policy is None:
@@ -224,9 +246,17 @@ def _product(
         contents,
         _decision(summary, issue),
         activation_receipt=activation_receipt,
+        targeted_release_reads=targeted_release_reads,
     )
     done = records.advance(
-        run_root, record, client=client, space_id=space_id, policy=policy, base=active
+        run_root,
+        record,
+        client=client,
+        space_id=space_id,
+        policy=policy,
+        base=active,
+        fixed_base=fixed,
+        budget=budget,
     )
     return {**info, **done.summary(), "status": "published"}
 
@@ -244,6 +274,7 @@ def publish_batch(
     repo: Path = REPO,
     products: list[str] | None = None,
     activation_receipt: bool = False,
+    targeted_release_reads: bool = False,
 ) -> dict[str, Any]:
     check_run_root(run_root)
     summary = verified(run_root)["summary"]
@@ -267,6 +298,7 @@ def publish_batch(
                 policy=policy,
                 repo=repo,
                 activation_receipt=activation_receipt,
+                targeted_release_reads=targeted_release_reads,
             )
         except (JudgeBatchError, PlatformError) as error:
             result["stopped"] = {"product": product, "code": error.code}

@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pydantic import ValidationError
 
 from insurance_harness.bundle.client import PlatformClient, Release
+from insurance_harness.bundle.fixed_release import FixedRelease
+from insurance_harness.bundle.request_budget import ReleaseReadBudget
 from insurance_harness.contracts.enums import ClaimState, LocatorKind
 from insurance_harness.contracts.knowledge import Claim
 from insurance_harness.eval.pdf_text import PageText
@@ -89,6 +91,13 @@ def active_carry(space_id: str) -> CarryRequest:
     """Read the Space's Active release once through the existing read route."""
     client = PlatformClient(os.environ[BASE_URL_ENV], os.environ[API_KEY_ENV])
     return CarryRequest(client.active(space_id))
+
+
+def targeted_carry(space_id: str, products: Sequence[str]) -> CarryRequest:
+    """Pin Active once and read only these products' published Claim bodies."""
+    client = PlatformClient(os.environ[BASE_URL_ENV], os.environ[API_KEY_ENV])
+    fixed = FixedRelease.active(client, space_id, ReleaseReadBudget())
+    return CarryRequest(fixed.body_view(fixed.claims_for(products)) if fixed else None)
 
 
 def carry_for(release: Release | None, entity_id: str, materials: Collection[str]) -> Carry | None:

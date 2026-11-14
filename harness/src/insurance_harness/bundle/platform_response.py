@@ -17,6 +17,7 @@ _PLATFORM_CODES = frozenset(
         "RELEASE_ACCESS_DENIED",
         "RELEASE_CONFLICT",
         "RELEASE_NOT_FOUND",
+        "RELEASE_READ_LIMIT",
         "SERVICE_UNAVAILABLE",
         "INTERNAL_ERROR",
         # Evidence and source checks a candidate or activation can fail on
