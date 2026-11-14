@@ -69,6 +69,7 @@ def _parser() -> argparse.ArgumentParser:
     publish.add_argument("--issue", type=int, required=True)
     publish.add_argument("--spot-check-policy", type=Path)
     publish.add_argument("--live", action="store_true")
+    publish.add_argument("--activation-receipt", action="store_true")
     close = commands.add_parser("close")
     close.add_argument("--run-root", type=Path, required=True)
     close.add_argument("--product", required=True)
@@ -138,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
             spot_check_policy=args.spot_check_policy,
             repo=args.repo,
             products=args.products,
+            activation_receipt=args.activation_receipt,
         )
         _emit(result)
         return 1 if result["stopped"] else 0

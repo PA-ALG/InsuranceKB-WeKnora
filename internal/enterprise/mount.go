@@ -68,6 +68,7 @@ func Mount(r gin.IRouter, deps Deps) {
 		deps.Authorizer.Register(http.MethodGet, prefix+"/sources/:knowledge_id/attempts/:attempt/pages", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates/:candidate_id/decisions", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/candidates/:candidate_id/activations", policy)
+		deps.Authorizer.Register(http.MethodGet, prefix+"/candidates/:candidate_id/activations", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/active", policy)
 		deps.Authorizer.Register(http.MethodGet, prefix+"/releases/:release_id", policy)
 		deps.Authorizer.Register(http.MethodPost, prefix+"/releases/:release_id/samples", policy)
@@ -94,6 +95,9 @@ func Mount(r gin.IRouter, deps Deps) {
 	group.GET("/candidates/:candidate_id/preview", func(c *gin.Context) { preview(c, deps.Candidates) })
 	group.POST("/candidates/:candidate_id/decisions", func(c *gin.Context) { decide(c, deps.Candidates) })
 	group.POST("/candidates/:candidate_id/activations", func(c *gin.Context) { activate(c, deps.Candidates) })
+	group.GET("/candidates/:candidate_id/activations", func(c *gin.Context) {
+		readActivationReceipt(c, deps.Candidates)
+	})
 	group.GET("/releases/active", func(c *gin.Context) { readRelease(c, deps.Candidates, "") })
 	group.GET("/releases/:release_id", func(c *gin.Context) { readRelease(c, deps.Candidates, c.Param("release_id")) })
 	group.POST("/releases/:release_id/samples", func(c *gin.Context) { submitSamples(c, deps.SpotChecks) })
@@ -212,9 +216,22 @@ func activate(c *gin.Context, service *release.Service) {
 		writeError(c, &release.Error{Code: release.ErrorDecisionInvalid, Detail: "decision_id is required"})
 		return
 	}
-	result, err := service.Activate(
-		c.Request.Context(), p, c.Param("space_id"), c.Param("candidate_id"), in.DecisionID,
-	)
+	small, err := receiptResponse(c.Request.URL.RawQuery)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	ctx, space, candidate := c.Request.Context(), c.Param("space_id"), c.Param("candidate_id")
+	if small {
+		result, err := service.ActivateReceipt(ctx, p, space, candidate, in.DecisionID)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+		return
+	}
+	result, err := service.Activate(ctx, p, space, candidate, in.DecisionID)
 	if err != nil {
 		writeError(c, err)
 		return

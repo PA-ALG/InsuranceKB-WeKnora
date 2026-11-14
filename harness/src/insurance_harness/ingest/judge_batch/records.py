@@ -1,13 +1,11 @@
 """Per-product publish attempts that survive any interruption (RV7 Spec §2.3, review R1).
 
 An attempt freezes the candidate it submits (its bytes and sha256) and the machine decision it
-makes, and records each stage before and after the step that reaches it. A rerun never rebuilds
-the candidate: it settles a step whose outcome is unknown by reading Active first, then replays
-the remaining steps with the same inputs, which the platform answers idempotently (the same
-bundle digest is the same candidate, the same decision input the same decision, a repeated
-activation the release it made, a repeated sample the one it kept). Activation refused with
-NEEDS_REBASE proves the attempt never went live; the next run starts a new one. A completed
-attempt is never written again.
+makes, and records each stage before and after the step that reaches it. A rerun starts from the
+frozen candidate and decision. Legacy activation settles an interruption by checking Active,
+then replaying with the same inputs. In receipt mode an interrupted activation is resolved only
+by looking up its exact receipt and verifying the fixed Release. A NEEDS_REBASE refusal from the
+activation request permits a new attempt. A completed attempt is never written again.
 
 The frozen file is written before its record, and the record before anything is sent, so a frozen
 file without a record (an interruption between the two) was never sent. A rerun freezes its own
@@ -28,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from insurance_harness.bundle.assemble import BundleError
 from insurance_harness.bundle.client import (
+    ActivationReceipt,
     DecisionInput,
     PlatformClient,
     PlatformError,
@@ -65,6 +64,9 @@ class Attempt(BaseModel):
     epoch: int | None = None
     samples: int | None = None
     reconciled: list[str] = []
+    activation_receipt: bool = False
+    approval_digest: str | None = None
+    receipt_base: str | None = None
 
     def summary(self) -> dict[str, Any]:
         keys = ("attempt", "stage", "candidate", "release", "epoch", "samples", "slugs")
@@ -114,7 +116,11 @@ def _save(run_root: Path, record: Attempt) -> None:
             raise JudgeBatchError("RECORD_INVALID") from None
         if stored.get("status") == "published":
             raise JudgeBatchError("RECORD_INVALID")  # a completed attempt is final
-    write_json(path, record.model_dump(mode="json"))
+    payload = record.model_dump(mode="json")
+    if not record.activation_receipt:
+        for key in ("activation_receipt", "approval_digest", "receipt_base"):
+            del payload[key]
+    write_json(path, payload)
 
 
 def _freeze(run_root: Path, product: str, after: int, raw: bytes) -> int:
@@ -136,6 +142,8 @@ def start(
     bundle: CandidateBundle,
     contents: dict[str, str],
     decision: DecisionInput,
+    *,
+    activation_receipt: bool = False,
 ) -> Attempt:
     """Freeze the candidate and the decision before anything is sent."""
     try:
@@ -153,6 +161,7 @@ def start(
         slugs=sorted(contents),
         contents=dict(sorted(contents.items())),
         decision=decision.model_dump(exclude_none=True),
+        activation_receipt=activation_receipt,
     )
     _save(run_root, record)
     return record
@@ -191,12 +200,56 @@ def _reach(run_root: Path, record: Attempt, stage: Stage, **values: Any) -> None
 
 def _verify(release: Release, record: Attempt, bundle: CandidateBundle) -> None:
     digests = {member.logical_slug: member.member_digest for member in release.members}
+    if record.activation_receipt and (
+        release.candidate_id != record.candidate
+        or release.decision_digest != record.approval_digest
+        or release.epoch != record.epoch
+        or release.base_release_id != record.receipt_base
+        or len(digests) != len(release.members)
+        or any(slug in digests for slug in bundle.removals)
+    ):
+        raise PlatformError("RELEASE_MISMATCH")
     if (
         release.id != record.release
         or (release.candidate_id and release.candidate_id != record.candidate)
         or any(digests.get(m.logical_slug) != m.member_digest for m in bundle.members)
     ):
         raise PlatformError("RELEASE_MISMATCH")
+
+
+def _reach_receipt(run_root: Path, record: Attempt, receipt: ActivationReceipt) -> None:
+    _reach(
+        run_root,
+        record,
+        "activated",
+        release=receipt.id,
+        epoch=receipt.epoch,
+        receipt_base=receipt.base_release_id,
+    )
+
+
+def _advance_activation(
+    run_root: Path, record: Attempt, client: PlatformClient, space_id: str
+) -> None:
+    if not record.candidate or not record.decision_id:
+        raise JudgeBatchError("RECORD_INVALID")
+    if record.activation_receipt:
+        if not record.approval_digest:
+            raise JudgeBatchError("RECORD_INVALID")
+        if record.pending == "activate":
+            receipt = client.activation_receipt(
+                space_id, record.candidate, record.decision_id, record.approval_digest
+            )
+        else:
+            _begin(run_root, record, "activate")
+            receipt = client.activate_receipt(
+                space_id, record.candidate, record.decision_id, record.approval_digest
+            )
+        _reach_receipt(run_root, record, receipt)
+        return
+    _begin(run_root, record, "activate")
+    activated = client.activate(space_id, record.candidate, record.decision_id)
+    _reach(run_root, record, "activated", release=activated.id, epoch=activated.epoch)
 
 
 def advance(
@@ -212,7 +265,11 @@ def advance(
     bundle = _frozen(run_root, record)
     if record.pending is not None:
         record.reconciled = [*record.reconciled, record.pending]
-    if record.stage in {"submitted", "decided"} and record.candidate:
+    if (
+        not record.activation_receipt
+        and record.stage in {"submitted", "decided"}
+        and record.candidate
+    ):
         active = client.active(space_id)
         if active is not None and active.candidate_id == record.candidate:
             _reach(run_root, record, "activated", release=active.id, epoch=active.epoch)
@@ -230,17 +287,25 @@ def advance(
         _begin(run_root, record, "decide")
         decision = DecisionInput.model_validate(record.decision)
         made = client.decide(space_id, str(record.candidate), decision)
+        if record.activation_receipt:
+            if (
+                made.candidate_id != record.candidate
+                or made.outcome != "approve"
+                or not re.fullmatch(r"[0-9a-f]{64}", made.digest)
+            ):
+                raise PlatformError("INVALID_RESPONSE")
+            record.approval_digest = made.digest
         _reach(run_root, record, "decided", decision_id=made.id)
     if record.stage == "decided":
-        _begin(run_root, record, "activate")
+        lookup_only = record.activation_receipt and record.pending == "activate"
         try:
-            activated = client.activate(space_id, str(record.candidate), str(record.decision_id))
+            _advance_activation(run_root, record, client, space_id)
         except PlatformError as error:
-            if error.code == "NEEDS_REBASE":  # never went live: the next run starts anew
+            # Only an activation refusal settles the attempt; a read error cannot.
+            if not lookup_only and error.code == "NEEDS_REBASE":
                 record.status, record.pending = "needs_rebase", None
                 _save(run_root, record)
             raise
-        _reach(run_root, record, "activated", release=activated.id, epoch=activated.epoch)
     published: Release | None = None
     if record.stage == "activated":
         _begin(run_root, record, "read_back")

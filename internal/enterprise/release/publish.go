@@ -65,6 +65,9 @@ type Release struct {
 	DecisionDigest string   `json:"decision_digest"`
 	Members        []Member `json:"members"`
 
+	DecisionID   string `json:"-"` // stored preparation manifest identity
+	BundleDigest string `json:"-"`
+
 	RetiredAt *time.Time `json:"retired_at,omitempty"`
 }
 
@@ -250,7 +253,7 @@ func (s *Service) write(
 	return ActivationWrite{
 		TenantID: p.TenantID, SpaceID: spaceID, Subject: p.Subject, CandidateID: c.ID,
 		BundleDigest: c.BundleDigest, DecisionID: d.ID, DecisionDigest: d.Digest,
-		Nonce: sha256Hex(c.ID + ":" + d.Digest), Expected: expected, Members: members,
+		Nonce: activationNonce(c.ID, d.Digest), Expected: expected, Members: members,
 	}
 }
 
