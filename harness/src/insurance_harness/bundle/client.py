@@ -6,13 +6,12 @@ never reach the exception. The client never approves anything on its own.
 """
 
 import json
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 # Re-exported: callers use the review and confirmation models through the client.
 from insurance_harness.bundle.candidate_reviews import CandidateDetail as CandidateDetail
@@ -23,70 +22,21 @@ from insurance_harness.bundle.confirmation_items import ConfirmationClosure as C
 from insurance_harness.bundle.confirmation_items import ConfirmationInput as ConfirmationInput
 from insurance_harness.bundle.confirmation_items import ConfirmationItem as ConfirmationItem
 from insurance_harness.bundle.confirmation_items import ConfirmationOption as ConfirmationOption
+from insurance_harness.bundle.platform_response import (
+    PlatformError as PlatformError,
+)
+from insurance_harness.bundle.platform_response import (
+    failure_code,
+    parse_response,
+    require_identifier,
+    strict_json,
+)
+from insurance_harness.bundle.request_budget import RequestBudgets, RequestType
 from insurance_harness.contracts.bundle import CandidateBundle
 
 MAX_BUNDLE_BYTES = 2 << 20  # the platform's limit (release.MaxBundleBytes)
-MAX_RESPONSE_BYTES = 32 << 20
 MAX_CONFIRMATIONS = 200  # the platform's limit on items per submission (S5b-3a)
 MAX_CONFIRMATION_BYTES = 512 << 10  # its limit on a submission body (maxConfirmationsBody)
-_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
-_PLATFORM_CODES = frozenset(
-    {
-        "CANDIDATE_INVALID",
-        "CANDIDATE_NOT_FOUND",
-        "CANDIDATE_NOT_APPROVED",
-        "DECISION_INVALID",
-        "DECISION_NOT_FOUND",
-        "NEEDS_REBASE",
-        "RELEASE_ACCESS_DENIED",
-        "RELEASE_CONFLICT",
-        "RELEASE_NOT_FOUND",
-        "SERVICE_UNAVAILABLE",
-        "INTERNAL_ERROR",
-        # Evidence and source checks a candidate or activation can fail on
-        "EVIDENCE_MISMATCH",
-        "EVIDENCE_NOT_FOUND",
-        "EVIDENCE_UNSUPPORTED",
-        "EVIDENCE_UNVERIFIABLE",
-        "SOURCE_UNAVAILABLE",
-        "RELEASE_ACTIVE",
-        "RETIREMENT_INVALID",
-        # RV4 spot checks
-        "MEMBER_NOT_FOUND",
-        "SAMPLE_INVALID",
-        "SAMPLE_NOT_FOUND",
-        "VERDICT_INVALID",
-        # S5b-3a confirmation items
-        "CONFIRMATION_INVALID",
-        "CONFIRMATION_NOT_FOUND",
-        "ANSWER_INVALID",
-        "CONFIRMATION_CLOSED",
-        "ANSWER_STALE",
-        # RV6 point review
-        "CANDIDATE_DECIDED",
-        "MEMBER_DECIDED",
-    }
-)
-_CLIENT_CODES = frozenset(
-    {
-        "INVALID_REQUEST",
-        "INVALID_RESPONSE",
-        "RELEASE_MISMATCH",
-        "UNAUTHENTICATED",
-        # S8b revert preconditions, checked before any write
-        "RELEASE_RETIRED",
-        "SLUG_COLLISION",
-    }
-)
-
-
-class PlatformError(ValueError):
-    """A caller-safe failure code; unknown platform codes read as SERVICE_UNAVAILABLE."""
-
-    def __init__(self, code: str) -> None:
-        known = code in _PLATFORM_CODES or code in _CLIENT_CODES
-        self.code = code if known else "SERVICE_UNAVAILABLE"
-        super().__init__(self.code)
 
 
 class _Response(BaseModel):
@@ -141,6 +91,16 @@ class Release(_Response):
     @property
     def head(self) -> Head:
         return Head(release_id=self.id, epoch=self.epoch)
+
+
+class ActivationReceipt(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+    id: str = Field(min_length=1)
+    epoch: int = Field(ge=1)
+    base_release_id: str
+    candidate_id: str
+    decision_id: str
+    decision_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class Verdict(_Response):
@@ -198,6 +158,10 @@ class PlatformClient:
         self._base_url = str(url).rstrip("/")
         self._api_key = api_key
         self._transport = transport
+        try:
+            self._budgets = RequestBudgets.from_env()
+        except ValueError:
+            raise PlatformError("INVALID_REQUEST") from None
 
     def active(self, space_id: str) -> Release | None:
         """The active release of the Space, or None before the first activation."""
@@ -212,28 +176,61 @@ class PlatformClient:
         raw = json.dumps(bundle.model_dump(mode="json"), ensure_ascii=False).encode("utf-8")
         if len(raw) > MAX_BUNDLE_BYTES:
             raise PlatformError("INVALID_REQUEST")
-        return _parse(Candidate, self._send("POST", space_id, ["candidates"], raw))
+        return parse_response(Candidate, self._send("POST", space_id, ["candidates"], raw))
 
     def decide(self, space_id: str, candidate_id: str, decision: DecisionInput) -> Decision:
         raw = json.dumps(decision.model_dump(exclude_none=True), ensure_ascii=False).encode()
         path = ["candidates", candidate_id, "decisions"]
-        return _parse(Decision, self._send("POST", space_id, path, raw))
+        return parse_response(Decision, self._send("POST", space_id, path, raw))
 
     def activate(self, space_id: str, candidate_id: str, decision_id: str) -> Release:
-        _identifier(decision_id)
+        require_identifier(decision_id)
         raw = json.dumps({"decision_id": decision_id}).encode()
         path = ["candidates", candidate_id, "activations"]
-        return _parse(Release, self._send("POST", space_id, path, raw))
+        return parse_response(
+            Release, self._send("POST", space_id, path, raw, request_type=RequestType.ACTIVATE)
+        )
+
+    def activate_receipt(
+        self, space_id: str, candidate_id: str, decision_id: str, decision_digest: str
+    ) -> ActivationReceipt:
+        require_identifier(decision_id)
+        path = ["candidates", candidate_id, "activations"]
+        raw = json.dumps({"decision_id": decision_id}).encode()
+        data = self._send(
+            "POST",
+            space_id,
+            path,
+            raw,
+            {"response": "receipt"},
+            request_type=RequestType.ACTIVATE_RECEIPT,
+        )
+        return _checked_receipt(data, candidate_id, decision_id, decision_digest)
+
+    def activation_receipt(
+        self, space_id: str, candidate_id: str, decision_id: str, decision_digest: str
+    ) -> ActivationReceipt:
+        require_identifier(decision_id)
+        path = ["candidates", candidate_id, "activations"]
+        data = self._send(
+            "GET",
+            space_id,
+            path,
+            None,
+            {"decision_id": decision_id},
+            request_type=RequestType.RECEIPT,
+        )
+        return _checked_receipt(data, candidate_id, decision_id, decision_digest)
 
     def submit_samples(
         self, space_id: str, release_id: str, picks: list[tuple[str, str]]
     ) -> list[Sample]:
         """Submit (slug, stratum) samples of one release; the platform keeps existing ones."""
-        _identifier(release_id)
+        require_identifier(release_id)
         body = {"samples": [{"slug": slug, "stratum": stratum} for slug, stratum in picks]}
         raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
         path = ["releases", release_id, "samples"]
-        return _parse(_Samples, self._send("POST", space_id, path, raw)).samples
+        return parse_response(_Samples, self._send("POST", space_id, path, raw)).samples
 
     def samples(
         self, space_id: str, *, status: str | None = None, release_id: str | None = None
@@ -244,8 +241,10 @@ class PlatformClient:
             if value is not None
         }
         for value in query.values():
-            _identifier(value)
-        return _parse(_Samples, self._send("GET", space_id, ["samples"], None, query)).samples
+            require_identifier(value)
+        return parse_response(
+            _Samples, self._send("GET", space_id, ["samples"], None, query)
+        ).samples
 
     def submit_confirmations(
         self, space_id: str, items: Sequence[ConfirmationInput]
@@ -258,7 +257,9 @@ class PlatformClient:
         raw = confirmation_body(items)
         if not 1 <= len(items) <= MAX_CONFIRMATIONS or len(raw) > MAX_CONFIRMATION_BYTES:
             raise PlatformError("INVALID_REQUEST")
-        stored = _parse(_Confirmations, self._send("POST", space_id, ["confirmations"], raw)).items
+        stored = parse_response(
+            _Confirmations, self._send("POST", space_id, ["confirmations"], raw)
+        ).items
         if len(stored) != len(items) or any(
             not _owns(item, space_id) or _asked(item) != _asked(question)
             for item, question in zip(stored, items, strict=False)
@@ -272,7 +273,7 @@ class PlatformClient:
         if status not in {"open", "closed"}:
             raise PlatformError("INVALID_REQUEST")
         data = self._send("GET", space_id, ["confirmations"], None, {"status": status})
-        listed = _parse(_Confirmations, data).items
+        listed = parse_response(_Confirmations, data).items
         if any(not _owns(i, space_id) or (i.closure is None) != (status == "open") for i in listed):
             raise PlatformError("INVALID_RESPONSE")
         return listed
@@ -294,11 +295,11 @@ class PlatformClient:
             raise PlatformError("INVALID_REQUEST")
         body: dict[str, str] = {"reason": reason}
         if answer_id is not None:
-            _identifier(answer_id)
+            require_identifier(answer_id)
             body["answer_id"] = answer_id
         path = ["confirmations", item_id, "closure"]
         data = self._send("POST", space_id, path, json.dumps(body).encode())
-        closure = _parse(_Closure, data).closure
+        closure = parse_response(_Closure, data).closure
         if (closure.reason, closure.answer_id or None) != (reason, answer_id):
             raise PlatformError("INVALID_RESPONSE")
         return closure
@@ -309,7 +310,7 @@ class PlatformClient:
         if status not in {"pending", "decided"}:
             raise PlatformError("INVALID_REQUEST")
         data = self._send("GET", space_id, ["candidates"], None, {"status": status})
-        return _parse(ReviewQueue, data).items
+        return parse_response(ReviewQueue, data).items
 
     def reject_points(
         self, space_id: str, candidate_id: str, slugs: list[str], reason: str, policy_ref: str
@@ -320,19 +321,21 @@ class PlatformClient:
         body = {"slugs": slugs, "outcome": "reject", "reason": reason, "policy_ref": policy_ref}
         path = ["candidates", candidate_id, "points", "decisions"]
         raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
-        return _parse(PointResult, self._send("POST", space_id, path, raw)).status
+        return parse_response(PointResult, self._send("POST", space_id, path, raw)).status
 
     def review_detail(self, space_id: str, candidate_id: str) -> CandidateDetail:
         """One candidate's members, removals and review points, as its review page shows them."""
         data = self._send("GET", space_id, ["candidates", candidate_id], None)
-        detail = _parse(CandidateDetail, data)
+        detail = parse_response(CandidateDetail, data)
         if detail.candidate_id != candidate_id:
             raise PlatformError("INVALID_RESPONSE")
         return detail
 
     def release(self, space_id: str, release_id: str) -> Release:
         path = ["releases", release_id] if release_id else ["releases", "active"]
-        return _parse(Release, self._send("GET", space_id, path, None))
+        return parse_response(
+            Release, self._send("GET", space_id, path, None, request_type=RequestType.FULL_RELEASE)
+        )
 
     def _send(
         self,
@@ -341,20 +344,23 @@ class PlatformClient:
         path: list[str],
         body: bytes | None,
         query: dict[str, str] | None = None,
+        *,
+        request_type: RequestType = RequestType.CONTROL,
     ) -> object:
         for part in [space_id, *path]:
-            _identifier(part)
+            require_identifier(part)
         url = f"{self._base_url}/api/v1/enterprise/spaces/{'/'.join([space_id, *path])}"
         if query:
             url = str(httpx.URL(url, params=query))
         headers = {"X-API-Key": self._api_key}
         if body is not None:
             headers["Content-Type"] = "application/json"
+        limit = self._budgets.response_limit(request_type)
         try:
             with (
                 httpx.Client(
                     transport=self._transport,
-                    timeout=30.0,
+                    timeout=self._budgets.timeout(request_type),
                     follow_redirects=False,
                     trust_env=False,
                 ) as client,
@@ -362,18 +368,37 @@ class PlatformClient:
             ):
                 content = bytearray()
                 for chunk in response.iter_bytes():
-                    content.extend(chunk)
-                    if len(content) > MAX_RESPONSE_BYTES:
+                    if len(chunk) > limit - len(content):
                         raise PlatformError("INVALID_RESPONSE")
+                    content.extend(chunk)
                 status = response.status_code
         except httpx.HTTPError:
             raise PlatformError("SERVICE_UNAVAILABLE") from None
         if not 200 <= status < 300:
-            raise PlatformError(_failure_code(status, bytes(content)))
-        document = _strict_json(bytes(content))
+            raise PlatformError(failure_code(status, bytes(content)))
+        document = strict_json(bytes(content))
         if not isinstance(document, dict) or document.get("success") is not True:
             raise PlatformError("INVALID_RESPONSE")
         return document.get("data")
+
+
+def _checked_receipt(
+    data: object, candidate_id: str, decision_id: str, decision_digest: str
+) -> ActivationReceipt:
+    receipt = parse_response(ActivationReceipt, data)
+    if (receipt.candidate_id, receipt.decision_id, receipt.decision_digest) != (
+        candidate_id,
+        decision_id,
+        decision_digest,
+    ):
+        raise PlatformError("RELEASE_MISMATCH")
+    try:
+        require_identifier(receipt.id)
+        if receipt.base_release_id:
+            require_identifier(receipt.base_release_id)
+    except PlatformError:
+        raise PlatformError("INVALID_RESPONSE") from None
+    return receipt
 
 
 @dataclass(frozen=True)
@@ -436,53 +461,3 @@ def _owns(item: ConfirmationItem, space_id: str) -> bool:
     if closure.reason == "applied":
         return item.answer is not None and closure.answer_id == item.answer.id
     return not closure.answer_id
-
-
-def _identifier(part: str) -> None:
-    if not isinstance(part, str) or not _IDENTIFIER.fullmatch(part):
-        raise PlatformError("INVALID_REQUEST")
-
-
-def _failure_code(status: int, content: bytes) -> str:
-    try:
-        document = _strict_json(content)
-    except PlatformError:
-        document = None
-    if isinstance(document, dict) and isinstance(document.get("code"), str):
-        return str(document["code"])
-    if status == 401:
-        return "UNAUTHENTICATED"
-    if status == 403:
-        return "RELEASE_ACCESS_DENIED"
-    return "SERVICE_UNAVAILABLE"
-
-
-def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    document: dict[str, object] = {}
-    for key, value in pairs:
-        if key in document:
-            raise ValueError("duplicate key")
-        document[key] = value
-    return document
-
-
-def _reject_constant(value: str) -> None:
-    raise ValueError(f"non-finite number {value}")
-
-
-def _strict_json(content: bytes) -> object:
-    try:
-        return json.loads(
-            content.decode("utf-8"),
-            object_pairs_hook=_unique_object,
-            parse_constant=_reject_constant,
-        )
-    except (ValueError, UnicodeError, RecursionError):
-        raise PlatformError("INVALID_RESPONSE") from None
-
-
-def _parse[T: BaseModel](model: type[T], data: object) -> T:
-    try:
-        return model.model_validate(data)
-    except ValidationError:
-        raise PlatformError("INVALID_RESPONSE") from None

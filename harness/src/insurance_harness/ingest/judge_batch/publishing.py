@@ -190,6 +190,7 @@ def _product(
     live: bool,
     policy: SpotCheckPolicy | None,
     repo: Path,
+    activation_receipt: bool,
 ) -> dict[str, Any]:
     record = records.current(run_root, product)
     if record is not None and record.status == "published":
@@ -216,7 +217,14 @@ def _product(
     if bundle is None or not live or policy is None:
         return info
     summary = verified(run_root)["summary"]
-    record = records.start(run_root, product, bundle, contents, _decision(summary, issue))
+    record = records.start(
+        run_root,
+        product,
+        bundle,
+        contents,
+        _decision(summary, issue),
+        activation_receipt=activation_receipt,
+    )
     done = records.advance(
         run_root, record, client=client, space_id=space_id, policy=policy, base=active
     )
@@ -235,6 +243,7 @@ def publish_batch(
     spot_check_policy: Path | None = None,
     repo: Path = REPO,
     products: list[str] | None = None,
+    activation_receipt: bool = False,
 ) -> dict[str, Any]:
     check_run_root(run_root)
     summary = verified(run_root)["summary"]
@@ -257,6 +266,7 @@ def publish_batch(
                 live=live,
                 policy=policy,
                 repo=repo,
+                activation_receipt=activation_receipt,
             )
         except (JudgeBatchError, PlatformError) as error:
             result["stopped"] = {"product": product, "code": error.code}
