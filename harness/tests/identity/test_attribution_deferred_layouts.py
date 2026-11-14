@@ -28,7 +28,7 @@ from insurance_harness.identity.attribution import (
 ACCIDENT = "平安示例安行意外伤害保险"
 MEDICAL = "平安示例康宁（2021）医疗保险"
 WHOLE_LIFE = "平安示例盈享（D款）终身寿险（分红型）"
-POLICY_REF = "attribution-policy@2026-11-12.2"
+POLICY_REF = "attribution-policy@2026-11-14.1"
 
 GUIDE_WITHOUT_NAME = (
     "阅 读 指 引\r\n为了帮助您更好地了解产品，我们先介绍几个保险条款中常用的术语\r\n"
