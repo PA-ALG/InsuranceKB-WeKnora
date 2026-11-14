@@ -5,13 +5,13 @@ import pytest
 
 from insurance_harness.bundle.client import PlatformClient
 from tests.compilers.schema_fields.test_publish_cli import platform as prepared_files  # noqa: F401
-from tests.ingest.test_judge_batch import world  # noqa: F401
-from tests.ingest.test_judge_batch_recovery import ledger, ok, publish, record  # noqa: F401
+from tests.ingest.test_judge_batch import publish, world  # noqa: F401
+from tests.ingest.test_judge_batch_recovery import LedgerPlatform, ledger, ok, record  # noqa: F401
 
 
 @pytest.mark.parametrize("mode", ["success", "lost", "unknown", "bad-release"])
 def test_judge_batch_receipt_path(ledger: dict[str, Any], mode: str) -> None:  # noqa: F811
-    server = ledger["server"]
+    server: LedgerPlatform = ledger["server"]
     activations: list[str] = []
     lookups: list[tuple[str, str]] = []
     readbacks: list[str] = []
@@ -37,6 +37,7 @@ def test_judge_batch_receipt_path(ledger: dict[str, Any], mode: str) -> None:  #
             receipt = {k: released[k] for k in ("id", "epoch", "base_release_id", "candidate_id")}
             receipt.update(decision_id=decision, decision_digest="e" * 64)
             released["decision_digest"] = receipt["decision_digest"]
+            server.releases[released["id"]] = server.active = released
             if mode != "unknown":
                 receipts[(candidate, decision)] = receipt
             if mode in {"lost", "unknown"}:
@@ -82,4 +83,8 @@ def test_judge_batch_receipt_path(ledger: dict[str, Any], mode: str) -> None:  #
     if mode == "unknown":
         assert readbacks == []
     else:
-        assert len(readbacks) == 1 and readbacks[0] == record(ledger)["release"]
+        stored = record(ledger)
+        expected = [stored["release"]]
+        if mode == "lost":
+            expected.append(stored["base_release"])  # resume loads the fixed sampling base
+        assert readbacks == expected
