@@ -63,7 +63,8 @@ func TestPostgresFixedReadsKeepHistoryAndMemberAuthority(t *testing.T) {
 			require.Equal(t, first.Members, members)
 			_, _, err = narrow.MemberIndex(ctx, 7, "space-2", first.ID)
 			require.Error(t, err)
-			changed := db.Exec(`UPDATE wiki_release_preparations SET manifest = jsonb_set(manifest, '{candidate_id}', '"other"')
+			changed := db.Exec(`UPDATE wiki_release_preparations
+ SET manifest = jsonb_set(manifest, '{candidate_id}', '"other"')
  WHERE preparation_id=(SELECT preparation_id FROM wiki_releases WHERE release_id=?)`, first.ID)
 			require.NoError(t, changed.Error)
 			_, _, err = narrow.MemberIndex(ctx, 7, "space-1", first.ID)
