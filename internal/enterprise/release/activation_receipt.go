@@ -95,6 +95,9 @@ func activationReceipt(
 			Code: ErrorReleaseConflict, Detail: "release belongs to a different decision",
 		}
 	}
+	if r.DecisionID != d.ID || r.BundleDigest != d.BundleDigest {
+		return ActivationReceipt{}, errors.New("activation manifest differs from approved decision")
+	}
 	return ActivationReceipt{
 		ID: r.ID, Epoch: r.Epoch, BaseReleaseID: r.BaseReleaseID, CandidateID: r.CandidateID,
 		DecisionID: d.ID, DecisionDigest: d.Digest,

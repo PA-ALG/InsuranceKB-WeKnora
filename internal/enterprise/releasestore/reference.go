@@ -74,5 +74,6 @@ func (s *Store) releaseMetadata(
 		RetiredAt: retiredAt,
 		ID:        rel.ID, Epoch: rel.BaseActivationEpoch + 1, BaseReleaseID: rel.BaseReleaseID,
 		CandidateID: manifest.CandidateID, DecisionDigest: manifest.DecisionDigest,
+		DecisionID: manifest.DecisionID, BundleDigest: manifest.BundleDigest,
 	}, nil
 }

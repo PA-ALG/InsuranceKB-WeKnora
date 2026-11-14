@@ -65,6 +65,9 @@ type Release struct {
 	DecisionDigest string   `json:"decision_digest"`
 	Members        []Member `json:"members"`
 
+	DecisionID   string `json:"-"` // stored preparation manifest identity
+	BundleDigest string `json:"-"`
+
 	RetiredAt *time.Time `json:"retired_at,omitempty"`
 }
 
