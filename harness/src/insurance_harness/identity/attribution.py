@@ -1,22 +1,9 @@
-"""Which product a newly uploaded material belongs to (S5b-1 Spec).
+"""Deterministic product attribution (blueprint §6.1/7.3); rules are versioned data.
 
-Blueprint §6.1 (IDENTITY_RESOLVED) and §7.3: the decision rests only on deterministic anchors —
-the clause filing code that terms print, and the full product name a material's title carries —
-and when they do not settle it the material goes to a person or waits in quarantine; ambiguity is
-never merged automatically. The rules are versioned data (attribution_policy.json); this module
-only applies them. It calls no model, reads nothing but its arguments and the packaged policy, and
-does not depend on the order of the registry.
-
-Names are compared as whole titles, not searched in the text: a product name can be part of another
-one (…终身寿险 inside …终身寿险(分红型)), and a substring search would file a new product as a new
-version of the shorter one.
-
-Sales and training materials, and Office files of no recognised role, often print only a brand
-(S11c Spec §2.5). When no anchor settles them, the products whose brand they carry are offered to a
-person as candidates; a brand is never an anchor, so even one candidate is only a question.
-
-With the pinned version catalog (PV-1), a clause code is first matched to a filed version (PV-0
-appendix A §1.3), and new terms of a registered name are a new entry beside it, never a replacement.
+Only filing codes and complete title names anchor a product, never substring or brand matches.
+Ambiguity asks a person or quarantines; brand-only sales/Office materials offer candidates (S11c).
+PV-1 matches a pinned filed version first, adding new terms beside an old version, not replacing it.
+Pure and registry-order independent: no model or I/O beyond loading the packaged policy.
 """
 
 import hashlib
@@ -32,7 +19,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from insurance_harness.identity.brands import brand_candidates, pack_of
 from insurance_harness.identity.material_roles import load_material_roles, role_of
 from insurance_harness.identity.text import fold as _fold
-from insurance_harness.identity.title_lines import line_titles, title_pattern
+from insurance_harness.identity.title_lines import (
+    line_titles,
+    registered_rate_titles,
+    title_pattern,
+)
 from insurance_harness.identity.titles import head_title, named_inside, own_codes, terms_title
 from insurance_harness.identity.training_versions import judge, training_role, versioned
 from insurance_harness.identity.version_basis import RegisteredVersion, VersionBasis
@@ -108,11 +99,11 @@ class AttributionPolicy(_Frozen):
     guide_title_patterns: tuple[str, ...] = Field(
         min_length=1
     )  # reader guide forms, one group each
-    # A whole title line anywhere on the first pages (S5b-7): 《name》, a plan part of at most this
-    # many characters (PB-A1), a document word; a line with an exclusion is no title.
+    # Whole title lines (S5b-7/PB-A1): bounded plan part, document word, no exclusion.
     title_line_qualifier_chars: int = Field(gt=0)
     title_line_documents: tuple[str, ...] = Field(min_length=1)
     title_line_exclusions: tuple[str, ...]
+    unbracketed_rate_documents: tuple[str, ...] = Field(min_length=1)
     created_id_prefix: str = Field(min_length=1)
     created_id_hex: int = Field(ge=8, le=64)
     classifications: tuple[Classification, ...] = Field(min_length=1)
@@ -156,6 +147,8 @@ class AttributionPolicy(_Frozen):
         words = (*self.issuer_names, *self.title_line_documents)
         if not all(_fold(word) for word in (*words, *self.title_line_exclusions)):
             raise ValueError("a blank issuer name or title line word")
+        if not set(self.unbracketed_rate_documents) <= set(self.title_line_documents):
+            raise ValueError("an unbracketed rate document must be a title line document")
         if any(year.groups != 1 for year in years):
             raise ValueError("a year pattern needs one group")
         if not all(_fold(text) for text in (*self.brand_prefixes, *self.brand_extensions)):
@@ -170,7 +163,6 @@ class AttributionPolicy(_Frozen):
 
     @property
     def title_line_pattern(self) -> str:
-        """The whole-line title, the name its one group (S5b-7 Spec §2.3)."""
         documents = [_fold(word) for word in self.title_line_documents]
         return title_pattern(self.title_line_qualifier_chars, documents, self.max_title_chars)
 
@@ -257,12 +249,8 @@ def attribute(
     pack: str | None = None,
     catalog: VersionIndex | None = None,
 ) -> Attribution:
-    """The attribution of one uploaded material against the registered products (Spec §2.3).
-
-    The keyword arguments carry what a person confirmed (S5b-3c-1 Spec §2.1): the product the
-    material belongs to, which skips identifying it by code or title; its role, in place of the
-    recognised one; and the pack for terms whose title no classification suffix matches. With the
-    pinned version catalog (PV-1 §3) a code is first matched to a filed version.
+    """Attribute one upload; explicit product/role/pack are a person's choices (S5b-3c-1).
+    A chosen product skips title matching, not conflicting codes. PV-1 catalog pins filed versions.
     """
     policy = policy or load_attribution_policy()
 
@@ -355,6 +343,20 @@ def attribute(
         named = [p for p in products if {_fold(n) for n in p.names} & lines.keys()]
         if len(lines) > 1 and len(named) < 2:  # titles of other products, unregistered
             return decided("QUARANTINE", "anchor_conflict", **anchors)
+    if not named and role in (None, "rate_table"):
+        extra, ambiguous = registered_rate_titles(
+            upload.head, [n for p in products for n in p.names], policy
+        )
+        if ambiguous:
+            return decided("QUARANTINE", "anchor_conflict", **anchors)
+        if extra:
+            titles = lines | extra
+            role = role_of(upload.file_name, upload.head, "".join(titles.values()))
+            anchors["role"] = role
+            if role == "rate_table":
+                named = [p for p in products if {_fold(n) for n in p.names} & titles.keys()]
+                if len(titles) > 1 and len(named) < 2:
+                    return decided("QUARANTINE", "anchor_conflict", **anchors)
     # Both anchors must agree: a code whose product the title does not name is a conflict, also
     # when the title is missing, too long or names nothing registered.
     if len(by_code) > 1 or (by_code and by_code[0] not in named):

@@ -8,6 +8,12 @@ whole line, never a phrase inside a sentence: a body citing 《another product�
 
 import re
 from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING
+
+from insurance_harness.identity.text import fold
+
+if TYPE_CHECKING:
+    from insurance_harness.identity.attribution import AttributionPolicy
 
 _LINE_BREAKS = re.compile(r"[\r\n]+")
 _BRACKETED = re.compile(r"^《[^《》]+》$")
@@ -52,3 +58,38 @@ def line_titles(
         if match is not None and not any(word in whole for word in excluded):
             found.setdefault(match.group(1), whole)
     return found
+
+
+def registered_rate_titles(
+    head: str, names: Sequence[str], policy: "AttributionPolicy"
+) -> tuple[dict[str, str], bool]:
+    """Exact unbracketed rate-title lines, or an ambiguous registered-name prefix (PB-A2).
+
+    The caller supplies only the first two pages and only after the original anchors failed.
+    Split before folding: neither adjacent lines nor page boundaries may complete a name.
+    Reuse the bracketed suffix grammar, but reject a qualifier starting with parentheses:
+    it may be an unregistered name extension. Never pick the longest registered prefix.
+    """
+    pattern = re.compile(title_pattern(
+        policy.title_line_qualifier_chars,
+        [fold(word) for word in policy.unbracketed_rate_documents],
+        policy.max_title_chars,
+    ))
+    registered = {fold(name) for name in names if fold(name)}
+    excluded = [fold(word) for word in policy.title_line_exclusions]
+    found: dict[str, str] = {}
+    for part in head.splitlines():
+        whole = fold(part)
+        if any(word in whole for word in excluded):
+            continue
+        prefixes = {name for name in registered if whole.startswith(name)}
+        valid = [
+            name for name in prefixes
+            if not whole[len(name):].startswith("(")
+            and pattern.fullmatch(f"《{name}》{whole[len(name):]}")
+        ]
+        if valid and len(prefixes) > 1:
+            return {}, True
+        for name in valid:
+            found.setdefault(name, whole)
+    return found, False
