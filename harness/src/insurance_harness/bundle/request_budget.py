@@ -43,7 +43,7 @@ class RequestBudgets:
         return httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, read=read)
 
     def response_limit(self, request_type: RequestType) -> int:
-        if request_type == RequestType.FULL_RELEASE:
+        if request_type in {RequestType.FULL_RELEASE, RequestType.ACTIVATE}:
             return self.release_max_bytes
         if request_type in {RequestType.ACTIVATE_RECEIPT, RequestType.RECEIPT}:
             return RECEIPT_RESPONSE_BYTES
