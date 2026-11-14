@@ -2,6 +2,7 @@
 
 - Issue #573，Codex 实现，Claude 审核
 - [裁定](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/573#issuecomment-6879562547)
+- [编译 carry 补充范围](https://github.com/PA-ALG/InsuranceKB-WeKnora/issues/573#issuecomment-6880100995)
 - 初始基线 `a8cb32011677750fe71f42afb70bd988c90dbd59`
 
 ## 1. 目标与范围
@@ -57,6 +58,11 @@ scope、nonce、authorization digest、Release ID、epoch、前驱及 manifest �
 `INVALID_REQUEST`。预算按流式解压后的字节计，超限返回 `INVALID_RESPONSE`。
 旧激活全量响应溢出时应改用受支持的小回执，不能借全读预算放大其它响应。
 
+`compile_run --carry-active` 继续为本轮读取一次 Active，使用同一全量 Release
+GET 预算。完整响应超过预算时以 `INVALID_RESPONSE` 退出 2，发生在读取来源页、
+创建模型客户端、发送请求或写入候选之前。保留既有已审引文、产品及材料固定修订
+筛选。PR-2 再改为在固定 Release 中定向读取本产品的已发布 Claim。
+
 Judge Batch `publish --activation-receipt` 给新建尝试启用小回执，作为
 记录属性随断点保存。已有全量尝试保持既有恢复行为，收回开关不改变
 已经冻结为小回执的尝试。小回执模式独立核对响应的候选、决定与保存的
@@ -76,9 +82,12 @@ Candidate/Decision 进行 GET 对账并读固定 Release。未找到或不可核
 - Harness 通过公开客户端与 Judge Batch 的离线 transport/记录验证预算隔离、
   默认及上下界、压缩后超限、小回执和全量旧回执兼容。断点对账测试覆盖
   Head 已前进、无精确回执及固定版本身份错配，确认不重发 POST。
+- `compile_run --carry-active` 经合成 HTTP 验证同一完整 Active 在默认预算和
+  配置后的边界行为，超限必须零模型发送，配置允许时按固定修订携带相同引文。
 - 冻结新增 RED 后实施。旧保护案例不改。定向 Go/Harness、ruff/mypy、
   架构守卫、合同对照由本地与精确 head CI 提供证据。
 
 写域为企业激活 HTTP/服务/存储适配器与新增同模块测试，Harness
-`bundle` 客户端/预算及 `ingest/judge_batch` 的 CLI、发布记录和测试。
+`bundle` 客户端/预算、`ingest/judge_batch` 的 CLI 和发布记录，以及
+`eval/compile_run` 的诊断和自有测试。
 该扩展不改 Candidate/Release 成员 JSON Schema、前端、上游文件及守卫基线。
