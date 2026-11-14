@@ -58,7 +58,7 @@ SOURCES = {"保险条款.pdf": SourceRevision("k-1", 1), "产品培训.pdf": Sou
 
 def test_sales_training_is_a_non_evidence_role_of_the_shipped_catalogue() -> None:
     roles = load_material_roles()
-    assert roles.version == "2026-11-01.1"  # SK-1 added the unrecognised sales_method role
+    assert roles.version == "2026-11-12.1"  # PB-A1 added 成本表 to the rate table opening
     assert {r.role: r.evidence for r in roles.roles}["sales_training"] is False
 
 

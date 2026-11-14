@@ -29,11 +29,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from insurance_harness.identity.brands import brand_candidates, unqualified
+from insurance_harness.identity.brands import brand_candidates, pack_of
 from insurance_harness.identity.material_roles import load_material_roles, role_of
 from insurance_harness.identity.text import fold as _fold
 from insurance_harness.identity.title_lines import line_titles, title_pattern
-from insurance_harness.identity.titles import guide_title, head_title, named_inside, own_codes
+from insurance_harness.identity.titles import head_title, named_inside, own_codes, terms_title
 from insurance_harness.identity.training_versions import judge, training_role, versioned
 from insurance_harness.identity.version_basis import RegisteredVersion, VersionBasis
 from insurance_harness.identity.versions import VersionIndex, match_version, normal_clause_code
@@ -105,10 +105,12 @@ class AttributionPolicy(_Frozen):
     max_title_chars: int = Field(gt=0)
     title_prefix_pattern: str = Field(min_length=1)  # page numbers and labels before a title
     issuer_names: tuple[str, ...]  # the insurer's name, printed above a title (S5b-7)
-    guide_title_pattern: str = Field(min_length=1)  # the name in the reader guide, one group
-    # A whole title line anywhere on the first pages (S5b-7): 《name》, then at most one listed
-    # qualifier and one listed document word, nothing else; a line with an exclusion is no title.
-    title_line_qualifiers: tuple[str, ...]
+    guide_title_patterns: tuple[str, ...] = Field(
+        min_length=1
+    )  # reader guide forms, one group each
+    # A whole title line anywhere on the first pages (S5b-7): 《name》, a plan part of at most this
+    # many characters (PB-A1), a document word; a line with an exclusion is no title.
+    title_line_qualifier_chars: int = Field(gt=0)
     title_line_documents: tuple[str, ...] = Field(min_length=1)
     title_line_exclusions: tuple[str, ...]
     created_id_prefix: str = Field(min_length=1)
@@ -141,15 +143,17 @@ class AttributionPolicy(_Frozen):
                 for text in (
                     self.clause_code_pattern,
                     self.title_prefix_pattern,
-                    self.guide_title_pattern,
+                    *self.guide_title_patterns,
                 )
             ]
             years = [re.compile(t) for t in (self.upload_year_pattern, *self.product_year_patterns)]
         except re.error as error:
             raise ValueError("invalid attribution pattern") from error
-        if patterns[2].groups != 1 or not self.title_prefix_pattern.startswith("^"):
+        if any(p.groups != 1 for p in patterns[2:]) or not self.title_prefix_pattern.startswith(
+            "^"
+        ):
             raise ValueError("the guide pattern needs one group and the prefix an anchor")
-        words = (*self.issuer_names, *self.title_line_qualifiers, *self.title_line_documents)
+        words = (*self.issuer_names, *self.title_line_documents)
         if not all(_fold(word) for word in (*words, *self.title_line_exclusions)):
             raise ValueError("a blank issuer name or title line word")
         if any(year.groups != 1 for year in years):
@@ -167,9 +171,8 @@ class AttributionPolicy(_Frozen):
     @property
     def title_line_pattern(self) -> str:
         """The whole-line title, the name its one group (S5b-7 Spec §2.3)."""
-        qualifiers = [_fold(word) for word in self.title_line_qualifiers]
         documents = [_fold(word) for word in self.title_line_documents]
-        return title_pattern(qualifiers, documents, self.max_title_chars)
+        return title_pattern(self.title_line_qualifier_chars, documents, self.max_title_chars)
 
     @property
     def policy_ref(self) -> str:
@@ -244,12 +247,6 @@ def load_attribution_policy() -> AttributionPolicy:
         raise AttributionPolicyError("ATTRIBUTION_POLICY_INVALID") from error
 
 
-def _pack(name: str, policy: AttributionPolicy) -> str | None:
-    base = unqualified(name)
-    hits = [entry for entry in policy.classifications if base.endswith(_fold(entry.suffix))]
-    return max(hits, key=lambda entry: len(_fold(entry.suffix))).schema_pack_id if hits else None
-
-
 def attribute(
     upload: Upload,
     registry: Sequence[RegisteredProduct],
@@ -301,9 +298,7 @@ def attribute(
         if chosen is not None and owners:  # no text, so no code to contradict the file
             return decided("DUPLICATE", "duplicate_file", product_id=chosen.product_id)
         return decided("QUARANTINE", "text_unavailable")
-    lines = line_titles(
-        upload.head, policy.title_line_pattern, policy.title_line_exclusions, _fold
-    )
+    lines = line_titles(upload.head, policy.title_line_pattern, policy.title_line_exclusions, _fold)
     # Title lines only add role evidence to the opening, so a conflict stays a conflict; terms are
     # never read through them (S5b-7 Spec §2.3).
     if role is None and (role := role_of(upload.file_name, upload.head)) != TERMS:
@@ -318,8 +313,8 @@ def attribute(
     match = re.search(policy.clause_code_pattern, window)
     own_code = next(iter(marked)) if len(marked) == 1 else None
     if own_code is None and not marked and match and match.start() == 0:
-        own_code = match.group(0)  # S5b-1: older terms open with their own code
-    code = own_code or (match.group(0) if match else None)
+        own_code = normal_clause_code(match.group(0))  # S5b-1: older terms open with their own code
+    code = own_code or (normal_clause_code(match.group(0)) if match else None)
     anchors = {"role": role, "clause_code": code}
     if len(marked) > 1:
         return decided("QUARANTINE", "anchor_conflict", **anchors)
@@ -352,7 +347,7 @@ def attribute(
         return _existing(chosen, "confirmed_by_person", decided, role, code, own_code, version)
     # The start names the product; the reader guide only stands in when the start has no title.
     title = head_title(window, own_code, policy) or (
-        guide_title(head, policy) if role == TERMS else ""
+        terms_title(head, own_code, policy) if role == TERMS else ""
     )
     named = [p for p in products if title and title in {_fold(n) for n in p.names}]
     named = named or named_inside(title, products)
@@ -388,7 +383,7 @@ def attribute(
     if role != TERMS or own_code is None or not title:
         return decided("QUARANTINE", "no_product_anchor", **anchors)
 
-    pack = _pack(title, policy) or pack
+    pack = pack_of(title, policy) or pack
     if pack is None:
         return decided("NEEDS_CONFIRM", "pack_unresolved", display_name=title, **anchors)
     if version[2]:  # the created ID is already registered
@@ -440,8 +435,13 @@ def _by_version(
             **anchors,
         )
     result = _existing(
-        chosen, "matched_by_version_period", decided, anchors["role"], anchors["clause_code"],
-        None, version,
+        chosen,
+        "matched_by_version_period",
+        decided,
+        anchors["role"],
+        anchors["clause_code"],
+        None,
+        version,
     )
     basis = found.basis.model_copy(
         update={"version_decided_by": "machine", "role_decided_by": "machine"}
