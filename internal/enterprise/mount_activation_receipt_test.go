@@ -27,6 +27,7 @@ func (s *activationReceiptStore) Activate(ctx context.Context, w release.Activat
 	if err == nil && s.failCommittedRead {
 		return release.Release{}, errors.New("synthetic committed read failure")
 	}
+	r.DecisionID, r.BundleDigest = w.DecisionID, w.BundleDigest
 	return r, err
 }
 
