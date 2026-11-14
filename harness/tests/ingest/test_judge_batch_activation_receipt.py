@@ -9,7 +9,7 @@ from tests.ingest.test_judge_batch import publish, world  # noqa: F401
 from tests.ingest.test_judge_batch_recovery import LedgerPlatform, ledger, ok, record  # noqa: F401
 
 
-@pytest.mark.parametrize("mode", ["success", "lost", "unknown", "bad-release"])
+@pytest.mark.parametrize("mode", ["success", "lost", "unknown", "lookup-conflict", "bad-release"])
 def test_judge_batch_receipt_path(ledger: dict[str, Any], mode: str) -> None:  # noqa: F811
     server: LedgerPlatform = ledger["server"]
     activations: list[str] = []
@@ -24,6 +24,8 @@ def test_judge_batch_receipt_path(ledger: dict[str, Any], mode: str) -> None:  #
             if req.method == "GET":
                 key = (candidate, req.url.params["decision_id"])
                 lookups.append(key)
+                if mode == "lookup-conflict":
+                    return httpx.Response(409, json={"success": False, "code": "NEEDS_REBASE"})
                 if key not in receipts:
                     return httpx.Response(404, json={"success": False, "code": "RELEASE_NOT_FOUND"})
                 return ok(receipts[key])
@@ -40,7 +42,7 @@ def test_judge_batch_receipt_path(ledger: dict[str, Any], mode: str) -> None:  #
             server.releases[released["id"]] = server.active = released
             if mode != "unknown":
                 receipts[(candidate, decision)] = receipt
-            if mode in {"lost", "unknown"}:
+            if mode in {"lost", "unknown", "lookup-conflict"}:
                 next_head = {
                     **released,
                     "id": "rel_later",
@@ -71,16 +73,18 @@ def test_judge_batch_receipt_path(ledger: dict[str, Any], mode: str) -> None:  #
         assert first["stopped"]["code"] == "SERVICE_UNAVAILABLE"
         assert record(ledger)["pending"] == "activate"
         again = publish(ledger, live=True)  # the choice survives switch removal
-        if mode == "unknown":
-            assert again["stopped"]["code"] == "RELEASE_NOT_FOUND"
+        if mode in {"unknown", "lookup-conflict"}:
+            expected_code = "RELEASE_NOT_FOUND" if mode == "unknown" else "NEEDS_REBASE"
+            assert again["stopped"]["code"] == expected_code
             assert record(ledger)["pending"] == "activate"
+            assert record(ledger)["status"] == "in_progress"
         else:
             assert again["stopped"] is None
             assert record(ledger)["release"] != server.active["id"]
         assert len(lookups) == 1
 
     assert len(activations) == 1
-    if mode == "unknown":
+    if mode in {"unknown", "lookup-conflict"}:
         assert readbacks == []
     else:
         stored = record(ledger)

@@ -41,4 +41,13 @@ func TestPostgresActivationReceiptFollowsExactCommitAfterHeadMoves(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, r2.ID, head.ReleaseID)
 	require.Equal(t, int64(2), storageCount(t, db, "wiki_release_receipts"))
+
+	// A fresh reader must still run the existing member integrity checks on the fixed Release.
+	changed := db.Exec("UPDATE wiki_release_members SET member_digest = ? WHERE release_id = ?", "bad-digest", r1.ID)
+	require.NoError(t, changed.Error)
+	require.EqualValues(t, 1, changed.RowsAffected)
+	cold := any(New(db, testSpaces(t))).(lookup)
+	_, err = cold.ActivationByNonce(ctx, a.TenantID, a.SpaceID, a.Nonce, a.DecisionDigest)
+	require.ErrorContains(t, err, "digest")
+	require.Equal(t, int64(2), storageCount(t, db, "wiki_release_receipts"))
 }

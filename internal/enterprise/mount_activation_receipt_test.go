@@ -2,6 +2,7 @@ package enterprise_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -12,12 +13,21 @@ import (
 
 type activationReceiptStore struct {
 	*publishStore
-	writes int
+	writes            int
+	failWrite         bool
+	failCommittedRead bool
 }
 
 func (s *activationReceiptStore) Activate(ctx context.Context, w release.ActivationWrite) (release.Release, error) {
 	s.writes++
-	return s.publishStore.Activate(ctx, w)
+	if s.failWrite {
+		return release.Release{}, errors.New("synthetic write failure")
+	}
+	r, err := s.publishStore.Activate(ctx, w)
+	if err == nil && s.failCommittedRead {
+		return release.Release{}, errors.New("synthetic committed read failure")
+	}
+	return r, err
 }
 
 func TestActivationReceiptResponseKeepsDefaultAndValidatesSelectionBeforeWrite(t *testing.T) {
@@ -25,18 +35,23 @@ func TestActivationReceiptResponseKeepsDefaultAndValidatesSelectionBeforeWrite(t
 		name, query string
 		status      int
 		receipt     bool
+		failure     string
 	}{
-		{"default", "", http.StatusOK, false},
-		{"legacy query", "?unused=x", http.StatusOK, false},
-		{"receipt", "?response=receipt", http.StatusOK, true},
-		{"empty", "?response=", http.StatusBadRequest, false},
-		{"duplicate", "?response=receipt&response=receipt", http.StatusBadRequest, false},
-		{"unknown", "?response=other", http.StatusBadRequest, false},
-		{"bad escape", "?response=receipt&x=%ZZ", http.StatusBadRequest, false},
-		{"invalid receipt escape", "?response=%ZZ", http.StatusBadRequest, false},
+		{"default", "", http.StatusOK, false, ""},
+		{"legacy query", "?unused=x", http.StatusOK, false, ""},
+		{"receipt", "?response=receipt", http.StatusOK, true, ""},
+		{"empty", "?response=", http.StatusBadRequest, false, ""},
+		{"duplicate", "?response=receipt&response=receipt", http.StatusBadRequest, false, ""},
+		{"unknown", "?response=other", http.StatusBadRequest, false, ""},
+		{"bad escape", "?response=receipt&x=%ZZ", http.StatusBadRequest, false, ""},
+		{"invalid receipt escape", "?response=%ZZ", http.StatusBadRequest, false, ""},
+		{"write failure", "?response=receipt", http.StatusInternalServerError, true, "write"},
+		{"committed read failure", "?response=receipt", http.StatusInternalServerError, true, "read"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			store := &activationReceiptStore{publishStore: newPublishStore()}
+			store := &activationReceiptStore{
+				publishStore: newPublishStore(), failWrite: tc.failure == "write", failCommittedRead: tc.failure == "read",
+			}
 			service := release.NewService(store, nil, nil, release.WithPublisher(store))
 			c, err := store.CreateCandidate(context.Background(), release.Candidate{
 				TenantID: 7, SpaceID: "demo", BundleDigest: "synthetic-digest",
@@ -56,6 +71,16 @@ func TestActivationReceiptResponseKeepsDefaultAndValidatesSelectionBeforeWrite(t
 				return
 			}
 			require.Equal(t, 1, store.writes)
+			if tc.failure != "" {
+				require.Equal(t, "INTERNAL_ERROR", code(t, response.Body.Bytes()))
+				require.NotContains(t, response.Body.String(), "synthetic")
+				if tc.failure == "read" {
+					require.Equal(t, "release-1", store.head.ReleaseID)
+				} else {
+					require.Empty(t, store.head.ReleaseID)
+				}
+				return
+			}
 			got := data(t, response.Body.Bytes())
 			if tc.receipt {
 				require.Equal(t, map[string]any{
